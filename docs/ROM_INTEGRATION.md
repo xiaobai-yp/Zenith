@@ -19,9 +19,8 @@ This guide covers embedding `zenithd` + config into an AOSP-based ROM.
 ├── etc/
 │   ├── init/
 │   │   └── init.zenith.rc               # init service definition
-│   ├── zenith/
-│   │   ├── profiles.json                # per-app profile mappings
-│   │   └── thermal_zones.json           # thermal zone config
+│   ├── profiles.json                    # per-app profile mappings
+│   └── thermal_zones.json               # thermal zone config
 │   └── selinux/
 │       ├── zenithd.te                   # SELinux policy
 │       ├── property_contexts            # property contexts (append)
@@ -40,9 +39,9 @@ PRODUCT_PACKAGES += zenithd
 
 # Config files
 PRODUCT_COPY_FILES += \
-    vendor/zenith/daemon/config/profiles.json:$(TARGET_COPY_OUT_SYSTEM)/etc/zenith/profiles.json \
-    vendor/zenith/daemon/config/thermal_zones.json:$(TARGET_COPY_OUT_SYSTEM)/etc/zenith/thermal_zones.json \
-    vendor/zenith/daemon/init.zenith.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/init.zenith.rc
+    vendor/zenith/daemon/config/profiles.json:$(TARGET_COPY_OUT_VENDOR)/etc/profiles.json \
+    vendor/zenith/daemon/config/thermal_zones.json:$(TARGET_COPY_OUT_VENDOR)/etc/thermal_zones.json \
+    vendor/zenith/daemon/init.zenith.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/init.zenith.rc
 
 # SELinux policy
 BOARD_SEPOLICY_DIRS += vendor/zenith/daemon/sepolicy

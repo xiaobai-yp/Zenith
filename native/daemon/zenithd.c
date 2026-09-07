@@ -46,7 +46,7 @@
 
 /* ---- Configuration ---- */
 
-#define PROFILE_JSON_PATH        "/vendor/etc/zenith/profiles.json"
+#define PROFILE_JSON_PATH        "/vendor/etc/profiles.json"
 #define PROFILE_JSON_FALLBACK    "/data/local/zenith/profiles.json"
 #define MONITOR_INTERVAL_MS      5000   /* 5s between sysfs reads */
 #define APP_DETECT_INTERVAL_MS   2000   /* 2s between app scans */

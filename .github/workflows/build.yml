@@ -75,7 +75,8 @@ jobs:
           mkdir -p zenith-rom/vendor/bin zenith-rom/vendor/etc
           cp native/build/arm64/zenithd zenith-rom/vendor/bin/
           cp daemon/init.zenith.rc zenith-rom/vendor/etc/
-          cp -r daemon/config zenith-rom/vendor/etc/zenith
+          cp daemon/config/profiles.json zenith-rom/vendor/etc/
+          cp daemon/config/thermal_zones.json zenith-rom/vendor/etc/
           cp -r daemon/sepolicy zenith-rom/vendor/etc/selinux
           cd zenith-rom && tar czf ../zenith-rom-module.tar.gz .
 
