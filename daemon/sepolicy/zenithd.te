@@ -16,6 +16,7 @@ type zenithd_data_file, file_type, data_file_type;
 
 # Init starts zenithd
 init_daemon_domain(zenithd)
+vendor_init_daemon_domain(zenithd)
 
 # Allow daemon to run as root (needed for sysfs access)
 # In production, use least-privilege with specific capabilities

@@ -1,10 +1,10 @@
 # init.zenith.rc — Android init service definition for zenithd.
-# Place in /system/etc/init/ on the device.
+# Place in /vendor/etc/init/ on the device.
 #
 # Copyright (c) 2026 ZenithThermal Contributors
 # SPDX-License-Identifier: MIT
 
-service zenithd /system/bin/zenithd --foreground
+service zenithd /vendor/bin/zenithd --foreground
     class late_start
     user root
     group root system readproc

@@ -4,6 +4,7 @@
 
 cc_binary {
     name: "zenithd",
+    proprietary: true,
     srcs: [
         "native/daemon/zenithd.c",
         "native/daemon/crypto.c",
@@ -34,6 +35,7 @@ cc_binary {
 
 cc_library_shared {
     name: "libzenith",
+    proprietary: true,
     srcs: [
         "native/daemon/sysfs_monitor.c",
         "native/daemon/thermal_core.c",

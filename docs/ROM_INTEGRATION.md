@@ -10,10 +10,10 @@ This guide covers embedding `zenithd` + config into an AOSP-based ROM.
 
 ---
 
-## Directory Structure in ROM
+## Directory Structure in ROM (vendor)
 
 ```
-/system/
+/vendor/
 ├── bin/
 │   └── zenithd                          # daemon binary
 ├── etc/
