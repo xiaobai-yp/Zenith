@@ -1,3 +1,6 @@
+# Copyright (c) 2026 ZenithThermal Contributors
+# SPDX-License-Identifier: MIT
+
 type zenithd, domain;
 type zenithd_exec, exec_type, vendor_file_type, file_type;
 type zenithd_socket, file_type, socket_file;
@@ -7,6 +10,7 @@ type zenithd_data_file, file_type, data_file_type;
 init_daemon_domain(zenithd)
 vendor_init_daemon_domain(zenithd)
 
+# sysfs
 allow zenithd sysfs_thermal:file { read write open };
 allow zenithd sysfs:file { read write open };
 allow zenithd sysfs_devices_system_cpu:dir { search };
@@ -17,6 +21,7 @@ allow zenithd sysfs_thermal_message:file { read write open };
 allow zenithd sysfs_kgsl:file { read write open };
 allow zenithd sysfs_block:file { read write open };
 
+# proc
 allow zenithd proc:dir { search };
 allow zenithd proc:file { read open };
 allow zenithd proc_pid:dir { search };
@@ -24,21 +29,26 @@ allow zenithd proc_pid:file { read open };
 allow zenithd proc_pid_cmdline:file { read open };
 allow zenithd proc_pid_status:file { read open };
 
+# property
 get_prop(zenithd, system_prop)
 set_prop(zenithd, system_prop)
 get_prop(zenithd, vendor_prop)
 set_prop(zenithd, vendor_prop)
 
+# socket
 allow zenithd zenithd_socket:sock_file { create write unlink };
 allow zenithd zenithd:unix_stream_socket { create bind listen accept connectto read write };
 
+# app client
 allow untrusted_app_29 zenithd_socket:sock_file { write };
 allow untrusted_app_29 zenithd:unix_stream_socket { connectto read write };
 
+# file
 allow zenithd zenithd_data_file:dir { search };
 allow zenithd zenithd_data_file:file { read open create write unlink };
 allow zenithd vendor_etc_zenith:file { read open };
 
+# log
 allow zenithd kernel:system syslog_read;
 allow zenithd logdr_socket:sock_file { write };
 allow zenithd logd:unix_stream_socket { connectto read write };
