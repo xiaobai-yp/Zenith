@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/bottomBar"
+    android:layout_width="wrap_content"
+    android:layout_height="52dp"
+    android:background="@drawable/bg_bottom_bar"
+    android:gravity="center"
+    android:orientation="horizontal"
+    android:paddingLeft="8dp"
+    android:paddingRight="8dp"
+    android:paddingTop="1dp"
+    android:paddingBottom="1dp">
+
+    <LinearLayout
+        android:id="@+id/navThermal"
+        android:layout_width="wrap_content"
+        android:layout_height="40dp"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:clickable="true"
+        android:focusable="true"
+        android:background="@drawable/bg_bottom_active"
+        android:paddingLeft="12dp"
+        android:paddingRight="12dp">
+        <ImageView
+            android:id="@+id/navThermalIcon"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@drawable/ic_thermal"
+            android:tint="#FF5EA7FF"
+            android:contentDescription="Thermal" />
+        <TextView
+            android:id="@+id/navThermalText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="9dp"
+            android:text="Thermal"
+            android:textColor="#FF5EA7FF"
+            android:textSize="13sp"
+            android:includeFontPadding="false" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/navBattery"
+        android:layout_width="wrap_content"
+        android:layout_height="40dp"
+        android:layout_marginLeft="8dp"
+        android:layout_marginRight="0dp"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:clickable="true"
+        android:focusable="true"
+        android:background="@android:color/transparent"
+        android:paddingLeft="12dp"
+        android:paddingRight="12dp">
+        <ImageView
+            android:id="@+id/navBatteryIcon"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@drawable/ic_battery"
+            android:tint="#FFB1C0C5"
+            android:contentDescription="Battery Monitor" />
+        <TextView
+            android:id="@+id/navBatteryText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="9dp"
+            android:text="Battery"
+            android:textColor="#FFB1C0C5"
+            android:textSize="13sp"
+            android:includeFontPadding="false" />
+    </LinearLayout>
+</LinearLayout>
