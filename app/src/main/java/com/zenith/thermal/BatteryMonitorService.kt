@@ -646,7 +646,7 @@ class BatteryMonitorService : Service() {
                 targetResetTriggered = false
                 pauseDischargeAccounting(nowElapsed, nowUptime)
             } else {
-                targetResetTriggered = false
+                if (level < resetTarget) targetResetTriggered = false
                 resumeDischargeAccounting(nowElapsed, nowUptime)
             }
 
@@ -662,7 +662,7 @@ class BatteryMonitorService : Service() {
             resumeDischargeAccounting(nowElapsed, nowUptime)
         }
 
-        if (charging && resetOnTarget && !targetResetTriggered && level >= resetTarget) {
+        if (resetOnTarget && !targetResetTriggered && level >= resetTarget) {
             resetStats()
             targetResetTriggered = true
             lastResetTarget = resetTarget
