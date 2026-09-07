@@ -31,3 +31,56 @@ jobs:
           name: app-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+  zenithd:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Find NDK
+        run: |
+          set -eux
+          # NDK is pre-installed on ubuntu-latest at $ANDROID_NDK_HOME
+          # Fallback: find in standard locations
+          if [ -z "${ANDROID_NDK_HOME:-}" ]; then
+            NDK=$(ls -d /usr/local/lib/android/sdk/ndk/*/ 2>/dev/null | head -1 || true)
+            if [ -z "$NDK" ]; then
+              echo "::error::NDK not found"; exit 1
+            fi
+            export ANDROID_NDK_HOME="$NDK"
+          fi
+          echo "NDK: $ANDROID_NDK_HOME"
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME" >> "$GITHUB_ENV"
+
+      - name: Build zenithd (NDK)
+        run: |
+          set -eux
+          cmake -S native -B native/build/arm64 \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-26
+          cmake --build native/build/arm64 -j4
+
+      - name: Upload zenithd binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: zenithd-arm64
+          path: |
+            native/build/arm64/zenithd
+          if-no-files-found: error
+
+      - name: Package ROM module
+        run: |
+          mkdir -p zenith-rom/usr/bin zenith-rom/usr/etc
+          cp native/build/arm64/zenithd zenith-rom/usr/bin/
+          cp daemon/init.zenith.rc zenith-rom/usr/etc/
+          cp -r daemon/config zenith-rom/usr/etc/zenith
+          cp -r daemon/sepolicy zenith-rom/usr/etc/selinux
+          cd zenith-rom && tar czf ../zenith-rom-module.tar.gz .
+
+      - name: Upload ROM module
+        uses: actions/upload-artifact@v4
+        with:
+          name: zenith-rom-module
+          path: zenith-rom-module.tar.gz
