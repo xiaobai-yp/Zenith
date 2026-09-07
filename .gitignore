@@ -7,3 +7,4 @@ keystore/
 .gradle/
 app-debug-ci.apk
 build/
+local.properties

@@ -4,142 +4,90 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
-import android.app.usage.UsageEvents
-import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.util.Log
 
+/**
+ * Foreground service that maintains the ZenithDaemonClient connection.
+ * Per-app profile switching is handled by zenithd, not this app.
+ */
 class AppMonitorService : Service() {
 
     companion object {
-        private const val CHECK_INTERVAL = 500L
+        private const val TAG = "AppMonitorService"
+        private const val CHANNEL = "zenith"
+        private const val NOTIFICATION_ID = 101
+        private const val HEARTBEAT_INTERVAL_MS = 15_000L
 
-        fun applyCurrent(context: Context) {
-            val app = findForeground(context) ?: return
-            if (app == context.packageName) return
-
-            val store = ProfileStore(context)
-            ThermalController.apply(store.app(app) ?: store.global())
-        }
-
-        private fun findForeground(context: Context): String? {
-            val usage = context.getSystemService(Context.USAGE_STATS_SERVICE)
-                as? UsageStatsManager ?: return null
-
-            val now = System.currentTimeMillis()
-            val events = usage.queryEvents(now - 5000L, now)
-            val event = UsageEvents.Event()
-
-            var result: String? = null
-            var latest = 0L
-
-            while (events.hasNextEvent()) {
-                events.getNextEvent(event)
-
-                @Suppress("DEPRECATION")
-                val isForeground = event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND
-                if (isForeground && event.timeStamp >= latest
-                ) {
-                    latest = event.timeStamp
-                    result = event.packageName
-                }
+        fun start(context: Context) {
+            val intent = Intent(context, AppMonitorService::class.java)
+            runCatching {
+                if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(intent)
+                else context.startService(intent)
             }
-
-            return result
         }
     }
 
-    private lateinit var store: ProfileStore
     private val handler = Handler(Looper.getMainLooper())
+    @Volatile private var destroyed = false
 
-    private var lastRealApp: String? = null
+    private val connListener: (Boolean) -> Unit = { connected ->
+        if (!destroyed) {
+            val msg = if (connected) "Connected" else "Disconnected — reconnecting…"
+            showNotification(msg)
+        }
+    }
 
-    private var lastAppliedApp: String? = null
-
-    private val monitor = object : Runnable {
+    private val heartbeat = object : Runnable {
         override fun run() {
-            updateForeground()
-            handler.postDelayed(this, CHECK_INTERVAL)
+            if (destroyed) return
+            if (ZenithDaemonClient.isConnected) {
+                // Keep-alive ping
+                ZenithDaemonClient.sendCommand(ZenithDaemonClient.MSG_HEARTBEAT)
+            } else {
+                Log.i(TAG, "Daemon disconnected, reconnecting…")
+                ZenithDaemonClient.requestConnect()
+            }
+            handler.postDelayed(this, HEARTBEAT_INTERVAL_MS)
         }
     }
 
     override fun onCreate() {
         super.onCreate()
-
-        store = ProfileStore(this)
-
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(
-            NotificationChannel(
-                "zenith",
-                "Zenith Thermal",
-                NotificationManager.IMPORTANCE_LOW
-            )
+            NotificationChannel(CHANNEL, "Zenith Thermal", NotificationManager.IMPORTANCE_LOW)
         )
+        showNotification("Connecting…")
 
-        val notification = Notification.Builder(this, "zenith")
+        ZenithDaemonClient.addConnectionListener(connListener)
+        ZenithDaemonClient.requestConnect()
+        showNotification(if (ZenithDaemonClient.isConnected) "Connected" else "Disconnected")
+        handler.post(heartbeat)
+    }
+
+    private fun showNotification(text: String) {
+        if (destroyed) return
+        val notification = Notification.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
             .setContentTitle("Zenith Thermal")
-            .setContentText("Per-app thermal monitor active")
+            .setContentText(text)
             .setOngoing(true)
             .build()
-
-        startForeground(101, notification)
-        handler.post(monitor)
+        startForeground(NOTIFICATION_ID, notification)
     }
 
-    private fun updateForeground() {
-        val current = findForeground(this) ?: return
-
-        if (current == packageName) return
-
-        if (isTransientSystemUi(current)) {
-            reapplyLastRealProfile()
-            return
-        }
-
-        if (current == lastRealApp) {
-            reapplyLastRealProfile()
-            return
-        }
-
-        lastRealApp = current
-        lastAppliedApp = current
-
-        ThermalController.apply(store.app(current) ?: store.global())
-    }
-
-    private fun reapplyLastRealProfile() {
-        val app = lastRealApp ?: return
-
-        ThermalController.apply(store.app(app) ?: store.global())
-        lastAppliedApp = app
-    }
-
-    private fun isTransientSystemUi(pkg: String): Boolean {
-        if (pkg == "com.android.systemui") return true
-
-        val homeIntent = Intent(Intent.ACTION_MAIN).apply {
-            addCategory(Intent.CATEGORY_HOME)
-        }
-
-        val resolved = packageManager.resolveActivity(homeIntent, 0)
-        val launcher = resolved?.activityInfo?.packageName
-
-        return !launcher.isNullOrEmpty() && pkg == launcher
-    }
-
-    override fun onStartCommand(
-        intent: Intent?,
-        flags: Int,
-        startId: Int
-    ): Int = START_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
 
     override fun onDestroy() {
+        destroyed = true
         handler.removeCallbacksAndMessages(null)
+        ZenithDaemonClient.removeConnectionListener(connListener)
         super.onDestroy()
     }
 

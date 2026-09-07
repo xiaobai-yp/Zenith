@@ -1,15 +1,18 @@
 package com.zenith.thermal
 
+/**
+ * Sends thermal profile commands to zenithd via socket IPC.
+ * No direct sysfs access — the daemon handles all hardware interaction.
+ */
 object ThermalController {
-    const val PROPERTY = "persist.sys.zenith.thermal"
 
-    fun apply(thermalId: Int) {
+    fun apply(thermalId: Int): Boolean {
         val id = thermalId.coerceAtLeast(0)
-        try {
-            val cls = Class.forName("android.os.SystemProperties")
-            val method = cls.getMethod("set", String::class.java, String::class.java)
-            method.invoke(null, PROPERTY, id.toString())
-        } catch (_: Throwable) {
+        return if (ZenithDaemonClient.isConnected) {
+            ZenithDaemonClient.setProfile(id)
+        } else {
+            android.util.Log.w("ThermalController", "Daemon not connected, profile $id not applied")
+            false
         }
     }
 }

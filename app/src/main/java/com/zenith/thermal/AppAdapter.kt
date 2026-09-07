@@ -8,10 +8,7 @@ import android.widget.BaseAdapter
 import android.widget.ImageView
 import android.widget.TextView
 
-class AppAdapter(
-    context: Context,
-    private val store: ProfileStore
-) : BaseAdapter() {
+class AppAdapter(context: Context) : BaseAdapter() {
     private val inflater = LayoutInflater.from(context)
     private val all = ArrayList<AppItem>()
     private val shown = ArrayList<AppItem>()
@@ -40,22 +37,10 @@ class AppAdapter(
     override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
         val view = convertView ?: inflater.inflate(R.layout.app_row, parent, false)
         val item = shown[position]
-
         view.findViewById<ImageView>(R.id.icon).setImageDrawable(item.icon)
         view.findViewById<TextView>(R.id.name).text = item.name
         view.findViewById<TextView>(R.id.packageName).text = item.pkg
-
-        val badge = view.findViewById<TextView>(R.id.profile)
-        val thermalId = store.app(item.pkg)
-        if (thermalId == null) {
-            badge.text = Profile.name(0)
-            badge.setBackgroundResource(R.drawable.bg_profile_default)
-            badge.setTextColor(view.context.getColor(R.color.text))
-        } else {
-            badge.text = Profile.name(thermalId)
-            badge.setBackgroundResource(R.drawable.bg_profile_active)
-            badge.setTextColor(view.context.getColor(R.color.accent))
-        }
+        view.findViewById<TextView>(R.id.profile).visibility = View.GONE
         return view
     }
 }

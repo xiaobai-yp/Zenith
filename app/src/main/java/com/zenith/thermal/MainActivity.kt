@@ -24,7 +24,6 @@ import android.text.Editable
 import android.text.TextWatcher
 
 class MainActivity : android.app.Activity() {
-    private lateinit var store: ProfileStore
     private lateinit var adapter: AppAdapter
     private var showSystem = false
     private val apps = ArrayList<AppItem>()
@@ -54,9 +53,8 @@ class MainActivity : android.app.Activity() {
         setContentView(R.layout.activity_main)
         cleanupLegacyNotificationChannels()
         applySystemBarInsets()
-        store = ProfileStore(this)
         val list = findViewById<ListView>(R.id.appList)
-        adapter = AppAdapter(this, store)
+        adapter = AppAdapter(this)
         list.adapter = adapter
         list.isVerticalScrollBarEnabled = true
         list.isScrollbarFadingEnabled = true
@@ -156,12 +154,11 @@ class MainActivity : android.app.Activity() {
     }
 
     private fun choose(app: AppItem) {
-        val override = store.app(app.pkg)
-        showProfileDialog("Set Profile: ${app.name}", if (override == null) 0 else Profile.indexOf(override), true, app.pkg)
+        showProfileDialog("Set Profile: ${app.name}")
     }
-    private fun global() = showProfileDialog("Global Profile", Profile.indexOf(store.global()), false, null)
+    private fun global() = showProfileDialog("Global Profile")
 
-    private fun showProfileDialog(title: String, selected: Int, appMode: Boolean, pkg: String?) {
+    private fun showProfileDialog(title: String) {
         val dialog = Dialog(this)
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(14), dp(18), dp(10)); background = getDrawable(R.drawable.bg_glass_dialog) }
@@ -172,18 +169,13 @@ class MainActivity : android.app.Activity() {
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; minimumHeight = dp(46); isClickable = true; isFocusable = true }
             val label = TextView(this).apply { text = Profile.MENU_NAMES[i]; setTextColor(TEXT); textSize = 16f; gravity = Gravity.CENTER_VERTICAL; maxLines = 2; setPadding(0,0,dp(8),0) }
             row.addView(label, LinearLayout.LayoutParams(0, dp(46), 1f))
-            val radio = ProfileRadio(this).apply { setChecked(i == selected) }
+            val radio = ProfileRadio(this).apply { setChecked(i == 0) }
             row.addView(radio, LinearLayout.LayoutParams(dp(48), dp(46)))
             val click = View.OnClickListener {
-                if (appMode && pkg != null) {
-                    if (i == 0) store.clear(pkg) else store.app(pkg, Profile.value(i))
-                } else {
-                    store.global(Profile.value(i))
-                }
-                if (appMode && pkg != null) ThermalController.apply(store.app(pkg) ?: store.global())
-                else ThermalController.apply(store.global())
+                val ok = ThermalController.apply(Profile.value(i))
                 adapter.notifyDataSetChanged()
-                showThemedToast("Profile applied: ${Profile.NAMES[i]}")
+                if (ok) showThemedToast("Profile applied: ${Profile.NAMES[i]}")
+                else showThemedToast("Daemon not available — profile not applied")
                 dialog.dismiss()
             }
             row.setOnClickListener(click); radio.setOnClickListener(click); group.addView(row, LinearLayout.LayoutParams(-1, dp(46)))
@@ -209,8 +201,8 @@ class MainActivity : android.app.Activity() {
         systemRow.addView(systemText, LinearLayout.LayoutParams(0, dp(44), 1f)); systemRow.addView(check, LinearLayout.LayoutParams(dp(42), dp(44)))
         systemRow.setOnClickListener { showSystem = !showSystem; dialog.dismiss(); load() }
         box.addView(systemRow)
-        val reset = menuText("Reset Per-App Profiles"); box.addView(reset, LinearLayout.LayoutParams(-1, dp(44))); reset.setOnClickListener { store.reset(); dialog.dismiss(); load(); showThemedToast("Per-app profiles reset") }
-        val global = menuText("Global Profile"); box.addView(global, LinearLayout.LayoutParams(-1, dp(44))); global.setOnClickListener { dialog.dismiss(); global() }
+        val reset = menuText("Reset Per-App Profiles"); box.addView(reset, LinearLayout.LayoutParams(-1, dp(44))); reset.setOnClickListener { dialog.dismiss(); showThemedToast("Per-app profiles are managed by zenithd (config: /vendor/etc/profiles.json)") }
+        val global = menuText("Global Profile"); box.addView(global, LinearLayout.LayoutParams(-1, dp(44))); global.setOnClickListener { dialog.dismiss(); global(); showDaemonStatus() }
         val about = menuText("About"); box.addView(about, LinearLayout.LayoutParams(-1, dp(44))); about.setOnClickListener { dialog.dismiss(); showAboutDialog() }
         dialog.setContentView(box)
         dialog.window?.apply {
@@ -266,7 +258,7 @@ class MainActivity : android.app.Activity() {
 
         val scroll = ScrollView(this)
         val message = TextView(this).apply {
-            text = "Zenith Thermal is an Android utility for managing thermal profiles on a per-app basis. It lets you assign a thermal profile to individual applications while keeping a Global Profile as the fallback for apps without a custom override.\n\nPER-APP PROFILES\nSelect an application and assign a profile such as Default, Dynamic, Game, Game 2, Pubg, AR & VR, Camera, or YouTube. Choosing Default removes the app-specific override and makes the app follow the Global Profile.\n\nGLOBAL PROFILE\nDefines the thermal profile used by applications that do not have their own profile. It also provides the baseline profile for the system's thermal profile controller.\n\nPROFILE APPLICATION\nZenith Thermal watches the foreground application and applies its configured profile. When no per-app profile is configured, the Global Profile is used instead.\n\nBATTERY MONITOR\nThe Battery Monitor provides battery status information and keeps persistent accounting for screen-on, screen-off, deep-sleep, awake time, and active/idle drain. It can also show current, voltage, temperature, and power information when supported by the device kernel.\n\nRESET PER-APP PROFILES\nRemoves all application-specific profile overrides so that applications return to the Global Profile.\n\nNOTE\nActual thermal behavior depends on the device kernel, vendor thermal framework, and available thermal interfaces. Zenith Thermal changes the configured profile; it does not replace the device thermal controller itself."
+            text = "Zenith Thermal is an Android UI controller for the zenithd thermal daemon. It lets you apply thermal profiles (Default, Dynamic, Game, Game 2, Pubg, AR & VR, Camera, YouTube, …) via socket IPC to the daemon, which owns all hardware interaction.\n\nGLOBAL PROFILE\nSelecting a profile sends MSG_SET_PROFILE to zenithd, which applies the matching profile from /vendor/etc/profiles.json. Per-app profile switching is handled automatically by the daemon's foreground-app monitor.\n\nDAEMON STATUS\nThis app is a pure UI controller: it does not read or write sysfs directly. All battery and thermal data shown here comes from the daemon via MSG_GET_STATUS. If the daemon is not running, the app shows a \"Daemon not available\" state and keeps retrying.\n\nBATTERY MONITOR\nThe Battery Monitor displays battery current, level and drain rate reported by the daemon. It keeps user settings locally (reset target, temperature unit, power display).\n\nNOTE\nzenithd runs from init.rc and reads /vendor/etc/profiles.json. Without the daemon, profile changes cannot be applied."
             setTextColor(TEXT)
             textSize = 14f
             setLineSpacing(0f, 1.12f)
@@ -305,6 +297,10 @@ class MainActivity : android.app.Activity() {
 
     private fun applySystemBarInsets() {
         val root=findViewById<View>(R.id.root); if (Build.VERSION.SDK_INT>=30) root.setOnApplyWindowInsetsListener { v,insets -> val bars=insets.getInsets(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars()); v.setPadding(v.paddingLeft,bars.top+dp(6),v.paddingRight,bars.bottom+dp(2)); insets }; root.requestApplyInsets()
+    }
+    private fun showDaemonStatus() {
+        val status = ZenithDaemonClient.isConnected
+        showThemedToast(if (status) "Daemon connected" else "Daemon not available")
     }
     private fun startMonitor() {
         val intent=Intent(this,AppMonitorService::class.java)

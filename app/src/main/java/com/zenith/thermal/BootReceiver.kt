@@ -8,30 +8,17 @@ import android.os.Build
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         when (intent?.action) {
-            Intent.ACTION_SHUTDOWN -> {
-                val prefs = context.getSharedPreferences("zenith_battery", Context.MODE_PRIVATE)
-                if (prefs.getBoolean("reset_on_restart", false)) {
-                    context.getSharedPreferences("zenith_battery_stats", Context.MODE_PRIVATE)
-                        .edit().clear().apply()
-                }
-                return
-            }
+            Intent.ACTION_SHUTDOWN -> return
             Intent.ACTION_BOOT_COMPLETED -> Unit
             else -> return
         }
 
-        val thermal = Intent(context, AppMonitorService::class.java)
-        runCatching {
-            if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(thermal)
-            else context.startService(thermal)
-        }
+        // zenithd is already running from init.rc; the app service just maintains
+        // the socket connection and reconnects on daemon restart.
+        AppMonitorService.start(context)
 
         val prefs = context.getSharedPreferences("zenith_battery", Context.MODE_PRIVATE)
         if (!prefs.getBoolean("enabled", true)) return
-        if (prefs.getBoolean("reset_on_restart", false)) {
-            context.getSharedPreferences("zenith_battery_stats", Context.MODE_PRIVATE).edit()
-                .clear().apply()
-        }
 
         val battery = Intent(context, BatteryMonitorService::class.java)
         runCatching {
