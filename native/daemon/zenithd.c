@@ -238,12 +238,6 @@ int main(int argc, char *argv[])
 
     __android_log_print(ANDROID_LOG_INFO, TAG, "Daemon running (pid=%d)", getpid());
 
-    /* Verify ROM */
-    if (crypto_verify_rom() < 0) {
-        __android_log_print(ANDROID_LOG_WARN, TAG,
-                            "ROM verification failed, continuing anyway");
-    }
-
     /* Init subsystems */
     sysfs_monitor_init();
     thermal_core_init();
