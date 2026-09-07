@@ -1,0 +1,78 @@
+# zenithd.te — SELinux policy for zenithd thermal daemon.
+#
+# Copyright (c) 2026 ZenithThermal Contributors
+# SPDX-License-Identifier: MIT
+
+# Daemon type
+type zenithd, domain;
+type zenithd_exec, exec_type, vendor_file_type, file_type;
+
+# Init starts zenithd
+init_daemon_domain(zenithd)
+
+# Allow daemon to run as root (needed for sysfs access)
+# In production, use least-privilege with specific capabilities
+
+# ---- Sysfs access (thermal zones, CPU freq, GPU) ----
+
+# Read/write thermal zone sysfs files
+allow zenithd sysfs_thermal:file { read write open };
+allow zenithd sysfs:file { read write open };
+allow zenithd sysfs_devices_system_cpu:dir { search };
+allow zenithd sysfs_devices_system_cpu:file { read write open };
+
+# Read/write cpufreq scaling parameters
+allow zenithd sysfs_devices_system_cpu_cpu:dir { search };
+allow zenithd sysfs_devices_system_cpu_cpu:file { read write open };
+
+# Read/write thermal_message sconfig
+allow zenithd sysfs_thermal_message:file { read write open };
+
+# ---- GPU sysfs ----
+allow zenithd sysfs_kgsl:file { read write open };
+
+# ---- Block device scheduler ----
+allow zenithd sysfs_block:file { read write open };
+
+# ---- /proc access ----
+allow zenithd proc:dir { search };
+allow zenithd proc:file { read open };
+
+# Allow reading oom_score_adj for app detection
+allow zenithd proc_pid:dir { search };
+allow zenithd proc_pid:file { read open };
+allow zenithd proc_pid_cmdline:file { read open };
+allow zenithd proc_pid_status:file { read open };
+
+# ---- Property access ----
+
+# Read and write persist.sys.zenith.* properties
+get_prop(zenithd, system_prop)
+set_prop(zenithd, system_prop)
+get_prop(zenithd, vendor_prop)
+set_prop(zenithd, vendor_prop)
+
+# ---- Socket IPC ----
+
+# Create and manage UNIX domain socket
+allow zenithd zenithd_socket:sock_file { create write unlink };
+allow zenithd zenithd:unix_stream_socket { create bind listen accept connectto read write };
+
+# Allow connection from untrusted_app (UI app)
+allow untrusted_app_29 zenithd_socket:sock_file { write };
+allow untrusted_app_29 zenithd:unix_stream_socket { connectto read write };
+
+# ---- File access ----
+
+# Read profiles.json config
+allow zenithd zenithd_data_file:dir { search };
+allow zenithd zenithd_data_file:file { read open };
+allow zenithd vendor_etc_zenith:file { read open };
+
+# PID file
+allow zenithd zenithd_data_file:file { create write unlink };
+
+# ---- Log ----
+allow zenithd kernel:system syslog_read;
+allow zenithd logdr_socket:sock_file { write };
+allow zenithd logd:unix_stream_socket { connectto read write };

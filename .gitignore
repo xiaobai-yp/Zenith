@@ -1,8 +1,9 @@
-.gradle/
 build/
-app/build/
-local.properties
-*.iml
-.idea/
-*.apk
-!gradle/wrapper/gradle-wrapper.jar
+*.o
+*.so
+*.d
+.cache/
+keystore/
+.gradle/
+app-debug-ci.apk
+build/

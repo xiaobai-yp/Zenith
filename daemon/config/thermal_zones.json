@@ -1,0 +1,75 @@
+{
+    "zones": [
+        {
+            "zone_id": 0,
+            "name": "cpu-0-0-usr",
+            "trip_critical": 95000,
+            "trip_hot": 85000,
+            "trip_passive": 75000
+        },
+        {
+            "zone_id": 1,
+            "name": "cpu-1-0-usr",
+            "trip_critical": 95000,
+            "trip_hot": 85000,
+            "trip_passive": 75000
+        },
+        {
+            "zone_id": 2,
+            "name": "cpu-2-0-usr",
+            "trip_critical": 95000,
+            "trip_hot": 85000,
+            "trip_passive": 75000
+        },
+        {
+            "zone_id": 3,
+            "name": "cpu-3-0-usr",
+            "trip_critical": 95000,
+            "trip_hot": 85000,
+            "trip_passive": 75000
+        },
+        {
+            "zone_id": 4,
+            "name": "cpu-4-0-usr",
+            "trip_critical": 95000,
+            "trip_hot": 85000,
+            "trip_passive": 75000
+        },
+        {
+            "zone_id": 5,
+            "name": "cpu-5-0-usr",
+            "trip_critical": 95000,
+            "trip_hot": 85000,
+            "trip_passive": 75000
+        },
+        {
+            "zone_id": 6,
+            "name": "cpu-6-0-usr",
+            "trip_critical": 95000,
+            "trip_hot": 85000,
+            "trip_passive": 75000
+        },
+        {
+            "zone_id": 7,
+            "name": "cpu-7-0-usr",
+            "trip_critical": 95000,
+            "trip_hot": 85000,
+            "trip_passive": 75000
+        },
+        {
+            "zone_id": 8,
+            "name": "gpu-usr",
+            "trip_critical": 100000,
+            "trip_hot": 90000,
+            "trip_passive": 80000
+        },
+        {
+            "zone_id": 9,
+            "name": "skin-therm",
+            "trip_critical": 45000,
+            "trip_hot": 42000,
+            "trip_passive": 40000
+        }
+    ],
+    "default_poll_interval_ms": 5000
+}

@@ -1,0 +1,9 @@
+# file_contexts — SELinux file contexts for ZenithThermal.
+#
+# Copyright (c) 2026 ZenithThermal Contributors
+# SPDX-License-Identifier: MIT
+
+/dev/socket/zenithd          u:object_r:zenithd_socket:s0
+/system/bin/zenithd           u:object_r:zenithd_exec:s0
+/system/etc/zenith(/.*)?      u:object_r:vendor_etc_zenith:s0
+/data/local/zenith(/.*)?      u:object_r:zenithd_data_file:s0

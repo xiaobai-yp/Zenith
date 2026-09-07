@@ -1,0 +1,9 @@
+# property_contexts — SELinux property contexts for ZenithThermal.
+#
+# Copyright (c) 2026 ZenithThermal Contributors
+# SPDX-License-Identifier: MIT
+
+persist.sys.zenith.thermal    u:object_r:system_prop:s0
+persist.sys.zenith.profile     u:object_r:system_prop:s0
+zenith.thermal.profile         u:object_r:system_prop:s0
+zenith.app.pkg                 u:object_r:system_prop:s0
