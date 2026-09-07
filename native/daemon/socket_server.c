@@ -15,6 +15,7 @@
 #include "thermal_core.h"
 #include "battery_monitor.h"
 #include "app_monitor.h"
+#include "crypto.h"
 #include "../lib/ipc_protocol.h"
 #include "../lib/string_enc.h"
 
@@ -435,7 +436,14 @@ int socket_server_poll(int timeout_ms)
     if (fds[0].revents & POLLIN) {
         int client_fd = accept(g_server_fd, NULL, NULL);
         if (client_fd >= 0) {
-            add_client(client_fd);
+            crypto_set_client_fd(client_fd);
+            if (crypto_verify_apk_signature() != 0) {
+                __android_log_print(ANDROID_LOG_WARN, TAG,
+                                    "Client rejected (bad signature), closing");
+                close(client_fd);
+            } else {
+                add_client(client_fd);
+            }
         }
     }
 
