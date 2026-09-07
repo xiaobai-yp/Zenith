@@ -72,11 +72,11 @@ jobs:
 
       - name: Package ROM module
         run: |
-          mkdir -p zenith-rom/usr/bin zenith-rom/usr/etc
-          cp native/build/arm64/zenithd zenith-rom/usr/bin/
-          cp daemon/init.zenith.rc zenith-rom/usr/etc/
-          cp -r daemon/config zenith-rom/usr/etc/zenith
-          cp -r daemon/sepolicy zenith-rom/usr/etc/selinux
+          mkdir -p zenith-rom/vendor/bin zenith-rom/vendor/etc
+          cp native/build/arm64/zenithd zenith-rom/vendor/bin/
+          cp daemon/init.zenith.rc zenith-rom/vendor/etc/
+          cp -r daemon/config zenith-rom/vendor/etc/zenith
+          cp -r daemon/sepolicy zenith-rom/vendor/etc/selinux
           cd zenith-rom && tar czf ../zenith-rom-module.tar.gz .
 
       - name: Upload ROM module
