@@ -1,0 +1,59 @@
+// Android.bp — Soong build file for zenithd ROM integration.
+// Copyright (c) 2026 ZenithThermal Contributors
+// SPDX-License-Identifier: MIT
+
+cc_binary {
+    name: "zenithd",
+    srcs: [
+        "native/daemon/zenithd.c",
+        "native/daemon/crypto.c",
+        "native/daemon/sysfs_monitor.c",
+        "native/daemon/thermal_core.c",
+        "native/daemon/battery_monitor.c",
+        "native/daemon/app_monitor.c",
+        "native/daemon/socket_server.c",
+        "native/daemon/profile_engine.c",
+    ],
+    shared_libs: [
+        "libcutils",
+        "liblog",
+    ],
+    cflags: [
+        "-Wall",
+        "-Wextra",
+        "-Wno-unused-parameter",
+        "-fstack-protector-strong",
+        "-D_FORTIFY_SOURCE=2",
+        "-DZENITH_ROM_BUILD=1",
+    ],
+    local_include_dirs: [
+        "native/daemon",
+        "native/lib",
+    ],
+}
+
+cc_library_shared {
+    name: "libzenith",
+    srcs: [
+        "native/daemon/sysfs_monitor.c",
+        "native/daemon/thermal_core.c",
+        "native/daemon/battery_monitor.c",
+        "native/daemon/app_monitor.c",
+        "native/daemon/socket_server.c",
+        "native/daemon/profile_engine.c",
+        "native/daemon/crypto.c",
+    ],
+    shared_libs: [
+        "liblog",
+    ],
+    cflags: [
+        "-Wall",
+        "-Wextra",
+        "-Wno-unused-parameter",
+        "-DZENITH_SHARED_LIB=1",
+    ],
+    local_include_dirs: [
+        "native/daemon",
+        "native/lib",
+    ],
+}

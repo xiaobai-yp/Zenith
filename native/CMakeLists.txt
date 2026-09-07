@@ -36,8 +36,9 @@ add_executable(zenithd
 target_link_libraries(zenithd
     log     # Android logging (liblog)
     m       # math (battery_monitor uses float)
-    cutils  # property_get/property_set
 )
+# Note: cutils is only available in AOSP ROM build (see Android.bp).
+# NDK builds use __system_property_set from libc (see zenithd.c).
 
 # ---- libzenith.so shared library ----
 add_library(zenith SHARED

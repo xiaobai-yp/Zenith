@@ -26,9 +26,13 @@
 #include "../lib/string_enc.h"
 
 #include <android/log.h>
+#ifndef ZENITH_ROM_BUILD
+/* NDK/standalone build: no libcutils. Use __system_property_set from libc directly. */
+#include <sys/system_properties.h>
+#else
 #include <cutils/properties.h>
+#endif
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <signal.h>
@@ -172,6 +176,16 @@ static int64_t monotonic_ms(void)
  * Returns 0 on success. Falls back to direct sysfs if property_set unavailable. */
 static int set_thermal_property(int profile_id)
 {
+#ifndef ZENITH_ROM_BUILD
+    /*
+     * NDK/standalone build: libcutils unavailable, so no init.rc trigger path.
+     * Always fall through so callers apply profiles directly to sysfs.
+     */
+    (void)profile_id;
+    __android_log_print(ANDROID_LOG_DEBUG, TAG,
+                        "NDK build: applying profile %d directly to sysfs", profile_id);
+    return -1;
+#else
     char value[PROPERTY_VALUE_MAX];
     snprintf(value, sizeof(value), "%d", profile_id);
 
@@ -184,6 +198,7 @@ static int set_thermal_property(int profile_id)
     __android_log_print(ANDROID_LOG_WARN, TAG,
                         "property_set failed (ret=%d), falling back to direct sysfs", ret);
     return -1;
+#endif
 }
 int main(int argc, char *argv[])
 {

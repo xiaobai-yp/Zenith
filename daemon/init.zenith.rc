@@ -4,14 +4,14 @@
 # Copyright (c) 2026 ZenithThermal Contributors
 # SPDX-License-Identifier: MIT
 
-service zenithd /system/bin/zenithd
+service zenithd /system/bin/zenithd --foreground
     class late_start
     user root
     group root system readproc
     capabilities SYS_NICE DAC_OVERRIDE
     socket zenithd stream 0660 root system
-    disabled
-    oneshot
+    # Not oneshot: daemon runs its own loop and must stay alive.
+    # init restarts it if it exits.
 
 on boot
     chmod 0666 /sys/class/thermal/thermal_message/sconfig
