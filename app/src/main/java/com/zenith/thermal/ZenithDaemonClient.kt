@@ -33,6 +33,8 @@ object ZenithDaemonClient {
     const val MSG_GET_STATUS: Byte = 0x10
     const val MSG_SET_PROFILE: Byte = 0x20
     const val MSG_GET_APPS: Byte = 0x30
+    const val MSG_GET_APPS_MAP: Byte = 0x32
+    const val MSG_SET_APP_PROFILE: Byte = 0x42
     const val MSG_SET_THERMAL: Byte = 0x40
     const val MSG_ERROR: Byte = (-1).toByte()
 
