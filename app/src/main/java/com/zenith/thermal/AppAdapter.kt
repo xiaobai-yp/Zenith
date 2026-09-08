@@ -40,7 +40,13 @@ class AppAdapter(context: Context) : BaseAdapter() {
         view.findViewById<ImageView>(R.id.icon).setImageDrawable(item.icon)
         view.findViewById<TextView>(R.id.name).text = item.name
         view.findViewById<TextView>(R.id.packageName).text = item.pkg
-        view.findViewById<TextView>(R.id.profile).visibility = View.GONE
+        val badge = view.findViewById<TextView>(R.id.profile)
+        if (item.profileId >= 0) {
+            badge.text = Profile.name(item.profileId)
+            badge.visibility = View.VISIBLE
+        } else {
+            badge.visibility = View.GONE
+        }
         return view
     }
 }
