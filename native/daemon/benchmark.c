@@ -128,3 +128,20 @@ int benchmark_export_json(char *out, size_t len)
     out[pos]   = '\0';
     return 0;
 }
+
+/* Return up to n most recent points (chronological order). */
+int benchmark_get_last_points(int n, benchmark_point_t *out)
+{
+    if (n <= 0 || !out) return 0;
+    if (n > BENCHMARK_MAX_POINTS) n = BENCHMARK_MAX_POINTS;
+    if (g_ring_count == 0) return 0;
+
+    int take = (g_ring_count < n) ? g_ring_count : n;
+    int start_idx = (g_ring_count < BENCHMARK_MAX_POINTS) ? 0 :
+                    (g_ring_head - take + BENCHMARK_MAX_POINTS) % BENCHMARK_MAX_POINTS;
+    for (int i = 0; i < take; i++) {
+        int idx = (start_idx + i) % BENCHMARK_MAX_POINTS;
+        out[i] = g_ring[idx];
+    }
+    return take;
+}

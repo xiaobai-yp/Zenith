@@ -42,4 +42,7 @@ int64_t benchmark_elapsed_ms(void);
  */
 int benchmark_export_json(char *out, size_t len);
 
+/* Return up to n most recent points (chronological order). */
+int benchmark_get_last_points(int n, benchmark_point_t *out);
+
 #endif /* ZENITH_BENCHMARK_H */
