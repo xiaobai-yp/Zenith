@@ -126,5 +126,3 @@ rm -f "$TMP" "$FC_TMP" "$PC_TMP"
 
 echo ""
 echo "Done. Backups: $CIL.orig $FC.orig $PC.orig"
-echo "Push: adb push $CIL $FC $PC /vendor/etc/selinux/"
-echo "      adb shell restorecon -R /vendor/etc/selinux/ && reboot"
