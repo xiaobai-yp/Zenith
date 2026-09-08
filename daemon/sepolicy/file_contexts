@@ -1,6 +1,5 @@
 # Copyright (c) 2026 ZenithThermal Contributors
 # SPDX-License-Identifier: MIT
-
 /dev/socket/zenithd          u:object_r:zenithd_socket:s0
 /vendor/bin/zenithd           u:object_r:zenithd_exec:s0
 /vendor/etc/profiles.json     u:object_r:vendor_etc_zenith:s0

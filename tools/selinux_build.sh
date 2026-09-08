@@ -82,6 +82,7 @@ print('  converted %d CIL rules' % len(cil))
 " "$TE" "$TMP"
 
 {
+    echo ""
     cat "$TMP"
 } >> "$CIL"
 echo "  appended -> $CIL"
