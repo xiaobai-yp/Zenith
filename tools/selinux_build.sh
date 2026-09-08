@@ -98,14 +98,36 @@ awk '
     { print }
 ' "$PC_IN" > "$PC_TMP"
 
-# --- 4) Append all ---
-{ echo ""; cat "$TMP"; } >> "$CIL"
+# --- 4) Assemble final file: strip trailing newline from target, append block ---
+# helper: strip trailing blank lines from a file
+strip_trailing() {
+    local f="$1"
+    # remove trailing blank lines
+    python3 - "$f" <<'PY'
+import sys
+p = sys.argv[1]
+with open(p, 'rb') as fh:
+    data = fh.read()
+# strip trailing whitespace + newlines
+data = data.rstrip(b'\n')
+with open(p, 'wb') as fh:
+    fh.write(data)
+PY
+}
+
+# CIL: append blank + rules (no license)
+strip_trailing "$CIL"
+{ printf "\n"; cat "$TMP"; } >> "$CIL"
 echo "  appended -> $CIL"
 
-{ echo ""; cat "$FC_TMP"; } >> "$FC"
+# FC: strip trailing, append block (license + rules, no blank after license)
+strip_trailing "$FC"
+{ printf "\n"; cat "$FC_TMP"; } >> "$FC"
 echo "  appended -> $FC"
 
-{ echo ""; cat "$PC_TMP"; } >> "$PC"
+# PC: same
+strip_trailing "$PC"
+{ printf "\n"; cat "$PC_TMP"; } >> "$PC"
 echo "  appended -> $PC"
 
 rm -f "$TMP" "$FC_TMP" "$PC_TMP"
