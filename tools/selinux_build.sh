@@ -38,11 +38,13 @@ echo "Reading $TE, $FC, $PC ..."
 
 # --- 1) file_contexts -> vendor_file_contexts (verbatim copy) ---
 cp "$FC" "${PREFIX}file_contexts"
-echo "  wrote vendor_file_contexts ($(wc -l < "${PREFIX}file_contexts") lines)"
+cp "${PREFIX}file_contexts" "${PREFIX}file_contexts.bak"
+echo "  wrote vendor_file_contexts + vendor_file_contexts.bak ($(wc -l < "${PREFIX}file_contexts") lines)"
 
 # --- 2) property_contexts -> vendor_property_contexts (verbatim copy) ---
 cp "$PC" "${PREFIX}property_contexts"
-echo "  wrote vendor_property_contexts ($(wc -l < "${PREFIX}property_contexts") lines)"
+cp "${PREFIX}property_contexts" "${PREFIX}property_contexts.bak"
+echo "  wrote vendor_property_contexts + vendor_property_contexts.bak ($(wc -l < "${PREFIX}property_contexts") lines)"
 
 # --- 3) zenithd.te -> vendor_sepolicy.cil (convert .te to CIL) ---
 python3 - "$TE" "${PREFIX}sepolicy.cil" <<'PYEOF'
@@ -125,7 +127,11 @@ cil = ["", ";; ZenithThermal SELinux policy (auto-generated from " + TE + ")", "
 with open(OUT, "w") as f:
     f.write("\n".join(cil) + "\n")
 
-print(f"  wrote vendor_sepolicy.cil ({len(cil)} lines)")
+# backup the new file
+import shutil
+shutil.copy2(OUT, OUT + ".bak")
+
+print(f"  wrote vendor_sepolicy.cil + vendor_sepolicy.cil.bak ({len(cil)} lines)")
 PYEOF
 
 echo ""
