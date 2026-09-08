@@ -78,22 +78,27 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: [build, zenithd]
+    if: github.ref == 'refs/heads/main'
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts/
-      - name: Bundle into single release
+      - name: Bundle into release
         run: |
           cd artifacts
           mv app-debug-apk/app-debug.apk .
           mv zenithd-arm64/zenithd .
           mv zenith-rom-module/zenith-rom-module.tar.gz .
-          zip -j ../zenithd-release.zip app-debug.apk zenithd zenith-rom-module.tar.gz
-          cd ..
-          sha256sum zenithd-release.zip
-      - name: Upload combined release
-        uses: actions/upload-artifact@v4
+          zip -j zenithd-release.zip app-debug.apk zenithd zenith-rom-module.tar.gz
+          SHA256=$(sha256sum zenithd-release.zip | cut -d' ' -f1)
+          echo "SHA256=$SHA256" >> "$GITHUB_ENV"
+          echo "SHA256: $SHA256"
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: zenithd-release
-          path: zenithd-release.zip
+          tag_name: build-${{ github.sha }}
+          name: Build ${{ github.sha }}
+          files: artifacts/zenithd-release.zip
+          body: |
+            SHA256: ${{ env.SHA256 }}
