@@ -10,6 +10,8 @@ TE="zenithd.te"
 FC_IN="file_contexts"
 PC_IN="property_contexts"
 TMP="$DIR/.zenith_cil.tmp"
+FC_TMP="$DIR/.zenith_fc.tmp"
+PC_TMP="$DIR/.zenith_pc.tmp"
 
 echo "=== Zenith SELinux append ==="
 echo "Folder: $DIR"
@@ -25,6 +27,7 @@ for f in "$CIL" "$FC" "$PC"; do
     [ -f "$f.orig" ] || { cp "$f" "$f.orig"; echo "Backup: $f.orig"; }
 done
 
+# --- 1) zenithd.te -> CIL rules (strip # license, blank only) ---
 python3 -c "
 import sys, re
 
@@ -81,19 +84,31 @@ with open(sys.argv[2], 'w') as f:
 print('  converted %d CIL rules' % len(cil))
 " "$TE" "$TMP"
 
-{
-    echo ""
-    cat "$TMP"
-} >> "$CIL"
+# --- 2) FC: strip blank line below license ---
+awk '
+    /^#/ && license==0 { license=1; print; next }
+    license && $0=="" { license=0; next }
+    { print }
+' "$FC_IN" > "$FC_TMP"
+
+# --- 3) PC: strip blank line below license ---
+awk '
+    /^#/ && license==0 { license=1; print; next }
+    license && $0=="" { license=0; next }
+    { print }
+' "$PC_IN" > "$PC_TMP"
+
+# --- 4) Append all ---
+{ echo ""; cat "$TMP"; } >> "$CIL"
 echo "  appended -> $CIL"
 
-{ echo ""; cat "$FC_IN"; } >> "$FC"
+{ echo ""; cat "$FC_TMP"; } >> "$FC"
 echo "  appended -> $FC"
 
-{ echo ""; cat "$PC_IN"; } >> "$PC"
+{ echo ""; cat "$PC_TMP"; } >> "$PC"
 echo "  appended -> $PC"
 
-rm -f "$TMP"
+rm -f "$TMP" "$FC_TMP" "$PC_TMP"
 
 echo ""
 echo "=== Done ==="
