@@ -11,6 +11,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
+import android.view.View
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -18,7 +19,7 @@ import android.os.Looper
 import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
-import android.view.View
+import android.graphics.PixelFormat
 import android.view.WindowManager
 import java.util.Locale
 
@@ -134,7 +135,7 @@ class FloatingHudService : Service() {
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-            android.view.PixelFormat.TRANSLUCENT
+            PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
             x = 0
