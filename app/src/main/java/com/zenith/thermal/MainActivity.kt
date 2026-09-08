@@ -22,6 +22,16 @@ import android.view.WindowManager
 import android.widget.*
 import android.text.Editable
 import android.text.TextWatcher
+import android.os.Handler
+import android.os.Looper
+import android.os.Environment
+import java.io.File
+import java.io.FileWriter
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import org.json.JSONArray
+import org.json.JSONObject
 
 class MainActivity : android.app.Activity() {
     private lateinit var adapter: AppAdapter
@@ -38,6 +48,28 @@ class MainActivity : android.app.Activity() {
     private lateinit var navThermalIconView: ImageView
     private lateinit var navBatteryIconView: ImageView
     private lateinit var navBenchmarkIconView: ImageView
+
+    // Benchmark page state
+    private val benchHandler = Handler(Looper.getMainLooper())
+    private val benchFpsHistory = ArrayList<FpsSample>()
+    private var benchRunning = false
+    private var benchStatusText: TextView? = null
+    private var benchDurationText: TextView? = null
+    private var benchAvgFpsText: TextView? = null
+    private var benchMinFpsText: TextView? = null
+    private var benchMaxFpsText: TextView? = null
+    private var benchAvgTempText: TextView? = null
+    private var benchBattDrainText: TextView? = null
+    private var benchChartView: FpsChartView? = null
+    private var benchStartStopButton: TextView? = null
+    private var benchStartedOnce = false
+
+    private val benchRefreshRunnable = object : Runnable {
+        override fun run() {
+            benchUpdateData()
+            if (benchRunning) benchHandler.postDelayed(this, 1000)
+        }
+    }
 
     companion object {
         private val DIALOG_BG = Color.rgb(8, 28, 36)
@@ -89,6 +121,11 @@ class MainActivity : android.app.Activity() {
 
     override fun onPause() {
         super.onPause()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        benchHandler.removeCallbacksAndMessages(null)
     }
 
     private fun load() {
@@ -159,7 +196,7 @@ class MainActivity : android.app.Activity() {
 
         navThermalView.setOnClickListener { showThermal() }
         navBatteryView.setOnClickListener { showBattery() }
-        navBenchmarkView.setOnClickListener { startActivity(Intent(this, BenchmarkResultsActivity::class.java)) }
+        navBenchmarkView.setOnClickListener { showBenchmark() }
         bottomBarHost.addView(view)
     }
 
@@ -219,7 +256,7 @@ class MainActivity : android.app.Activity() {
         box.addView(systemRow)
         val reset = menuText("Reset Per-App Profiles"); box.addView(reset, LinearLayout.LayoutParams(-1, dp(44))); reset.setOnClickListener { dialog.dismiss(); showThemedToast("Per-app profiles are managed by zenithd (config: /vendor/etc/profiles.json)") }
         val global = menuText("Global Profile"); box.addView(global, LinearLayout.LayoutParams(-1, dp(44))); global.setOnClickListener { dialog.dismiss(); global(); showDaemonStatus() }
-        val benchmark = menuText("Benchmark"); box.addView(benchmark, LinearLayout.LayoutParams(-1, dp(44))); benchmark.setOnClickListener { dialog.dismiss(); startActivity(Intent(this, BenchmarkResultsActivity::class.java)) }
+        val benchmark = menuText("Benchmark"); box.addView(benchmark, LinearLayout.LayoutParams(-1, dp(44))); benchmark.setOnClickListener { dialog.dismiss(); showBenchmark() }
         val about = menuText("About"); box.addView(about, LinearLayout.LayoutParams(-1, dp(44))); about.setOnClickListener { dialog.dismiss(); showAboutDialog() }
         dialog.setContentView(box)
         dialog.window?.apply {
@@ -550,18 +587,201 @@ class MainActivity : android.app.Activity() {
         }
     }
 
+    private fun showBenchmark() {
+        findViewById<View>(R.id.searchContainer).visibility = View.GONE
+        findViewById<View>(R.id.appList).visibility = View.GONE
+        findViewById<View>(R.id.batteryPage).visibility = View.GONE
+        findViewById<View>(R.id.benchmarkPage).visibility = View.VISIBLE
+        findViewById<TextView>(R.id.title).text = "Benchmark"
+        navThermalView.background = null
+        navBatteryView.background = null
+        navBenchmarkView.background = getDrawable(R.drawable.bg_bottom_active)
+        restoreNavPadding()
+        navThermalTextView.setTextColor(MUTED)
+        navThermalIconView.setColorFilter(MUTED)
+        navBatteryTextView.setTextColor(MUTED)
+        navBatteryIconView.setColorFilter(MUTED)
+        navBenchmarkTextView.setTextColor(RADIO)
+        navBenchmarkIconView.setColorFilter(RADIO)
+
+        if (benchStatusText == null) {
+            benchStatusText = findViewById(R.id.benchStatusText)
+            benchDurationText = findViewById(R.id.benchDurationText)
+            benchAvgFpsText = findViewById(R.id.benchAvgFpsText)
+            benchMinFpsText = findViewById(R.id.benchMinFpsText)
+            benchMaxFpsText = findViewById(R.id.benchMaxFpsText)
+            benchAvgTempText = findViewById(R.id.benchAvgTempText)
+            benchBattDrainText = findViewById(R.id.benchBattDrainText)
+            benchChartView = findViewById(R.id.benchChartView)
+            benchStartStopButton = findViewById(R.id.benchStartStopButton)
+            findViewById<TextView>(R.id.benchExportButton).setOnClickListener { benchExportJson() }
+            findViewById<TextView>(R.id.benchShareButton).setOnClickListener { benchShareJson() }
+            benchStartStopButton!!.setOnClickListener { benchToggle() }
+            styleBenchButton(benchStartStopButton!!, primary = true)
+            styleBenchButton(findViewById(R.id.benchExportButton), primary = false)
+            styleBenchButton(findViewById(R.id.benchShareButton), primary = false)
+        }
+        if (benchRunning) {
+            benchHandler.removeCallbacks(benchRefreshRunnable)
+            benchHandler.post(benchRefreshRunnable)
+        }
+    }
+
+    private fun benchToggle() {
+        if (benchRunning) {
+            ZenithDaemonClient.stopBenchmark()
+            benchRunning = false
+            benchStatusText?.text = "Stopped"
+            benchStartStopButton?.text = "START"
+            styleBenchButton(benchStartStopButton!!, primary = true)
+        } else {
+            benchFpsHistory.clear()
+            ZenithDaemonClient.startBenchmark()
+            benchRunning = true
+            benchStartedOnce = true
+            benchStatusText?.text = "Running…"
+            benchStartStopButton?.text = "STOP"
+            styleBenchButton(benchStartStopButton!!, primary = false)
+            benchHandler.removeCallbacks(benchRefreshRunnable)
+            benchHandler.post(benchRefreshRunnable)
+        }
+    }
+
+    private fun benchUpdateData() {
+        try {
+            val data = ZenithDaemonClient.getBenchmarkData() ?: return
+            val elapsedMs = data.elapsedMs
+            benchDurationText?.text = benchFormatDuration(elapsedMs)
+
+            val fps = data.fps
+            if (fps != null) {
+                benchAvgFpsText?.text = String.format(Locale.US, "%.1f", fps.avgFps / 10.0)
+                benchMinFpsText?.text = String.format(Locale.US, "%.1f", fps.minFps / 10.0)
+                benchMaxFpsText?.text = String.format(Locale.US, "%.1f", fps.maxFps / 10.0)
+            }
+
+            if (fps != null && elapsedMs > 0) {
+                val tsSec = elapsedMs / 1000
+                val exists = benchFpsHistory.any { it.tsSec == tsSec }
+                if (!exists) {
+                    benchFpsHistory.add(FpsSample(tsSec, fps.avgFps / 10.0))
+                    while (benchFpsHistory.size > 300) benchFpsHistory.removeAt(0)
+                    benchChartView?.setData(benchFpsHistory)
+                }
+            }
+
+            val status = ZenithDaemonClient.getStatus()
+            if (status != null) {
+                val zones = status.thermalZones
+                var sum = 0.0
+                if (!zones.isEmpty()) { for (z in zones) sum += z.tempC; sum /= zones.size }
+                benchAvgTempText?.text = String.format(Locale.US, "%.1f°C", sum)
+                benchBattDrainText?.text = String.format(Locale.US, "%.1f%%/h", status.batteryDrainPctPerHr)
+            }
+
+            if (!data.running && benchRunning) {
+                benchRunning = false
+                benchStatusText?.text = "Completed"
+                benchStartStopButton?.text = "START"
+                styleBenchButton(benchStartStopButton!!, primary = true)
+            }
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun benchExportJson() {
+        try {
+            val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+            var dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            if (dir == null) dir = getExternalFilesDir(null)
+            if (dir != null && !dir.exists()) dir.mkdirs()
+            if (dir == null) { showThemedToast("Cannot write file"); return }
+            val file = File(dir, "zenith_benchmark_$ts.json")
+            FileWriter(file).use { it.write(benchBuildJson().toString(2)) }
+            showThemedToast("Saved: ${file.name}")
+        } catch (e: Exception) { showThemedToast("Export failed: ${e.message}") }
+    }
+
+    private fun benchShareJson() {
+        try {
+            val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+            var dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            if (dir == null) dir = getExternalFilesDir(null)
+            if (dir != null && !dir.exists()) dir.mkdirs()
+            if (dir == null) { showThemedToast("Cannot create file"); return }
+            val file = File(dir, "zenith_benchmark_$ts.json")
+            FileWriter(file).use { it.write(benchBuildJson().toString(2)) }
+            val uri = android.net.Uri.fromFile(file)
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "application/json"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                putExtra(Intent.EXTRA_SUBJECT, "Zenith Benchmark Results")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(intent, "Share Benchmark"))
+        } catch (e: Exception) { showThemedToast("Share failed: ${e.message}") }
+    }
+
+    private fun benchBuildJson(): JSONObject {
+        val obj = JSONObject()
+        obj.put("timestamp", System.currentTimeMillis())
+        obj.put("durationMs", if (benchFpsHistory.isEmpty()) 0
+            else (benchFpsHistory.last().tsSec - benchFpsHistory.first().tsSec) * 1000)
+        val data = ZenithDaemonClient.getBenchmarkData()
+        if (data != null) {
+            obj.put("elapsedMs", data.elapsedMs)
+            obj.put("totalFrames", data.frames)
+            data.fps?.let { fpsVal ->
+                val fpsObj = JSONObject()
+                fpsObj.put("avg", fpsVal.avgFps / 10.0)
+                fpsObj.put("min", fpsVal.minFps / 10.0)
+                fpsObj.put("max", fpsVal.maxFps / 10.0)
+                obj.put("fps", fpsObj)
+            }
+        }
+        val pts = JSONArray()
+        for (s in benchFpsHistory) {
+            val p = JSONObject()
+            p.put("timeMs", s.tsSec * 1000)
+            p.put("fps", Math.round(s.fps * 10.0) / 10.0)
+            pts.put(p)
+        }
+        obj.put("fpsHistory", pts)
+        return obj
+    }
+
+    private fun benchFormatDuration(ms: Long): String {
+        var s = ms / 1000
+        if (s < 60) return "${s}s"
+        val m = s / 60; s %= 60
+        if (m < 60) return "${m}m ${s}s"
+        return "${m / 60}h ${m % 60}m"
+    }
+
+    private fun styleBenchButton(btn: TextView, primary: Boolean) {
+        val bg = GradientDrawable()
+        bg.setColor(if (primary) Color.rgb(0x5E, 0xA7, 0xFF) else Color.rgb(0x2A, 0x44, 0x4D))
+        bg.setCornerRadius(dp(18).toFloat())
+        bg.setStroke(dp(1), Color.rgb(0x49, 0x63, 0x6B))
+        btn.background = bg
+    }
+
     private fun showBattery() {
         findViewById<View>(R.id.searchContainer).visibility = View.GONE
         findViewById<View>(R.id.appList).visibility = View.GONE
         findViewById<View>(R.id.batteryPage).visibility = View.VISIBLE
+        findViewById<View>(R.id.benchmarkPage)?.visibility = View.GONE
         findViewById<TextView>(R.id.title).text = "Battery Monitor"
         navThermalView.background = null
         navBatteryView.background = getDrawable(R.drawable.bg_bottom_active)
+        navBenchmarkView.background = null
         restoreNavPadding()
         navThermalTextView.setTextColor(MUTED)
         navThermalIconView.setColorFilter(MUTED)
         navBatteryTextView.setTextColor(RADIO)
         navBatteryIconView.setColorFilter(RADIO)
+        navBenchmarkTextView.setTextColor(MUTED)
+        navBenchmarkIconView.setColorFilter(MUTED)
         updateBatteryNav()
     }
 
@@ -585,14 +805,18 @@ class MainActivity : android.app.Activity() {
         findViewById<View>(R.id.searchContainer).visibility = View.VISIBLE
         findViewById<View>(R.id.appList).visibility = View.VISIBLE
         findViewById<View>(R.id.batteryPage).visibility = View.GONE
+        findViewById<View>(R.id.benchmarkPage)?.visibility = View.GONE
         findViewById<TextView>(R.id.title).text = "Zenith Thermal"
         navThermalView.background = getDrawable(R.drawable.bg_bottom_active)
         navBatteryView.background = null
+        navBenchmarkView.background = null
         restoreNavPadding()
         navThermalTextView.setTextColor(RADIO)
         navThermalIconView.setColorFilter(RADIO)
         navBatteryTextView.setTextColor(MUTED)
         navBatteryIconView.setColorFilter(MUTED)
+        navBenchmarkTextView.setTextColor(MUTED)
+        navBenchmarkIconView.setColorFilter(MUTED)
         updateBatteryNav()
     }
 
