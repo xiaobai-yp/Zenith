@@ -36,6 +36,11 @@ object ZenithDaemonClient {
     const val MSG_GET_APPS_MAP: Byte = 0x32
     const val MSG_SET_APP_PROFILE: Byte = 0x42
     const val MSG_SET_THERMAL: Byte = 0x40
+    const val MSG_GET_FPS: Byte = 0x60
+    const val MSG_GET_FPS_R: Byte = 0x61
+    const val MSG_BENCH_START: Byte = 0x62
+    const val MSG_BENCH_STOP: Byte = 0x63
+    const val MSG_BENCH_DATA: Byte = 0x64
     const val MSG_ERROR: Byte = (-1).toByte()
 
     private val ioLock = Any()
@@ -290,5 +295,60 @@ object ZenithDaemonClient {
     ) {
         val batteryCurrentMa: Double get() = kotlin.math.abs(batteryCurrentUa / 1000.0)
         val batteryCharging: Boolean get() = batteryOnline && batteryCurrentUa >= 0
+    }
+
+    // ---- FPS / Benchmark ----
+
+    // MSG_GET_FPS_R (0x61) → 5 x uint16, each is value * 10
+    data class FpsResponse(
+        val shortFps: Int,
+        val longFps: Int,
+        val avgFps: Int,
+        val minFps: Int,
+        val maxFps: Int
+    )
+
+    fun getFps(): FpsResponse? {
+        val payload = sendCommand(MSG_GET_FPS) ?: return null
+        if (payload.size < 10) return null
+        val buf = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN)
+        return FpsResponse(
+            buf.short.toInt() and 0xFFFF,
+            buf.short.toInt() and 0xFFFF,
+            buf.short.toInt() and 0xFFFF,
+            buf.short.toInt() and 0xFFFF,
+            buf.short.toInt() and 0xFFFF
+        )
+    }
+
+    fun startBenchmark(): Boolean = sendCommand(MSG_BENCH_START) != null
+    fun stopBenchmark(): Boolean = sendCommand(MSG_BENCH_STOP) != null
+
+    // MSG_BENCH_DATA (0x64) → [running:u8][elapsed_ms:u32][frames:u32] then
+    // optional stats block when benchmark finished/final: 5 x uint16 (x10)
+    data class BenchmarkData(
+        val running: Boolean,
+        val elapsedMs: Long,
+        val frames: Long,
+        val fps: FpsResponse?
+    )
+
+    fun getBenchmarkData(): BenchmarkData? {
+        val payload = sendCommand(MSG_BENCH_DATA) ?: return null
+        if (payload.size < 9) return null
+        val buf = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN)
+        val running = buf.get().toInt() and 0xFF != 0
+        val elapsedMs = buf.int.toLong() and 0xFFFFFFFFL
+        val frames = buf.int.toLong() and 0xFFFFFFFFL
+        val fps = if (buf.remaining() >= 10) {
+            FpsResponse(
+                buf.short.toInt() and 0xFFFF,
+                buf.short.toInt() and 0xFFFF,
+                buf.short.toInt() and 0xFFFF,
+                buf.short.toInt() and 0xFFFF,
+                buf.short.toInt() and 0xFFFF
+            )
+        } else null
+        return BenchmarkData(running, elapsedMs, frames, fps)
     }
 }
