@@ -60,7 +60,7 @@ typedef struct __attribute__((packed)) {
 /* ---- Payloads ---- */
 
 typedef struct __attribute__((packed)) {
-    uint8_t  foreground_pid;
+    uint16_t foreground_pid;
     uint32_t current_profile_id;
     uint8_t  thermal_zone_count;
     struct {

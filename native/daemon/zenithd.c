@@ -86,7 +86,7 @@ static void setup_signals(void)
     sigaction(SIGHUP, &sa, NULL);
 
     /* Ignore SIGPIPE (broken socket writes) */
-    signal(SIGPIPE, SIG_IGN);
+    { struct sigaction sa = {0}; sa.sa_handler = SIG_IGN; sigaction(SIGPIPE, &sa, NULL); }
 }
 
 /* ---- Daemonization ---- */

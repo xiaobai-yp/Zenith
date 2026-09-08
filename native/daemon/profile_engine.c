@@ -77,6 +77,7 @@ static int json_get_string(const char *json, const char *key,
 static const char *json_find_next_profile(const char *json, const char **scan,
                                           char *id_out, size_t id_len)
 {
+    (void)json;
     const char *p = *scan;
     while (*p) {
         if (*p == '"') {

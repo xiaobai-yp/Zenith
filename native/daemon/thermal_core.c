@@ -219,10 +219,10 @@ int thermal_core_apply_profile(const char *profile_id)
             write_sysfs(g_governor_paths[i], gov);
         }
         if (max_f > 0) {
-            write_sysfs_int(g_scaling_max_paths[i], (int)max_f);
+            write_sysfs_uint32(g_scaling_max_paths[i], max_f);
         }
         if (min_f > 0) {
-            write_sysfs_int(g_scaling_min_paths[i], (int)min_f);
+            write_sysfs_uint32(g_scaling_min_paths[i], min_f);
         }
     }
 
@@ -298,4 +298,11 @@ int thermal_core_set_max_freq(int core_id, uint32_t freq_khz)
                         "Max freq set to %u kHz on core %d",
                         freq_khz, core_id);
     return 0;
+}
+
+/* Fix: write uint32_t directly instead of casting to int (wraps at 2.147GHz) */
+static int write_sysfs_uint32(const char *path, uint32_t val) {
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%u", val);
+    return write_sysfs_str(path, buf);
 }

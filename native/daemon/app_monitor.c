@@ -77,7 +77,7 @@ static int read_cmdline(int pid, char *out, size_t outlen)
 
     /* Cmdline args are null-separated; take only the first arg */
     for (size_t i = 0; i < n; i++) {
-        if (buf[i] == '\0') { buf[i] = '\0'; break; }
+        if (buf[i] == '\0') break;
     }
 
     /* Validate: package names have dots, lowercase letters, maybe underscores */

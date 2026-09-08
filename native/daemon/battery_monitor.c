@@ -122,7 +122,7 @@ int battery_monitor_update(int capacity_pct, int current_now_ua,
             }
 
             /* Idle drain (low current_now while discharging) */
-            if (abs(current_now_ua) < 100000) { /* < 100mA */
+            if (labs((long)current_now_ua) < 100000) { /* < 100mA */
                 g_stats.idle_drain_pct_per_hr = g_stats.drain_pct_per_hour * 0.5f;
             }
 

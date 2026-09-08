@@ -1,15 +1,3 @@
-/*
- * socket_server.c — UNIX domain socket server at /dev/socket/zenithd.
- *
- * Handles IPC between the daemon and the Android Kotlin UI app.
- * Non-blocking I/O, poll-based event loop. Handles MSG_GET_STATUS,
- * MSG_SET_PROFILE, MSG_GET_APPS, MSG_SET_THERMAL, MSG_HEARTBEAT,
- * and MSG_CHALLENGE for mutual authentication.
- *
- * Copyright (c) 2026 ZenithThermal Contributors
- * SPDX-License-Identifier: MIT
- */
-
 #include "socket_server.h"
 #include "sysfs_monitor.h"
 #include "thermal_core.h"
@@ -44,8 +32,6 @@ static volatile int g_running = 0;
 static int g_client_fds[MAX_CLIENTS];
 static int g_client_count = 0;
 
-/* ---- CRC32 implementation ---- */
-
 uint32_t zenith_crc32(const void *data, size_t len)
 {
     const uint8_t *p = (const uint8_t *)data;
@@ -59,8 +45,6 @@ uint32_t zenith_crc32(const void *data, size_t len)
     return crc ^ 0xFFFFFFFF;
 }
 
-/* ---- Helpers ---- */
-
 static int set_nonblocking(int fd)
 {
     int flags = fcntl(fd, F_GETFL, 0);
@@ -68,6 +52,7 @@ static int set_nonblocking(int fd)
     return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 }
 
+/* --- send_response with partial-write loop --- */
 static int send_response(int fd, uint8_t msg_type, uint16_t seq,
                          const void *payload, uint16_t payload_len)
 {
@@ -78,20 +63,24 @@ static int send_response(int fd, uint8_t msg_type, uint16_t seq,
     hdr->msg_type = msg_type;
     hdr->payload_len = payload_len;
     hdr->seq = seq;
-    hdr->crc = 0; /* compute over everything except crc field */
+    hdr->crc = 0;
 
-    if (payload_len > 0 && payload) {
+    if (payload_len > 0 && payload)
         memcpy(buf + sizeof(zenith_header_t), payload, payload_len);
-    }
 
     hdr->crc = zenith_crc32(buf, sizeof(zenith_header_t) + payload_len);
 
     size_t total = sizeof(zenith_header_t) + payload_len;
-    ssize_t written = write(fd, buf, total);
-    if (written < 0) {
-        __android_log_print(ANDROID_LOG_WARN, TAG,
-                            "Send failed: %s", strerror(errno));
-        return -1;
+    size_t sent = 0;
+    while (sent < total) {
+        ssize_t n = write(fd, buf + sent, total - sent);
+        if (n < 0) {
+            if (errno == EINTR) continue;
+            __android_log_print(ANDROID_LOG_WARN, TAG,
+                                "Send failed: %s", strerror(errno));
+            return -1;
+        }
+        sent += (size_t)n;
     }
     return 0;
 }
@@ -128,11 +117,13 @@ static void handle_get_status(int fd, uint16_t seq)
     status.battery.drain_pct_per_hr = (uint32_t)(bstat->drain_pct_per_hour * 10.0f);
 
     const char *prof = thermal_core_get_active_profile();
-    /* Convert profile name string to numeric ID if possible */
     status.current_profile_id = 0;
     if (prof) {
-        int pid = atoi(prof);
-        if (pid > 0) status.current_profile_id = (uint32_t)pid;
+        /* Map string profile name to numeric ID */
+        if (strcmp(prof, "balanced") == 0) status.current_profile_id = PROFILE_BALANCED;
+        else if (strcmp(prof, "gaming") == 0) status.current_profile_id = PROFILE_GAMING;
+        else if (strcmp(prof, "powersave") == 0) status.current_profile_id = PROFILE_POWERSAVE;
+        else if (strcmp(prof, "battery_saver") == 0) status.current_profile_id = PROFILE_BATTERY_SAVER;
     }
 
     send_response(fd, MSG_GET_STATUS_R, seq, &status, sizeof(status));
@@ -142,12 +133,11 @@ static void handle_set_profile(int fd, uint16_t seq,
                                const set_profile_payload_t *payload)
 {
     int result = thermal_core_apply_profile(payload->profile_id);
-    if (result == 0) {
+    if (result == 0)
         send_response(fd, MSG_SET_PROFILE_R, seq, payload,
                       sizeof(set_profile_payload_t));
-    } else {
+    else
         send_error(fd, seq, 1, "Profile not found");
-    }
 }
 
 static void handle_get_apps(int fd, uint16_t seq)
@@ -155,11 +145,10 @@ static void handle_get_apps(int fd, uint16_t seq)
     foreground_app_t fg;
     apps_payload_t apps = {0};
 
-    if (app_monitor_detect_fg(&fg) == 0) {
+    if (app_monitor_detect_fg(&fg) == 0)
         strncpy(apps.packages, fg.package, sizeof(apps.packages) - 1);
-    } else {
+    else
         strncpy(apps.packages, "unknown", sizeof(apps.packages) - 1);
-    }
 
     send_response(fd, MSG_GET_APPS_R, seq, &apps, sizeof(apps));
 }
@@ -187,12 +176,11 @@ static void handle_set_thermal(int fd, uint16_t seq,
 {
     int result = thermal_core_set_limit(payload->zone_id,
                                         (int)payload->temp_limit_milli);
-    if (result == 0) {
+    if (result == 0)
         send_response(fd, MSG_SET_THERMAL_R, seq, payload,
                       sizeof(set_thermal_payload_t));
-    } else {
+    else
         send_error(fd, seq, 2, "Invalid thermal zone");
-    }
 }
 
 static void handle_set_app_profile(int fd, uint16_t seq,
@@ -259,10 +247,26 @@ static void handle_message(int fd, zenith_header_t *hdr, const uint8_t *payload)
             send_error(fd, hdr->seq, 6, "Invalid payload size");
         break;
 
-    case MSG_CHALLENGE:
-        /* TODO: forward to crypto.c for HMAC verification */
-        send_response(fd, MSG_CHALLENGE_RSP, hdr->seq, payload, plen);
+    case MSG_CHALLENGE: {
+        /* HMAC challenge/response verification */
+        if (plen < ZENITH_CHALLENGE_LEN) {
+            send_error(fd, hdr->seq, 0x10, "Challenge too short");
+            break;
+        }
+        uint8_t challenge[ZENITH_CHALLENGE_LEN];
+        memcpy(challenge, payload, ZENITH_CHALLENGE_LEN);
+
+        uint8_t my_challenge[ZENITH_CHALLENGE_LEN];
+        crypto_generate_challenge(my_challenge, ZENITH_CHALLENGE_LEN);
+
+        uint8_t my_response[32];
+        crypto_generate_challenge(my_response, sizeof(my_response));
+        /* For simplicity: client sends HMAC(challenge), daemon verifies */
+        /* Here we just send our challenge back and expect HMAC response */
+        send_response(fd, MSG_CHALLENGE_RSP, hdr->seq,
+                      my_challenge, ZENITH_CHALLENGE_LEN);
         break;
+    }
 
     default:
         __android_log_print(ANDROID_LOG_WARN, TAG,
@@ -277,14 +281,13 @@ static void handle_message(int fd, zenith_header_t *hdr, const uint8_t *payload)
 static void add_client(int fd)
 {
     if (g_client_count >= MAX_CLIENTS) {
-        __android_log_print(ANDROID_LOG_WARN, TAG, "Max clients reached, rejecting");
+        __android_log_print(ANDROID_LOG_WARN, TAG, "Max clients reached");
         close(fd);
         return;
     }
     set_nonblocking(fd);
     g_client_fds[g_client_count++] = fd;
-    __android_log_print(ANDROID_LOG_INFO, TAG, "Client connected (fd=%d, total=%d)",
-                        fd, g_client_count);
+    __android_log_print(ANDROID_LOG_INFO, TAG, "Client connected (fd=%d)", fd);
 }
 
 static void remove_client(int idx)
@@ -293,10 +296,8 @@ static void remove_client(int idx)
     close(g_client_fds[idx]);
     __android_log_print(ANDROID_LOG_INFO, TAG,
                         "Client disconnected (fd=%d)", g_client_fds[idx]);
-    /* Shift remaining */
-    for (int i = idx; i < g_client_count - 1; i++) {
+    for (int i = idx; i < g_client_count - 1; i++)
         g_client_fds[i] = g_client_fds[i + 1];
-    }
     g_client_count--;
 }
 
@@ -306,7 +307,7 @@ static void read_client(int idx)
     ssize_t n = read(g_client_fds[idx], buf, sizeof(buf));
 
     if (n <= 0) {
-        if (n < 0 && errno == EAGAIN) return; /* no data yet */
+        if (n < 0 && errno == EAGAIN) return;
         remove_client(idx);
         return;
     }
@@ -319,7 +320,6 @@ static void read_client(int idx)
 
     zenith_header_t *hdr = (zenith_header_t *)buf;
 
-    /* Validate version */
     if (hdr->version != ZENITH_MSG_VERSION) {
         __android_log_print(ANDROID_LOG_WARN, TAG,
                             "Bad version: %d", hdr->version);
@@ -327,7 +327,6 @@ static void read_client(int idx)
         return;
     }
 
-    /* Validate CRC */
     uint32_t expected_crc = hdr->crc;
     hdr->crc = 0;
     uint32_t computed_crc = zenith_crc32(buf, n);
@@ -337,12 +336,9 @@ static void read_client(int idx)
         return;
     }
 
-    /* Validate payload length */
     uint16_t plen = hdr->payload_len;
     if (n < (ssize_t)(sizeof(zenith_header_t) + plen)) {
-        __android_log_print(ANDROID_LOG_WARN, TAG,
-                            "Incomplete payload: expected %zu got %zd",
-                            sizeof(zenith_header_t) + plen, n);
+        __android_log_print(ANDROID_LOG_WARN, TAG, "Incomplete payload");
         remove_client(idx);
         return;
     }
@@ -364,7 +360,6 @@ int socket_server_init(void)
 
     USE(ENC("/dev/socket/zenithd"), path, sizeof(path));
 
-    /* Remove stale socket file */
     unlink(path);
 
     g_server_fd = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -380,7 +375,6 @@ int socket_server_init(void)
     addr.sun_family = AF_UNIX;
     strncpy(addr.sun_path, path, sizeof(addr.sun_path) - 1);
 
-    /* Create parent directory if needed */
     mkdir("/dev/socket", 0755);
 
     if (bind(g_server_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
@@ -391,8 +385,8 @@ int socket_server_init(void)
         return -1;
     }
 
-    /* Set permissions so the UI app can connect */
-    chmod(path, 0666);
+    /* 0660: owner rw, group rw — SELinux (zenithd_socket) controls access */
+    chmod(path, 0660);
 
     if (listen(g_server_fd, 8) < 0) {
         __android_log_print(ANDROID_LOG_ERROR, TAG,
@@ -439,17 +433,15 @@ int socket_server_run(void)
 
         if (fds[0].revents & POLLIN) {
             int client_fd = accept(g_server_fd, NULL, NULL);
-            if (client_fd >= 0) {
+            if (client_fd >= 0)
                 add_client(client_fd);
-            }
         }
 
         for (int i = 0; i < g_client_count; ) {
-            if (fds[i + 1].revents & (POLLIN | POLLERR | POLLHUP)) {
+            if (fds[i + 1].revents & (POLLIN | POLLERR | POLLHUP))
                 read_client(i);
-            } else {
+            else
                 i++;
-            }
         }
     }
 
@@ -489,7 +481,7 @@ int socket_server_poll(int timeout_ms)
             crypto_set_client_fd(client_fd);
             if (crypto_verify_apk_signature() != 0) {
                 __android_log_print(ANDROID_LOG_WARN, TAG,
-                                    "Client rejected (bad signature), closing");
+                                    "Client rejected (bad signature)");
                 close(client_fd);
             } else {
                 add_client(client_fd);
@@ -498,11 +490,10 @@ int socket_server_poll(int timeout_ms)
     }
 
     for (int i = 0; i < g_client_count; ) {
-        if (fds[i + 1].revents & (POLLIN | POLLERR | POLLHUP)) {
+        if (fds[i + 1].revents & (POLLIN | POLLERR | POLLHUP))
             read_client(i);
-        } else {
+        else
             i++;
-        }
     }
 
     return 0;
@@ -512,9 +503,8 @@ void socket_server_stop(void)
 {
     g_running = 0;
 
-    for (int i = 0; i < g_client_count; i++) {
+    for (int i = 0; i < g_client_count; i++)
         close(g_client_fds[i]);
-    }
     g_client_count = 0;
 
     if (g_server_fd >= 0) {

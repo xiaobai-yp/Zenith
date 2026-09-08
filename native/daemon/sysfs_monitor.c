@@ -249,10 +249,10 @@ int sysfs_monitor_read(sysfs_snapshot_t *snap)
             strncpy(c->governor, val, sizeof(c->governor) - 1);
         }
 
-        c->freq_khz = (uint32_t)read_int_file(g_cache.cpu_freq_paths[i]);
-        c->max_freq_khz = (uint32_t)read_int_file(g_cache.cpu_max_freq_paths[i]);
-        c->min_freq_khz = (uint32_t)read_int_file(g_cache.cpu_min_freq_paths[i]);
-        c->scaling_max_khz = (uint32_t)read_int_file(g_cache.cpu_scaling_max_paths[i]);
+        { int v = read_int_file(g_cache.cpu_freq_paths[i]); c->freq_khz = (v < 0) ? 0 : (uint32_t)v; }
+        { int v = read_int_file(g_cache.cpu_max_freq_paths[i]); c->max_freq_khz = (v < 0) ? 0 : (uint32_t)v; }
+        { int v = read_int_file(g_cache.cpu_min_freq_paths[i]); c->min_freq_khz = (v < 0) ? 0 : (uint32_t)v; }
+        { int v = read_int_file(g_cache.cpu_scaling_max_paths[i]); c->scaling_max_khz = (v < 0) ? 0 : (uint32_t)v; }
     }
 
     return 0;
