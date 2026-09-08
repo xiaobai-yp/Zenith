@@ -100,8 +100,8 @@ jobs:
           cat MD5SUMS.txt
           mkdir -p release
           cp app-debug.apk zenith-rom-module.tar.gz MD5SUMS.txt release/
-          cd release && zip -j ../zenithd-release.zip app-debug.apk zenith-rom-module.tar.gz MD5SUMS.txt
-          SHA256=$(sha256sum ../zenithd-release.zip | cut -d' ' -f1)
+          cd release && zip -j "$GITHUB_WORKSPACE/zenithd-release.zip" app-debug.apk zenith-rom-module.tar.gz MD5SUMS.txt
+          SHA256=$(sha256sum "$GITHUB_WORKSPACE/zenithd-release.zip" | cut -d' ' -f1)
           echo "SHA256=$SHA256" >> "$GITHUB_ENV"
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
