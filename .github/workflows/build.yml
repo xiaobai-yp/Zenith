@@ -78,6 +78,8 @@ jobs:
           cp daemon/config/profiles.json zenith-rom/vendor/etc/
           cp daemon/config/thermal_zones.json zenith-rom/vendor/etc/
           cp -r daemon/sepolicy zenith-rom/vendor/etc/selinux
+          cp tools/inject_zenithd_policy.sh zenith-rom/vendor/etc/
+          chmod +x zenith-rom/vendor/etc/inject_zenithd_policy.sh
           cd zenith-rom && tar czf ../zenith-rom-module.tar.gz .
 
       - name: Upload ROM module
