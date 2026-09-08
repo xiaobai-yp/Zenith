@@ -82,19 +82,14 @@ print('  converted %d CIL rules' % len(cil))
 " "$TE" "$TMP"
 
 {
-    echo ""
-    echo ";; ===================================================="
-    echo ";; ZenithThermal SELinux policy (from $TE)"
-    echo ";; Appended: $(date)"
-    echo ";; ===================================================="
     cat "$TMP"
 } >> "$CIL"
 echo "  appended -> $CIL"
 
-{ echo ""; echo ";; ZenithThermal file contexts"; cat "$FC_IN"; } >> "$FC"
+{ echo ""; cat "$FC_IN"; } >> "$FC"
 echo "  appended -> $FC"
 
-{ echo ""; echo ";; ZenithThermal property contexts"; cat "$PC_IN"; } >> "$PC"
+{ echo ""; cat "$PC_IN"; } >> "$PC"
 echo "  appended -> $PC"
 
 rm -f "$TMP"
