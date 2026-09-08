@@ -211,6 +211,7 @@ class MainActivity : android.app.Activity() {
         box.addView(systemRow)
         val reset = menuText("Reset Per-App Profiles"); box.addView(reset, LinearLayout.LayoutParams(-1, dp(44))); reset.setOnClickListener { dialog.dismiss(); showThemedToast("Per-app profiles are managed by zenithd (config: /vendor/etc/profiles.json)") }
         val global = menuText("Global Profile"); box.addView(global, LinearLayout.LayoutParams(-1, dp(44))); global.setOnClickListener { dialog.dismiss(); global(); showDaemonStatus() }
+        val benchmark = menuText("Benchmark"); box.addView(benchmark, LinearLayout.LayoutParams(-1, dp(44))); benchmark.setOnClickListener { dialog.dismiss(); startActivity(Intent(this, BenchmarkResultsActivity::class.java)) }
         val about = menuText("About"); box.addView(about, LinearLayout.LayoutParams(-1, dp(44))); about.setOnClickListener { dialog.dismiss(); showAboutDialog() }
         dialog.setContentView(box)
         dialog.window?.apply {
