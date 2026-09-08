@@ -91,15 +91,23 @@ jobs:
           mv app-debug-apk/app-debug.apk .
           mv zenithd-arm64/zenithd .
           mv zenith-rom-module/zenith-rom-module.tar.gz .
-          zip -j zenithd-release.zip app-debug.apk zenithd zenith-rom-module.tar.gz
-          SHA256=$(sha256sum zenithd-release.zip | cut -d' ' -f1)
+          SHA_APK=$(md5sum app-debug.apk | cut -d' ' -f1)
+          SHA_ROM=$(md5sum zenith-rom-module.tar.gz | cut -d' ' -f1)
+          cat > MD5SUMS.txt <<EOF
+          $SHA_APK  app-debug.apk
+          $SHA_ROM  zenith-rom-module.tar.gz
+          EOF
+          cat MD5SUMS.txt
+          mkdir -p release
+          cp app-debug.apk zenith-rom-module.tar.gz MD5SUMS.txt release/
+          cd release && zip -j ../zenithd-release.zip app-debug.apk zenith-rom-module.tar.gz MD5SUMS.txt
+          SHA256=$(sha256sum ../zenithd-release.zip | cut -d' ' -f1)
           echo "SHA256=$SHA256" >> "$GITHUB_ENV"
-          echo "SHA256: $SHA256"
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.sha }}
           name: Build ${{ github.sha }}
-          files: artifacts/zenithd-release.zip
+          files: zenithd-release.zip
           body: |
             SHA256: ${{ env.SHA256 }}
