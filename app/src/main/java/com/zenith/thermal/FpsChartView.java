@@ -28,6 +28,15 @@ class FpsChartView extends View {
 
     public FpsChartView(Context ctx) {
         super(ctx);
+        init();
+    }
+
+    public FpsChartView(Context ctx, android.util.AttributeSet attrs) {
+        super(ctx, attrs);
+        init();
+    }
+
+    private void init() {
         float d = getResources().getDisplayMetrics().density;
         linePaint.setStyle(Paint.Style.STROKE);
         linePaint.setStrokeWidth(3f * d);
