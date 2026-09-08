@@ -35,6 +35,8 @@ add_executable(zenithd
     daemon/app_monitor.c
     daemon/socket_server.c
     daemon/profile_engine.c
+    daemon/apk_verify.c
+    lib/sha256.c
 )
 
 target_link_libraries(zenithd
@@ -53,6 +55,8 @@ add_library(zenith SHARED
     daemon/socket_server.c
     daemon/profile_engine.c
     daemon/crypto.c
+    daemon/apk_verify.c
+    lib/sha256.c
 )
 
 target_compile_definitions(zenith PRIVATE ZENITH_SHARED_LIB=1)
