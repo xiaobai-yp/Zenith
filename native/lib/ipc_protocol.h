@@ -144,11 +144,17 @@ typedef struct __attribute__((packed)) {
     uint8_t  padding[5];   /* alignment */
 } benchmark_control_t;
 
-/* benchmark data payload (multiple points) */
+/* benchmark data payload — matches Kotlin BenchmarkData parser:
+ * [running:u8][elapsed_ms:u32_le][frames:u32_le][fps_short:u16_le][fps_long:u16_le]
+ * [fps_avg:u16_le][fps_min:u16_le][fps_max:u16_le]
+ * All FPS values are (value * 10) integer encoding. */
 typedef struct __attribute__((packed)) {
-    uint8_t  point_count;
-    uint8_t  active;
-    uint16_t total_points;
-    uint32_t duration_ms;
-    uint8_t  points_raw[10 * 10]; /* packed: ts_ms(4) + fps_x10(2) + temp(2) + batt(2) */
+    uint8_t  running;       /* 1=active, 0=stopped */
+    uint32_t elapsed_ms;    /* session elapsed milliseconds */
+    uint32_t frames;        /* total frames/points recorded */
+    uint16_t fps_short;     /* short EMA ×10 */
+    uint16_t fps_long;      /* long EMA ×10 */
+    uint16_t fps_avg;       /* average of all recorded ×10 */
+    uint16_t fps_min;       /* min of all recorded ×10 */
+    uint16_t fps_max;       /* max of all recorded ×10 */
 } benchmark_data_t;

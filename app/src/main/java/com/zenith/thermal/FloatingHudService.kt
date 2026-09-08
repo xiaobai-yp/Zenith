@@ -212,6 +212,7 @@ class FloatingHudService : Service() {
             textSize = 32f
             typeface = android.graphics.Typeface.MONOSPACE
         }
+        private val runningPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#FF9800") }
         private val smallPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#B0BEC5")
             textSize = 26f

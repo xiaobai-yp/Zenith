@@ -35,6 +35,9 @@ int benchmark_is_active(void);
 /* Elapsed time of current session in milliseconds */
 int64_t benchmark_elapsed_ms(void);
 
+/* Number of frames recorded in the current session */
+int benchmark_frame_count(void);
+
 /*
  * Export recorded points as JSON array into `out`.
  * Format: [{"ts":..., "fps":..., "temp":..., "batt_pct":..., "current_ma":...}, ...]

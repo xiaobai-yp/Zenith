@@ -184,9 +184,9 @@ public class BenchmarkResultsActivity extends Activity {
             if (dir == null) { Toast.makeText(this, "Cannot write file", Toast.LENGTH_SHORT).show(); return; }
 
             File file = new File(dir, "zenith_benchmark_" + ts + ".json");
-            FileWriter fw = new FileWriter(file);
-            fw.write(buildJson().toString(2));
-            fw.close();
+            try (FileWriter fw = new FileWriter(file)) {
+                fw.write(buildJson().toString(2));
+            }
 
             Toast.makeText(this, "Saved: " + file.getName(), Toast.LENGTH_LONG).show();
         } catch (Exception e) {
@@ -203,9 +203,9 @@ public class BenchmarkResultsActivity extends Activity {
             if (dir == null) { Toast.makeText(this, "Cannot create file", Toast.LENGTH_SHORT).show(); return; }
 
             File file = new File(dir, "zenith_benchmark_" + ts + ".json");
-            FileWriter fw = new FileWriter(file);
-            fw.write(buildJson().toString(2));
-            fw.close();
+            try (FileWriter fw = new FileWriter(file)) {
+                fw.write(buildJson().toString(2));
+            }
 
             Uri uri = android.net.Uri.fromFile(file);
             Intent intent = new Intent(Intent.ACTION_SEND);

@@ -65,6 +65,11 @@ int benchmark_is_active(void)
     return g_active;
 }
 
+int benchmark_frame_count(void)
+{
+    return g_ring_count;
+}
+
 int64_t benchmark_elapsed_ms(void)
 {
     if (!g_active) return 0;

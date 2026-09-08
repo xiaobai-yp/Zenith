@@ -240,41 +240,36 @@ static void handle_bench_control(int fd, uint16_t seq, uint8_t msg_type)
         benchmark_start();
         ctrl.active = 1;
     } else {
+        int64_t elapsed = benchmark_elapsed_ms();
         benchmark_stop();
         ctrl.active = 0;
+        ctrl.duration_s = (uint16_t)(elapsed / 1000);
     }
-    ctrl.duration_s = (uint16_t)(benchmark_elapsed_ms() / 1000);
     send_response(fd, (msg_type == MSG_BENCH_START) ? MSG_BENCH_START : MSG_BENCH_STOP,
                   seq, &ctrl, sizeof(ctrl));
 }
 
 static void handle_bench_data(int fd, uint16_t seq)
 {
-    /* Send last 10 benchmark points as chunked response */
+    /* Benchmark data — layout matches Kotlin BenchmarkData parser:
+     * [running:u8][elapsed_ms:u32][frames:u32][fps×5:u16 each] */
     benchmark_data_t bd = {0};
-    bd.active = benchmark_is_active();
-    bd.duration_ms = (uint32_t)benchmark_elapsed_ms();
+    bd.running    = (uint8_t)benchmark_is_active();
+    bd.elapsed_ms = (uint32_t)benchmark_elapsed_ms();
+    bd.frames     = (uint32_t)benchmark_frame_count();
 
-    /* We'll export a subset — last 10 points from the circular buffer.
-     * This is approximate: benchmark_export_json is full export, so we
-     * build the payload directly. */
-    extern int benchmark_get_last_points(int n, benchmark_point_t *out);
+    /* FPS stats from fps_monitor (short/long EMA + avg/min/max) */
+    int s = 0, l = 0;
+    fps_monitor_read(&s, &l);
+    bd.fps_short = (uint16_t)(s * 10);
+    bd.fps_long  = (uint16_t)(l * 10);
 
-    benchmark_point_t bpts[10];
-    int count = benchmark_get_last_points(10, bpts);
-    bd.point_count = (uint8_t)count;
-    bd.total_points = (uint16_t)(count > 0 ? benchmark_elapsed_ms() / 1000 : 0);
-    for (int i = 0; i < count && i < 10; i++) {
-        uint8_t *dst = bd.points_raw + (i * 10);
-        int32_t ts = (int32_t)(bpts[i].ts % 100000);
-        memcpy(dst,      &ts,           4);
-        uint16_t fps10 = (uint16_t)(bpts[i].fps * 10);
-        memcpy(dst + 4,  &fps10,        2);
-        uint16_t temp  = (uint16_t)bpts[i].temp;
-        memcpy(dst + 6,  &temp,         2);
-        uint16_t batt  = (uint16_t)(bpts[i].batt_pct * 10);
-        memcpy(dst + 8,  &batt,         2);
-    }
+    int avg = 0, mn = 0, mx = 0;
+    fps_monitor_get_avg(&avg, &mn, &mx);
+    bd.fps_avg = (uint16_t)(avg * 10);
+    bd.fps_min = (uint16_t)(mn * 10);
+    bd.fps_max = (uint16_t)(mx * 10);
+
     send_response(fd, MSG_BENCH_DATA, seq, &bd, sizeof(bd));
 }
 
