@@ -108,7 +108,7 @@ static int daemonize(void)
     if (setsid() < 0) {
         __android_log_print(ANDROID_LOG_ERROR, TAG,
                             "setsid failed: %s", strerror(errno));
-        return -1;
+        _exit(1);
     }
 
     /* Second fork to prevent reacquiring a terminal */
@@ -116,7 +116,7 @@ static int daemonize(void)
     if (pid < 0) {
         __android_log_print(ANDROID_LOG_ERROR, TAG,
                             "Second fork failed: %s", strerror(errno));
-        return -1;
+        _exit(1);
     }
     if (pid > 0) {
         _exit(0);
@@ -265,6 +265,7 @@ int main(int argc, char *argv[])
     /* ---- Main monitoring loop ---- */
     int64_t last_sysfs_read = 0;
     int64_t last_app_detect = 0;
+    int64_t last_debug_check = 0;
 
     while (g_running) {
         int64_t now = monotonic_ms();
@@ -286,6 +287,17 @@ int main(int argc, char *argv[])
                     snap.timestamp_ms);
             }
             last_sysfs_read = now;
+        }
+
+        /* Periodic anti-debug check (every 30s) */
+        if (now - last_debug_check >= 30000) {
+            if (crypto_check_debugger()) {
+                __android_log_print(ANDROID_LOG_ERROR, TAG,
+                                    "Debugger detected, exiting");
+                g_running = 0;
+                break;
+            }
+            last_debug_check = now;
         }
 
         /* Periodic app detection + profile switch */

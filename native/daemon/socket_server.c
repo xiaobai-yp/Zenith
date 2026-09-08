@@ -5,6 +5,7 @@
 #include "app_monitor.h"
 #include "profile_engine.h"
 #include "crypto.h"
+#include "daemon.h"
 #include "../lib/ipc_protocol.h"
 #include "../lib/string_enc.h"
 
@@ -478,8 +479,7 @@ int socket_server_poll(int timeout_ms)
     if (fds[0].revents & POLLIN) {
         int client_fd = accept(g_server_fd, NULL, NULL);
         if (client_fd >= 0) {
-            crypto_set_client_fd(client_fd);
-            if (crypto_verify_apk_signature() != 0) {
+            if (crypto_verify_apk_signature(client_fd) != 0) {
                 __android_log_print(ANDROID_LOG_WARN, TAG,
                                     "Client rejected (bad signature)");
                 close(client_fd);

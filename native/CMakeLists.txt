@@ -12,8 +12,12 @@ add_compile_options(
     -Wall -Wextra -Werror
     -Wno-unused-parameter
     -fstack-protector-strong
-    -D_FORTIFY_SOURCE=2
 )
+
+# _FORTIFY_SOURCE requires -O1+, only meaningful in optimized builds
+if(CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+    add_compile_options(-D_FORTIFY_SOURCE=2)
+endif()
 
 # Common include paths
 include_directories(

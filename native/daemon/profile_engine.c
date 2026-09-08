@@ -104,13 +104,20 @@ static const char *json_find_next_profile(const char *json, const char **scan,
             memcpy(id_out, key_start, klen);
             id_out[klen] = '\0';
 
-            /* Find matching closing brace (simple count) */
+            /* Find matching closing brace (handle braces inside quotes) */
             const char *content = r + 1; /* after '{' */
             int depth = 1;
+            int in_string = 0;
             const char *end = content;
             while (*end && depth > 0) {
-                if (*end == '{') depth++;
-                else if (*end == '}') depth--;
+                if (in_string) {
+                    if (*end == '\\') { end++; }
+                    else if (*end == '"') in_string = 0;
+                } else {
+                    if (*end == '"') in_string = 1;
+                    else if (*end == '{') depth++;
+                    else if (*end == '}') depth--;
+                }
                 if (depth > 0) end++;
             }
             if (depth != 0) { p = q + 1; continue; }

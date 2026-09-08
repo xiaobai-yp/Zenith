@@ -187,13 +187,12 @@ int crypto_verify_response(const uint8_t *challenge, size_t challenge_len,
 
 /* --- Client APK signature verification (package name check) --- */
 
-int crypto_verify_apk_signature(void) {
-    int client_fd = g_client_fd;
-    if (client_fd < 0) return -1;
+int crypto_verify_apk_signature(int fd) {
+    if (fd < 0) return -1;
 
     struct ucred cred;
     socklen_t len = sizeof(cred);
-    if (getsockopt(client_fd, SOL_SOCKET, SO_PEERCRED, &cred, &len) < 0) {
+    if (getsockopt(fd, SOL_SOCKET, SO_PEERCRED, &cred, &len) < 0) {
         __android_log_print(ANDROID_LOG_WARN, TAG, "SO_PEERCRED failed: %s", strerror(errno));
         return -1;
     }
@@ -201,10 +200,10 @@ int crypto_verify_apk_signature(void) {
     char cmdline[256];
     char proc_path[64];
     snprintf(proc_path, sizeof(proc_path), "/proc/%d/cmdline", (int)cred.pid);
-    int fd = open(proc_path, O_RDONLY);
+    int proc_fd = open(proc_path, O_RDONLY);
     if (fd < 0) return -1;
-    ssize_t n = read(fd, cmdline, sizeof(cmdline) - 1);
-    close(fd);
+    ssize_t n = read(proc_fd, cmdline, sizeof(cmdline) - 1);
+    close(proc_fd);
     if (n <= 0) return -1;
     cmdline[n] = '\0';
 

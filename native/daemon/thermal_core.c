@@ -68,6 +68,14 @@ static int write_sysfs_int(const char *path, int value)
     return write_sysfs(path, buf);
 }
 
+/* uint32 variant — cast of int wraps above 2.147GHz */
+static int write_sysfs_uint32(const char *path, uint32_t value)
+{
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%u", value);
+    return write_sysfs(path, buf);
+}
+
 /* ---- Init ---- */
 
 int thermal_core_init(void)
@@ -300,9 +308,3 @@ int thermal_core_set_max_freq(int core_id, uint32_t freq_khz)
     return 0;
 }
 
-/* Fix: write uint32_t directly instead of casting to int (wraps at 2.147GHz) */
-static int write_sysfs_uint32(const char *path, uint32_t val) {
-    char buf[32];
-    snprintf(buf, sizeof(buf), "%u", val);
-    return write_sysfs_str(path, buf);
-}
