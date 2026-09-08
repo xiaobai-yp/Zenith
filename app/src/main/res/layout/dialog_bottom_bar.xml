@@ -70,4 +70,34 @@
             android:textSize="13sp"
             android:includeFontPadding="false" />
     </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/navBenchmark"
+        android:layout_width="wrap_content"
+        android:layout_height="40dp"
+        android:layout_marginLeft="8dp"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:clickable="true"
+        android:focusable="true"
+        android:background="@android:color/transparent"
+        android:paddingLeft="12dp"
+        android:paddingRight="12dp">
+        <ImageView
+            android:id="@+id/navBenchmarkIcon"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@drawable/ic_chart"
+            android:tint="#FFB1C0C5"
+            android:contentDescription="Benchmark" />
+        <TextView
+            android:id="@+id/navBenchmarkText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="9dp"
+            android:text="Benchmark"
+            android:textColor="#FFB1C0C5"
+            android:textSize="13sp"
+            android:includeFontPadding="false" />
+    </LinearLayout>
 </LinearLayout>

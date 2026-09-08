@@ -31,10 +31,13 @@ class MainActivity : android.app.Activity() {
     private lateinit var bottomBarHost: FrameLayout
     private lateinit var navThermalView: View
     private lateinit var navBatteryView: View
+    private lateinit var navBenchmarkView: View
     private lateinit var navThermalTextView: TextView
     private lateinit var navBatteryTextView: TextView
+    private lateinit var navBenchmarkTextView: TextView
     private lateinit var navThermalIconView: ImageView
     private lateinit var navBatteryIconView: ImageView
+    private lateinit var navBenchmarkIconView: ImageView
 
     companion object {
         private val DIALOG_BG = Color.rgb(8, 28, 36)
@@ -129,6 +132,7 @@ class MainActivity : android.app.Activity() {
     private fun restoreNavPadding() {
         navThermalView.setPadding(dp(12), 0, dp(12), 0)
         navBatteryView.setPadding(dp(12), 0, dp(12), 0)
+        navBenchmarkView.setPadding(dp(12), 0, dp(12), 0)
     }
 
     private fun setupGlassBottomBar() {
@@ -145,13 +149,17 @@ class MainActivity : android.app.Activity() {
 
         navThermalView = view.findViewById(R.id.navThermal)
         navBatteryView = view.findViewById(R.id.navBattery)
+        navBenchmarkView = view.findViewById(R.id.navBenchmark)
         navThermalTextView = view.findViewById(R.id.navThermalText)
         navBatteryTextView = view.findViewById(R.id.navBatteryText)
+        navBenchmarkTextView = view.findViewById(R.id.navBenchmarkText)
         navThermalIconView = view.findViewById(R.id.navThermalIcon)
         navBatteryIconView = view.findViewById(R.id.navBatteryIcon)
+        navBenchmarkIconView = view.findViewById(R.id.navBenchmarkIcon)
 
         navThermalView.setOnClickListener { showThermal() }
         navBatteryView.setOnClickListener { showBattery() }
+        navBenchmarkView.setOnClickListener { startActivity(Intent(this, BenchmarkResultsActivity::class.java)) }
         bottomBarHost.addView(view)
     }
 
