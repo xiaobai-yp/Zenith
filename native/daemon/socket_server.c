@@ -15,6 +15,7 @@
 #include "thermal_core.h"
 #include "battery_monitor.h"
 #include "app_monitor.h"
+#include "profile_engine.h"
 #include "crypto.h"
 #include "../lib/ipc_protocol.h"
 #include "../lib/string_enc.h"
@@ -163,6 +164,24 @@ static void handle_get_apps(int fd, uint16_t seq)
     send_response(fd, MSG_GET_APPS_R, seq, &apps, sizeof(apps));
 }
 
+static void handle_get_apps_map(int fd, uint16_t seq)
+{
+    apps_map_payload_t resp;
+    memset(&resp, 0, sizeof(resp));
+
+    profile_map_entry_t entries[MAX_APPS_MAP];
+    int n = profile_engine_export_map(entries, MAX_APPS_MAP);
+    resp.count = (uint8_t)n;
+    for (int i = 0; i < n; i++) {
+        strncpy(resp.entries[i].pkg, entries[i].package,
+                sizeof(resp.entries[i].pkg) - 1);
+        resp.entries[i].pkg[sizeof(resp.entries[i].pkg) - 1] = '\0';
+        resp.entries[i].profile_id = entries[i].profile_id;
+    }
+
+    send_response(fd, MSG_GET_APPS_MAP_R, seq, &resp, sizeof(resp));
+}
+
 static void handle_set_thermal(int fd, uint16_t seq,
                                const set_thermal_payload_t *payload)
 {
@@ -173,6 +192,25 @@ static void handle_set_thermal(int fd, uint16_t seq,
                       sizeof(set_thermal_payload_t));
     } else {
         send_error(fd, seq, 2, "Invalid thermal zone");
+    }
+}
+
+static void handle_set_app_profile(int fd, uint16_t seq,
+                                   const set_app_profile_payload_t *payload)
+{
+    char pkg[APP_PKG_LEN_IN];
+    memcpy(pkg, payload->pkg, sizeof(pkg));
+    pkg[sizeof(pkg) - 1] = '\0';
+    int pid = payload->profile_id;
+
+    int result = profile_engine_map_app(pkg, pid);
+    if (result == 0) {
+        send_response(fd, MSG_SET_APP_PROFILE_R, seq, payload,
+                      sizeof(set_app_profile_payload_t));
+        __android_log_print(ANDROID_LOG_INFO, TAG,
+                            "Mapped app %s -> profile %d", pkg, pid);
+    } else {
+        send_error(fd, seq, 5, "Package map full");
     }
 }
 
@@ -201,12 +239,24 @@ static void handle_message(int fd, zenith_header_t *hdr, const uint8_t *payload)
         handle_get_apps(fd, hdr->seq);
         break;
 
+    case MSG_GET_APPS_MAP:
+        handle_get_apps_map(fd, hdr->seq);
+        break;
+
     case MSG_SET_THERMAL:
         if (plen >= sizeof(set_thermal_payload_t))
             handle_set_thermal(fd, hdr->seq,
                                (const set_thermal_payload_t *)payload);
         else
             send_error(fd, hdr->seq, 4, "Invalid payload size");
+        break;
+
+    case MSG_SET_APP_PROFILE:
+        if (plen >= sizeof(set_app_profile_payload_t))
+            handle_set_app_profile(fd, hdr->seq,
+                                   (const set_app_profile_payload_t *)payload);
+        else
+            send_error(fd, hdr->seq, 6, "Invalid payload size");
         break;
 
     case MSG_CHALLENGE:

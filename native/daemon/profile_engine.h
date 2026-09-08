@@ -33,4 +33,13 @@ int profile_engine_reload(const char *profiles_json_path);
 /* Get default profile ID */
 int profile_engine_get_default(void);
 
+/* Export current app→profile map (package + profile_id pairs).
+ * Returns count written. max_entries limits output. */
+typedef struct {
+    char package[256];
+    int  profile_id;
+} profile_map_entry_t;
+
+int profile_engine_export_map(profile_map_entry_t *out, int max_entries);
+
 #endif /* ZENITH_PROFILE_ENGINE_H */

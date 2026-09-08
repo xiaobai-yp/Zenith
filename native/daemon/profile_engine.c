@@ -277,3 +277,18 @@ int profile_engine_get_default(void)
 {
     return g_default_profile_id;
 }
+
+int profile_engine_export_map(profile_map_entry_t *out, int max_entries)
+{
+    if (!out || max_entries <= 0) return 0;
+
+    int count = 0;
+    for (int i = 0; i < g_pkg_map_count && count < max_entries; i++) {
+        strncpy(out[count].package, g_pkg_map[i].package,
+                sizeof(out[count].package) - 1);
+        out[count].package[sizeof(out[count].package) - 1] = '\0';
+        out[count].profile_id = g_pkg_map[i].profile_id;
+        count++;
+    }
+    return count;
+}

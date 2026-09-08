@@ -90,10 +90,12 @@ class MainActivity : android.app.Activity() {
 
     private fun load() {
         val pm = packageManager
+        val map = try { ZenithDaemonClient.getAppsMap() } catch (_: Throwable) { emptyMap() }
         apps.clear()
         for (info in pm.getInstalledApplications(PackageManager.ApplicationInfoFlags.of(0))) {
             if (!showSystem && (info.flags and ApplicationInfo.FLAG_SYSTEM) != 0) continue
-            apps.add(AppItem(info, pm))
+            val pid = map[info.packageName] ?: -1
+            apps.add(AppItem(info, pm, pid))
         }
         apps.sortBy { it.name.lowercase() }
         adapter.setItems(apps)
@@ -154,11 +156,11 @@ class MainActivity : android.app.Activity() {
     }
 
     private fun choose(app: AppItem) {
-        showProfileDialog("Set Profile: ${app.name}")
+        showProfileDialog("Set Profile: ${app.name}", app.pkg)
     }
-    private fun global() = showProfileDialog("Global Profile")
+    private fun global() = showProfileDialog("Global Profile", null)
 
-    private fun showProfileDialog(title: String) {
+    private fun showProfileDialog(title: String, pkg: String? = null) {
         val dialog = Dialog(this)
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(14), dp(18), dp(10)); background = getDrawable(R.drawable.bg_glass_dialog) }
@@ -172,10 +174,16 @@ class MainActivity : android.app.Activity() {
             val radio = ProfileRadio(this).apply { setChecked(i == 0) }
             row.addView(radio, LinearLayout.LayoutParams(dp(48), dp(46)))
             val click = View.OnClickListener {
-                val ok = ThermalController.apply(Profile.value(i))
+                val id = Profile.value(i)
+                val ok = if (pkg != null) {
+                    ZenithDaemonClient.setAppProfile(pkg, id)
+                } else {
+                    ThermalController.apply(id)
+                }
                 adapter.notifyDataSetChanged()
                 if (ok) showThemedToast("Profile applied: ${Profile.NAMES[i]}")
                 else showThemedToast("Daemon not available — profile not applied")
+                if (pkg != null) load()
                 dialog.dismiss()
             }
             row.setOnClickListener(click); radio.setOnClickListener(click); group.addView(row, LinearLayout.LayoutParams(-1, dp(46)))

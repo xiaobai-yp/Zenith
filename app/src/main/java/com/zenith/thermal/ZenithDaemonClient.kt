@@ -217,10 +217,38 @@ object ZenithDaemonClient {
         return sendCommand(MSG_SET_PROFILE, padded) != null
     }
 
+    // MSG_SET_APP_PROFILE (0x42): [pkg:64][profile_id:int32]
+    fun setAppProfile(pkg: String, profileId: Int): Boolean {
+        val buf = ByteBuffer.allocate(64 + 4).order(ByteOrder.LITTLE_ENDIAN)
+        val pkgBytes = pkg.toByteArray(Charsets.UTF_8)
+        buf.put(pkgBytes, 0, minOf(pkgBytes.size, 64))
+        repeat(64 - minOf(pkgBytes.size, 64)) { buf.put(0) }
+        buf.putInt(profileId)
+        return sendCommand(MSG_SET_APP_PROFILE, buf.array()) != null
+    }
+
     fun getForegroundApp(): String? {
         val payload = sendCommand(MSG_GET_APPS) ?: return null
         val end = payload.indexOf(0).takeIf { it >= 0 } ?: payload.size
         return String(payload, 0, end.coerceAtMost(payload.size), Charsets.UTF_8).trim().ifEmpty { null }
+    }
+
+    // MSG_GET_APPS_MAP (0x32) → [count][pkg:32][profile_id:int32] repeated
+    fun getAppsMap(): Map<String, Int> {
+        val payload = sendCommand(MSG_GET_APPS_MAP) ?: return emptyMap()
+        val buf = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN)
+        if (buf.remaining() < 1) return emptyMap()
+        val count = buf.get().toInt() and 0xFF
+        val map = HashMap<String, Int>()
+        for (i in 0 until count.coerceAtMost(20)) {
+            if (buf.remaining() < 32 + 4) break
+            val pkg = ByteArray(32); buf.get(pkg)
+            val end = pkg.indexOf(0).takeIf { it >= 0 } ?: pkg.size
+            val name = String(pkg, 0, end, Charsets.UTF_8).trim()
+            val profileId = buf.getInt()
+            if (name.isNotEmpty()) map[name] = profileId
+        }
+        return map
     }
 
     private fun parseStatusPayload(data: ByteArray): StatusResponse? {

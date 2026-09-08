@@ -32,8 +32,12 @@ typedef enum {
     MSG_SET_PROFILE_R = 0x21,
     MSG_GET_APPS      = 0x30,
     MSG_GET_APPS_R    = 0x31,
+    MSG_GET_APPS_MAP  = 0x32,
+    MSG_GET_APPS_MAP_R = 0x33,
     MSG_SET_THERMAL   = 0x40,
     MSG_SET_THERMAL_R = 0x41,
+    MSG_SET_APP_PROFILE  = 0x42,
+    MSG_SET_APP_PROFILE_R = 0x43,
     MSG_CHALLENGE     = 0x50,
     MSG_CHALLENGE_RSP = 0x51,
     MSG_ERROR         = 0xFF,
@@ -76,9 +80,27 @@ typedef struct __attribute__((packed)) {
     char profile_id[ZENITH_MAX_PROFILE_ID]; /* null-terminated */
 } set_profile_payload_t;
 
+#define APP_PKG_LEN_IN 64
+
+typedef struct __attribute__((packed)) {
+    char pkg[APP_PKG_LEN_IN];      /* null-terminated package name */
+    int32_t profile_id;
+} set_app_profile_payload_t;
+
 typedef struct __attribute__((packed)) {
     char packages[ZENITH_MAX_PKG_NAME]; /* null-terminated, comma-separated */
 } apps_payload_t;
+
+#define MAX_APPS_MAP  20
+#define APP_PKG_LEN   32
+
+typedef struct __attribute__((packed)) {
+    uint8_t count;
+    struct {
+        char  pkg[APP_PKG_LEN];     /* null-terminated package name */
+        int32_t profile_id;         /* -1 = none/default */
+    } entries[MAX_APPS_MAP];
+} apps_map_payload_t;
 
 typedef struct __attribute__((packed)) {
     uint8_t  zone_id;
