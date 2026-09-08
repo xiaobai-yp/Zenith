@@ -40,6 +40,11 @@ typedef enum {
     MSG_SET_APP_PROFILE_R = 0x43,
     MSG_CHALLENGE     = 0x50,
     MSG_CHALLENGE_RSP = 0x51,
+    MSG_GET_FPS       = 0x60,
+    MSG_GET_FPS_R     = 0x61,
+    MSG_BENCH_START   = 0x62,
+    MSG_BENCH_STOP    = 0x63,
+    MSG_BENCH_DATA    = 0x64,
     MSG_ERROR         = 0xFF,
 } msg_type_t;
 
@@ -127,3 +132,23 @@ static inline size_t zenith_packet_size(uint16_t payload_len) {
 }
 
 #endif /* ZENITH_IPC_PROTOCOL_H */
+
+/* ---- Benchmark / FPS messages ---- */
+#define MAX_BENCHMARK_POINTS 300
+#define MAX_JSON_OUTPUT      (16 * 1024)  /* 16KB JSON output buffer */
+
+/* payload for benchmark start/stop ack */
+typedef struct __attribute__((packed)) {
+    uint8_t  active;       /* 1=benchmark started, 0=stopped */
+    uint16_t duration_s;   /* elapsed seconds */
+    uint8_t  padding[5];   /* alignment */
+} benchmark_control_t;
+
+/* benchmark data payload (multiple points) */
+typedef struct __attribute__((packed)) {
+    uint8_t  point_count;
+    uint8_t  active;
+    uint16_t total_points;
+    uint32_t duration_ms;
+    uint8_t  points_raw[10 * 10]; /* packed: ts_ms(4) + fps_x10(2) + temp(2) + batt(2) */
+} benchmark_data_t;

@@ -35,6 +35,8 @@ add_executable(zenithd
     daemon/app_monitor.c
     daemon/socket_server.c
     daemon/profile_engine.c
+    daemon/fps_monitor.c
+    daemon/benchmark.c
     daemon/apk_verify.c
     lib/sha256.c
 )
@@ -55,6 +57,8 @@ add_library(zenith SHARED
     daemon/socket_server.c
     daemon/profile_engine.c
     daemon/crypto.c
+    daemon/fps_monitor.c
+    daemon/benchmark.c
     daemon/apk_verify.c
     lib/sha256.c
 )

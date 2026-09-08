@@ -5,6 +5,9 @@
 #include "app_monitor.h"
 #include "profile_engine.h"
 #include "crypto.h"
+#include "apk_verify.h"
+#include "fps_monitor.h"
+#include "benchmark.h"
 #include "daemon.h"
 #include "../lib/ipc_protocol.h"
 #include "../lib/string_enc.h"
@@ -203,6 +206,78 @@ static void handle_set_app_profile(int fd, uint16_t seq,
     }
 }
 
+/* ---- FPS + Benchmark handlers ---- */
+
+typedef struct __attribute__((packed)) {
+    uint16_t short_fps;  /* EMA short window FPS * 10 */
+    uint16_t long_fps;   /* EMA long window FPS * 10 */
+    uint16_t avg_fps;    /* session average FPS */
+    uint16_t min_fps;    /* session min FPS */
+    uint16_t max_fps;    /* session max FPS */
+} fps_payload_t;
+
+static void handle_get_fps(int fd, uint16_t seq)
+{
+    fps_payload_t fp = {0};
+    int s_fps = 0, l_fps = 0;
+    if (fps_monitor_read(&s_fps, &l_fps) == 0) {
+        fp.short_fps = (uint16_t)(s_fps * 10);
+        fp.long_fps  = (uint16_t)(l_fps * 10);
+    }
+    int avg = 0, min_f = 0, max_f = 0;
+    if (fps_monitor_get_avg(&avg, &min_f, &max_f) == 0) {
+        fp.avg_fps = (uint16_t)(avg * 10);
+        fp.min_fps = (uint16_t)(min_f * 10);
+        fp.max_fps = (uint16_t)(max_f * 10);
+    }
+    send_response(fd, MSG_GET_FPS_R, seq, &fp, sizeof(fp));
+}
+
+static void handle_bench_control(int fd, uint16_t seq, uint8_t msg_type)
+{
+    benchmark_control_t ctrl = {0};
+    if (msg_type == MSG_BENCH_START) {
+        benchmark_start();
+        ctrl.active = 1;
+    } else {
+        benchmark_stop();
+        ctrl.active = 0;
+    }
+    ctrl.duration_s = (uint16_t)(benchmark_elapsed_ms() / 1000);
+    send_response(fd, (msg_type == MSG_BENCH_START) ? MSG_BENCH_START : MSG_BENCH_STOP,
+                  seq, &ctrl, sizeof(ctrl));
+}
+
+static void handle_bench_data(int fd, uint16_t seq)
+{
+    /* Send last 10 benchmark points as chunked response */
+    benchmark_data_t bd = {0};
+    bd.active = benchmark_is_active();
+    bd.duration_ms = (uint32_t)benchmark_elapsed_ms();
+
+    /* We'll export a subset — last 10 points from the circular buffer.
+     * This is approximate: benchmark_export_json is full export, so we
+     * build the payload directly. */
+    extern int benchmark_get_last_points(int n, benchmark_point_t *out);
+
+    benchmark_point_t bpts[10];
+    int count = benchmark_get_last_points(10, bpts);
+    bd.point_count = (uint8_t)count;
+    bd.total_points = (uint16_t)(count > 0 ? benchmark_elapsed_ms() / 1000 : 0);
+    for (int i = 0; i < count && i < 10; i++) {
+        uint8_t *dst = bd.points_raw + (i * 10);
+        int32_t ts = (int32_t)(bpts[i].ts % 100000);
+        memcpy(dst,      &ts,           4);
+        uint16_t fps10 = (uint16_t)(bpts[i].fps * 10);
+        memcpy(dst + 4,  &fps10,        2);
+        uint16_t temp  = (uint16_t)bpts[i].temp;
+        memcpy(dst + 6,  &temp,         2);
+        uint16_t batt  = (uint16_t)(bpts[i].batt_pct * 10);
+        memcpy(dst + 8,  &batt,         2);
+    }
+    send_response(fd, MSG_BENCH_DATA, seq, &bd, sizeof(bd));
+}
+
 static void handle_message(int fd, zenith_header_t *hdr, const uint8_t *payload)
 {
     uint16_t plen = hdr->payload_len;
@@ -246,6 +321,19 @@ static void handle_message(int fd, zenith_header_t *hdr, const uint8_t *payload)
                                    (const set_app_profile_payload_t *)payload);
         else
             send_error(fd, hdr->seq, 6, "Invalid payload size");
+        break;
+
+    case MSG_GET_FPS:
+        handle_get_fps(fd, hdr->seq);
+        break;
+
+    case MSG_BENCH_START:
+    case MSG_BENCH_STOP:
+        handle_bench_control(fd, hdr->seq, hdr->msg_type);
+        break;
+
+    case MSG_BENCH_DATA:
+        handle_bench_data(fd, hdr->seq);
         break;
 
     case MSG_CHALLENGE: {

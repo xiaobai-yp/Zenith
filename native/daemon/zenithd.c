@@ -20,6 +20,8 @@
 #include "thermal_core.h"
 #include "battery_monitor.h"
 #include "app_monitor.h"
+#include "fps_monitor.h"
+#include "benchmark.h"
 #include "socket_server.h"
 #include "crypto.h"
 #include "profile_engine.h"
@@ -243,6 +245,7 @@ int main(int argc, char *argv[])
     thermal_core_init();
     battery_monitor_init();
     app_monitor_init();
+    fps_monitor_init();
 
     /* Load profiles — try system path first, then fallback */
     const char *profiles_path = PROFILE_JSON_PATH;
@@ -287,6 +290,21 @@ int main(int argc, char *argv[])
                     snap.timestamp_ms);
             }
             last_sysfs_read = now;
+        }
+
+        /* Benchmark recording (1Hz while active) */
+        if (benchmark_is_active()) {
+            benchmark_record();
+        }
+
+        /* FPS monitor read (every 1s) */
+        {
+            static int64_t last_fps_read = 0;
+            if (now - last_fps_read >= 1000) {
+                int s_fps, l_fps;
+                fps_monitor_read(&s_fps, &l_fps);
+                last_fps_read = now;
+            }
         }
 
         /* Periodic anti-debug check (every 30s) */
