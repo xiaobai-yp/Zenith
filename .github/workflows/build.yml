@@ -18,16 +18,25 @@ jobs:
         with:
           targets: aarch64-linux-android
 
-      - name: Install Android NDK linker
+      - name: Setup Zig
+        uses: mlugg/setup-zig@v1
+        with:
+          version: 0.13.0
+
+      - name: Configure Zig linker
         run: |
-          sudo rm -f /etc/apt/sources.list.d/google-chrome.list
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq gcc-aarch64-linux-gnu
           mkdir -p ~/.cargo
-          cat > ~/.cargo/config.toml << 'TOML'
+          cat > ~/.cargo/config.toml << 'EOF'
           [target.aarch64-linux-android]
-          linker = "aarch64-linux-gnu-gcc"
-          TOML
+          linker = "zig cc -target aarch64-linux-android"
+          EOF
+          # Need a wrapper for cargo (space-separated args issue)
+          printf '#!/usr/bin/env bash\nexec zig cc -target aarch64-linux-android "$@"\n' | sudo tee /usr/local/bin/aarch64-linux-android-cc > /dev/null
+          sudo chmod +x /usr/local/bin/aarch64-linux-android-cc
+          cat > ~/.cargo/config.toml << 'EOF'
+          [target.aarch64-linux-android]
+          linker = "aarch64-linux-android-cc"
+          EOF
 
       - name: Check
         working-directory: daemon/rust
