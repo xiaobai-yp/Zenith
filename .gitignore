@@ -15,3 +15,9 @@ app-debug-ci.apk
 .git-credentials
 zenithd
 zenithd-*.zip
+
+# local build
+local.properties
+# selinux leftovers
+*.cil
+*.orig
