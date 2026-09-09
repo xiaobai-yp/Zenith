@@ -1,0 +1,95 @@
+package com.zenith.thermal
+
+import android.content.Context
+import android.util.Log
+import java.io.File
+
+/**
+ * Manages the zenithd daemon lifecycle: extract, start, stop, check.
+ *
+ * All blocking work runs on the calling thread. Only call from a background
+ * thread (Service.onCreate, or wrap calls in `Thread { ... }`).
+ */
+object DaemonManager {
+
+    private const val TAG = "DaemonManager"
+    private const val SOCKET_PATH = "/data/data/com.zenith.thermal/files/zenithd.sock"
+    private const val ASSET_NAME = "zenithd"
+    private const val SOCKET_WAIT_MS = 3_000L
+    private const val SOCKET_POLL_MS = 100L
+
+    /**
+     * Start zenithd if not already running.
+     * Extracts the binary from assets if missing or updated (size differs),
+     * chmods it, launches via su, and waits for the IPC socket to appear.
+     *
+     * @return true if the daemon is running (socket present) after the call.
+     */
+    fun startDaemon(context: Context): Boolean {
+        if (isDaemonRunning()) {
+            Log.i(TAG, "Daemon already running (socket exists)")
+            return true
+        }
+
+        val binFile = File(context.filesDir, "zenithd")
+        val assetLength = context.assets.openFd(ASSET_NAME).use { it.declaredLength }
+
+        // Only extract if missing or the asset changed (size differs)
+        val needsExtract = !binFile.exists() || binFile.length() != assetLength
+        if (needsExtract) {
+            Log.i(TAG, "Extracting $ASSET_NAME to ${binFile.absolutePath}")
+            context.assets.open(ASSET_NAME).use { input ->
+                binFile.outputStream().use { output -> input.copyTo(output) }
+            }
+        }
+
+        // Make executable
+        try {
+            Runtime.getRuntime().exec(arrayOf("su", "-c", "chmod 755 ${binFile.absolutePath}")).waitFor()
+        } catch (e: Exception) {
+            Log.e(TAG, "chmod failed: ${e.message}")
+            return false
+        }
+
+        // Launch daemon via su. Note: `su -c` takes a single arg and does not
+        // expand `~`, so always pass the absolute filesDir path.
+        try {
+            val cmd = "${binFile.absolutePath} &"
+            Runtime.getRuntime().exec(arrayOf("su", "-c", cmd))
+            Log.i(TAG, "Launched: su -c '$cmd'")
+        } catch (e: Exception) {
+            Log.e(TAG, "Exec failed: ${e.message}")
+            return false
+        }
+
+        // Wait up to SOCKET_WAIT_MS for the socket file to appear
+        val deadline = System.currentTimeMillis() + SOCKET_WAIT_MS
+        while (System.currentTimeMillis() < deadline) {
+            if (File(SOCKET_PATH).exists()) {
+                Log.i(TAG, "Daemon socket appeared")
+                return true
+            }
+            try { Thread.sleep(SOCKET_POLL_MS) } catch (_: InterruptedException) { break }
+        }
+
+        Log.w(TAG, "Socket did not appear within ${SOCKET_WAIT_MS}ms")
+        return false
+    }
+
+    /** Kill zenithd via su. */
+    fun stopDaemon() {
+        try {
+            Runtime.getRuntime().exec(arrayOf("su", "-c", "killall zenithd")).waitFor()
+            Log.i(TAG, "Sent killall zenithd")
+        } catch (e: Exception) {
+            Log.e(TAG, "Stop failed: ${e.message}")
+        }
+    }
+
+    /** @return true if the daemon's IPC socket file exists. */
+    fun isDaemonRunning(): Boolean = File(SOCKET_PATH).exists()
+
+    /** Start the daemon only if it is not already running. */
+    fun ensureDaemon(context: Context): Boolean =
+        isDaemonRunning() || startDaemon(context)
+}

@@ -65,6 +65,16 @@ class AppMonitorService : Service() {
         )
         showNotification("Connecting…")
 
+        // Ensure the zenithd daemon is up before the client starts connecting.
+        Thread {
+            try {
+                val ok = DaemonManager.ensureDaemon(this)
+                Log.i(TAG, "ensureDaemon -> $ok")
+            } catch (e: Exception) {
+                Log.e(TAG, "ensureDaemon failed: ${e.message}")
+            }
+        }.start()
+
         ZenithDaemonClient.addConnectionListener(connListener)
         ZenithDaemonClient.requestConnect()
         showNotification(if (ZenithDaemonClient.isConnected) "Connected" else "Disconnected")
