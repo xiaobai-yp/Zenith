@@ -277,6 +277,17 @@ async fn main() {
             tokio::time::interval(std::time::Duration::from_secs(2));
         let mut interval_fps =
             tokio::time::interval(std::time::Duration::from_secs(1));
+        let mut interval_prop =
+            tokio::time::interval(std::time::Duration::from_secs(3));
+
+        // Track last applied property value (persist.sys.zenith.thermal)
+        let mut last_prop = String::new();
+        if let Ok(v) = read_prop("persist.sys.zenith.thermal").await {
+            last_prop = v;
+            if !last_prop.is_empty() {
+                let _ = thermal_core::apply_profile(&last_prop).await;
+            }
+        }
 
         loop {
             tokio::select! {
@@ -301,6 +312,15 @@ async fn main() {
                 }
                 _ = interval_app.tick() => {
                     let _ = app_monitor::detect_fg();
+                }
+                _ = interval_prop.tick() => {
+                    if let Ok(v) = read_prop("persist.sys.zenith.thermal").await {
+                        if !v.is_empty() && v != last_prop {
+                            eprintln!("[zenithd] property change: {last_prop} -> {v}");
+                            let _ = thermal_core::apply_profile(&v).await;
+                            last_prop = v;
+                        }
+                    }
                 }
             }
         }
@@ -365,4 +385,14 @@ fn now_ms() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as u64
+}
+
+/// Read a system property via `getprop`.
+async fn read_prop(name: &str) -> Result<String, String> {
+    let out = tokio::process::Command::new("getprop")
+        .arg(name)
+        .output()
+        .await
+        .map_err(|e| format!("getprop: {e}"))?;
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }

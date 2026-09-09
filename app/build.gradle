@@ -8,7 +8,7 @@ android {
     namespace 'com.zenith.thermal'
     compileSdk 35
     aaptOptions {
-        noCompress 'zenithd'
+        noCompress 'zenithd', 'profiles.json'
     }
 
     defaultConfig {

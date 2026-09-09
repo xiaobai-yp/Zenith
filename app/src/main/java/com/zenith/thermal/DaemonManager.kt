@@ -15,6 +15,7 @@ object DaemonManager {
     private const val TAG = "DaemonManager"
     private const val SOCKET_PATH = "/data/data/com.zenith.thermal/files/zenithd.sock"
     private const val ASSET_NAME = "zenithd"
+    private const val ASSET_PROFILES = "profiles.json"
     private const val SOCKET_WAIT_MS = 3_000L
     private const val SOCKET_POLL_MS = 100L
 
@@ -41,6 +42,19 @@ object DaemonManager {
         if (needsExtract) {
             Log.i(TAG, "Extracting $ASSET_NAME (${assetBytes.size} bytes)")
             binFile.outputStream().use { it.write(assetBytes) }
+        }
+
+        // Extract profiles.json alongside the daemon (it must exist before
+        // zenithd starts — profile_engine::init reads it at boot).
+        val profilesFile = File(context.filesDir, ASSET_PROFILES)
+        if (!profilesFile.exists()) {
+            try {
+                val profilesBytes = context.assets.open(ASSET_PROFILES).use { it.readBytes() }
+                profilesFile.outputStream().use { it.write(profilesBytes) }
+                Log.i(TAG, "Extracted $ASSET_PROFILES (${profilesBytes.size} bytes)")
+            } catch (e: Exception) {
+                Log.e(TAG, "profiles.json extract failed: ${e.message}")
+            }
         }
 
         // Make executable

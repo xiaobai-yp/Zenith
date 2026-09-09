@@ -1,5 +1,0 @@
-/dev/socket/zenithd          u:object_r:zenithd_socket:s0
-/vendor/bin/zenithd           u:object_r:zenithd_exec:s0
-/vendor/etc/profiles.json     u:object_r:vendor_etc_zenith:s0
-/vendor/etc/thermal_zones.json u:object_r:vendor_etc_zenith:s0
-/data/local/zenith(/.*)?      u:object_r:zenithd_data_file:s0
