@@ -1,0 +1,123 @@
+{
+    "0": {
+        "cpu0_max": "1804800",
+        "cpu4_max": "2419200",
+        "cpu7_max": "2841600",
+        "cpu0_min": "300000",
+        "cpu4_min": "710000",
+        "cpu7_min": "844000",
+        "cpu0_gov": "schedutil",
+        "cpu4_gov": "schedutil",
+        "cpu7_gov": "schedutil"
+    },
+    "10": {
+        "cpu0_max": "1804800",
+        "cpu4_max": "2419200",
+        "cpu7_max": "2841600",
+        "cpu0_min": "300000",
+        "cpu4_min": "710000",
+        "cpu7_min": "844000",
+        "cpu0_gov": "schedutil",
+        "cpu4_gov": "schedutil",
+        "cpu7_gov": "schedutil"
+    },
+    "2": {
+        "cpu0_max": "1075200",
+        "cpu4_max": "1344000",
+        "cpu7_max": "1862400",
+        "cpu0_min": "300000",
+        "cpu4_min": "710000",
+        "cpu7_min": "844000",
+        "cpu0_gov": "powersave",
+        "cpu4_gov": "powersave",
+        "cpu7_gov": "powersave"
+    },
+    "9": {
+        "cpu0_max": "1804800",
+        "cpu4_max": "2419200",
+        "cpu7_max": "3187200",
+        "cpu0_min": "300000",
+        "cpu4_min": "710000",
+        "cpu7_min": "844000",
+        "cpu0_gov": "schedutil",
+        "cpu4_gov": "schedutil",
+        "cpu7_gov": "performance"
+    },
+    "16": {
+        "cpu0_max": "1804800",
+        "cpu4_max": "2246400",
+        "cpu7_max": "2745600",
+        "cpu0_min": "300000",
+        "cpu4_min": "710000",
+        "cpu7_min": "844000",
+        "cpu0_gov": "schedutil",
+        "cpu4_gov": "schedutil",
+        "cpu7_gov": "performance"
+    },
+    "13": {
+        "cpu0_max": "1804800",
+        "cpu4_max": "2419200",
+        "cpu7_max": "3187200",
+        "cpu0_min": "300000",
+        "cpu4_min": "710000",
+        "cpu7_min": "844000",
+        "cpu0_gov": "schedutil",
+        "cpu4_gov": "performance",
+        "cpu7_gov": "performance"
+    },
+    "14": {
+        "cpu0_max": "1804800",
+        "cpu4_max": "1958400",
+        "cpu7_max": "1632000",
+        "cpu0_min": "300000",
+        "cpu4_min": "710000",
+        "cpu7_min": "844000",
+        "cpu0_gov": "schedutil",
+        "cpu4_gov": "schedutil",
+        "cpu7_gov": "schedutil"
+    },
+    "8": {
+        "cpu0_max": "1804800",
+        "cpu4_max": "2419200",
+        "cpu7_max": "2841600",
+        "cpu0_min": "300000",
+        "cpu4_min": "710000",
+        "cpu7_min": "844000",
+        "cpu0_gov": "schedutil",
+        "cpu4_gov": "schedutil",
+        "cpu7_gov": "schedutil"
+    },
+    "11": {
+        "cpu0_max": "1804800",
+        "cpu4_max": "2419200",
+        "cpu7_max": "2841600",
+        "cpu0_min": "300000",
+        "cpu4_min": "710000",
+        "cpu7_min": "844000",
+        "cpu0_gov": "schedutil",
+        "cpu4_gov": "schedutil",
+        "cpu7_gov": "schedutil"
+    },
+    "12": {
+        "cpu0_max": "1804800",
+        "cpu4_max": "2419200",
+        "cpu7_max": "2841600",
+        "cpu0_min": "300000",
+        "cpu4_min": "710000",
+        "cpu7_min": "844000",
+        "cpu0_gov": "schedutil",
+        "cpu4_gov": "schedutil",
+        "cpu7_gov": "schedutil"
+    },
+    "15": {
+        "cpu0_max": "1804800",
+        "cpu4_max": "2419200",
+        "cpu7_max": "2841600",
+        "cpu0_min": "300000",
+        "cpu4_min": "710000",
+        "cpu7_min": "844000",
+        "cpu0_gov": "schedutil",
+        "cpu4_gov": "schedutil",
+        "cpu7_gov": "schedutil"
+    }
+}

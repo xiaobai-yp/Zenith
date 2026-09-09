@@ -1,0 +1,15 @@
+service zenithd /vendor/bin/zenithd --foreground
+    class core
+    user root
+    group root system readproc
+    capabilities SYS_NICE DAC_OVERRIDE
+    socket zenithd stream 0666 root system u:object_r:zenithd_socket:s0
+
+on init
+    restorecon /vendor/bin/zenithd
+
+on property:persist.sys.zenith.thermal=*
+    start zenithd
+
+on property:persist.sys.zenith.thermal=0
+    stop zenithd

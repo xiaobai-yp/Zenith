@@ -1,0 +1,43 @@
+name: Build zenithd
+
+on:
+  push:
+    paths: ['daemon/rust/**']
+  pull_request:
+    paths: ['daemon/rust/**']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Install Android NDK linker
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          mkdir -p ~/.cargo
+          cat > ~/.cargo/config.toml << 'TOML'
+          [target.aarch64-linux-android]
+          linker = "aarch64-linux-gnu-gcc"
+          TOML
+
+      - name: Check
+        working-directory: daemon/rust
+        run: cargo check
+
+      - name: Build release
+        working-directory: daemon/rust
+        run: cargo build --release --target aarch64-linux-android
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: zenithd-android-arm64
+          path: daemon/rust/target/aarch64-linux-android/release/zenithd

@@ -1,0 +1,11 @@
+<resources>
+    <color name="bg">#102830</color>
+    <color name="surface">#2A444D</color>
+    <color name="surface2">#304D56</color>
+    <color name="nav">#0D2028</color>
+    <color name="surfaceBorder">#49636B</color>
+    <color name="text">#F2F5F6</color>
+    <color name="muted">#B8C6CA</color>
+    <color name="accent">#5EA7FF</color>
+    <color name="accentSoft">#163B63</color>
+</resources>

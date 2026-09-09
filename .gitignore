@@ -1,0 +1,15 @@
+.gradle/
+build/
+app/build/
+daemon/rust/target/
+*.apk
+*.iml
+local.properties
+.DS_Store
+*.o
+*.so
+*.d
+.cache/
+keystore/
+app-debug-ci.apk
+.git-credentials
