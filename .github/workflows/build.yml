@@ -10,6 +10,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
     steps:
       - uses: actions/checkout@v4
 
@@ -23,9 +25,6 @@ jobs:
         with:
           ndk-version: r27b
 
-      - name: Install cargo-ndk
-        run: cargo install cargo-ndk
-
       - name: Check
         working-directory: daemon/rust
         run: cargo check
@@ -33,10 +32,12 @@ jobs:
       - name: Build release
         working-directory: daemon/rust
         run: |
-          cargo ndk -t arm64-v8a -o target/android build --release
+          TOOLCHAIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$TOOLCHAIN/aarch64-linux-android24-clang"
+          cargo build --release --target aarch64-linux-android
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
           name: zenithd-android-arm64
-          path: daemon/rust/target/android/arm64-v8a/release/zenithd
+          path: daemon/rust/target/aarch64-linux-android/release/zenithd
