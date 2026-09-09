@@ -20,8 +20,9 @@ jobs:
 
       - name: Install Android NDK linker
         run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gcc-aarch64-linux-gnu
           mkdir -p ~/.cargo
           cat > ~/.cargo/config.toml << 'TOML'
           [target.aarch64-linux-android]
