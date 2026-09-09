@@ -18,25 +18,13 @@ jobs:
         with:
           targets: aarch64-linux-android
 
-      - name: Setup Zig
-        uses: mlugg/setup-zig@v1
+      - name: Setup NDK
+        uses: nttld/setup-ndk@v1
         with:
-          version: 0.13.0
+          ndk-version: r27b
 
-      - name: Configure Zig linker
-        run: |
-          mkdir -p ~/.cargo
-          cat > ~/.cargo/config.toml << 'EOF'
-          [target.aarch64-linux-android]
-          linker = "zig cc -target aarch64-linux-android"
-          EOF
-          # Need a wrapper for cargo (space-separated args issue)
-          printf '#!/usr/bin/env bash\nexec zig cc -target aarch64-linux-android "$@"\n' | sudo tee /usr/local/bin/aarch64-linux-android-cc > /dev/null
-          sudo chmod +x /usr/local/bin/aarch64-linux-android-cc
-          cat > ~/.cargo/config.toml << 'EOF'
-          [target.aarch64-linux-android]
-          linker = "aarch64-linux-android-cc"
-          EOF
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk
 
       - name: Check
         working-directory: daemon/rust
@@ -44,10 +32,11 @@ jobs:
 
       - name: Build release
         working-directory: daemon/rust
-        run: cargo build --release --target aarch64-linux-android
+        run: |
+          cargo ndk -t arm64-v8a -o target/android build --release
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
           name: zenithd-android-arm64
-          path: daemon/rust/target/aarch64-linux-android/release/zenithd
+          path: daemon/rust/target/android/arm64-v8a/release/zenithd
