@@ -127,9 +127,9 @@ public class BenchmarkResultsActivity extends Activity {
 
             ZenithDaemonClient.FpsResponse fps = data.getFps();
             if (fps != null) {
-                avgFpsText.setText(String.format(Locale.US, "%.1f", fps.getAvgFps() / 10.0));
-                minFpsText.setText(String.format(Locale.US, "%.1f", fps.getMinFps() / 10.0));
-                maxFpsText.setText(String.format(Locale.US, "%.1f", fps.getMaxFps() / 10.0));
+                avgFpsText.setText(String.format(Locale.US, "%.1f", (double) fps.getAvgFps()));
+                minFpsText.setText(String.format(Locale.US, "%.1f", (double) fps.getMinFps()));
+                maxFpsText.setText(String.format(Locale.US, "%.1f", (double) fps.getMaxFps()));
             }
 
             // Record FPS history for chart (1 sample per second)
@@ -140,7 +140,7 @@ public class BenchmarkResultsActivity extends Activity {
                     if (s.tsSec == tsSec) { exists = true; break; }
                 }
                 if (!exists) {
-                    fpsHistory.add(new FpsSample(tsSec, fps.getAvgFps() / 10.0));
+                    fpsHistory.add(new FpsSample(tsSec, (double) fps.getAvgFps()));
                     // Keep last 300 samples (5 min)
                     while (fpsHistory.size() > 300) fpsHistory.remove(0);
                     chartView.setData(fpsHistory);
@@ -232,9 +232,9 @@ public class BenchmarkResultsActivity extends Activity {
             ZenithDaemonClient.FpsResponse fps = data.getFps();
             if (fps != null) {
                 JSONObject fpsObj = new JSONObject();
-                fpsObj.put("avg", fps.getAvgFps() / 10.0);
-                fpsObj.put("min", fps.getMinFps() / 10.0);
-                fpsObj.put("max", fps.getMaxFps() / 10.0);
+                fpsObj.put("avg", (double) fps.getAvgFps());
+                fpsObj.put("min", (double) fps.getMinFps());
+                fpsObj.put("max", (double) fps.getMaxFps());
                 obj.put("fps", fpsObj);
             }
         }

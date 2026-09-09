@@ -15,7 +15,7 @@ import java.util.Locale
 
 /**
  * Foreground service that displays battery stats from zenithd.
- * All battery data comes from the daemon via MSG_GET_STATUS.
+ * All battery data comes from the daemon via the status command.
  * User settings (reset target, temperature unit, etc) are kept in SharedPreferences.
  */
 class BatteryMonitorService : Service() {

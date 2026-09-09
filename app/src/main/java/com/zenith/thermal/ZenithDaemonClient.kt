@@ -1,55 +1,40 @@
 package com.zenith.thermal
 
-import android.util.Log
-import java.io.IOException
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import android.net.LocalSocket
 import android.net.LocalSocketAddress
+import android.util.Log
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.io.PrintWriter
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicBoolean
+import org.json.JSONObject
 
 /**
- * Singleton client for IPC with zenithd via /dev/socket/zenithd.
+ * Singleton client for IPC with zenithd via newline-delimited JSON.
  *
- * Wire format (all little-endian):
- *   version(u8) msg_type(u8) payload_len(u16) seq(u32) crc(u32) payload(...)
+ * Wire format:
+ *   Request:  {"cmd":"...","args":{...}}\n
+ *   Response: {"ok":true,"data":{...}}\n  or  {"ok":false,"error":"..."}\n
  *
- * All socket state is guarded by ioLock. All blocking I/O runs on a dedicated
- * daemon thread; sendCommand() blocks the calling thread up to IO_TIMEOUT_MS
- * while the actual socket work happens in the background.
+ * Persistent connection — socket stays open across requests.
+ * All blocking I/O runs on a dedicated daemon thread.
  */
 object ZenithDaemonClient {
 
     private const val TAG = "ZDaemonClient"
-    private const val SOCKET_PATH = "/dev/socket/zenithd"
-    private const val HEADER_SIZE = 10
-    private const val MSG_VERSION = 1
-    private const val IO_TIMEOUT_MS = 3_000
-
-    const val MSG_HEARTBEAT: Byte = 0x01
-    const val MSG_GET_STATUS: Byte = 0x10
-    const val MSG_SET_PROFILE: Byte = 0x20
-    const val MSG_GET_APPS: Byte = 0x30
-    const val MSG_GET_APPS_MAP: Byte = 0x32
-    const val MSG_SET_APP_PROFILE: Byte = 0x42
-    const val MSG_SET_THERMAL: Byte = 0x40
-    const val MSG_GET_FPS: Byte = 0x60
-    const val MSG_GET_FPS_R: Byte = 0x61
-    const val MSG_BENCH_START: Byte = 0x62
-    const val MSG_BENCH_STOP: Byte = 0x63
-    const val MSG_BENCH_DATA: Byte = 0x64
-    const val MSG_ERROR: Byte = (-1).toByte()
+    private const val SOCKET_PATH = "/data/data/com.zenith.thermal/files/zenithd.sock"
+    private const val IO_TIMEOUT_MS = 5_000
 
     private val ioLock = Any()
+    private var reader: BufferedReader? = null
+    private var writer: PrintWriter? = null
     private var socket: LocalSocket? = null
     @Volatile var isConnected: Boolean = false
         private set
-    private val seq = AtomicInteger(0)
 
-    // Multiple consumers (AppMonitorService, MainActivity) can register
     private val listeners = java.util.concurrent.CopyOnWriteArrayList<(Boolean) -> Unit>()
 
     fun addConnectionListener(l: (Boolean) -> Unit) { listeners.add(l) }
@@ -61,17 +46,18 @@ object ZenithDaemonClient {
         }
     }
 
+    // ---- Internal request envelope ----
+
     private class Work(
-        val msgType: Byte,
-        val payload: ByteArray,
-        val result: Array<ByteArray?> = arrayOfNulls(1),
-        val latch: CountDownLatch = CountDownLatch(1)
+        val request: JSONObject,
+        val result: Array<Any?> = arrayOfNulls(1),
+        val latch: CountDownLatch = CountDownLatch(1),
+        val failed: AtomicBoolean = AtomicBoolean(false)
     )
 
-    private val workQueue = LinkedBlockingQueue<Work>()
+    private val workQueue = LinkedBlockingQueue<Work>(64)
 
-    // Dedicated I/O thread — processes one work item at a time, keeping the
-    // socket open across requests so there's no connect overhead per call.
+    // Dedicated I/O thread — processes one request at a time, socket stays open.
     private val ioThread = Thread({
         while (!Thread.currentThread().isInterrupted) {
             try {
@@ -79,13 +65,15 @@ object ZenithDaemonClient {
                 val result = synchronized(ioLock) {
                     if (socket == null || socket?.isConnected != true) doConnectLocked()
                     if (socket == null || socket?.isConnected != true) {
+                        w.failed.set(true)
                         null
                     } else {
                         try {
-                            doSendRecv(w.msgType, w.payload)
-                        } catch (e: IOException) {
+                            doSendRecv(w.request)
+                        } catch (e: Exception) {
                             Log.w(TAG, "IPC error: ${e.message}")
                             disconnectLocked()
+                            w.failed.set(true)
                             null
                         }
                     }
@@ -96,23 +84,25 @@ object ZenithDaemonClient {
         }
     }, "zenith-daemon-io").apply { isDaemon = true; start() }
 
+    // ---- Connection management ----
+
     fun connect(): Boolean = synchronized(ioLock) { doConnectLocked() }
 
-    /** Non-blocking: enqueue a heartbeat that connects if needed. */
-    fun requestConnect() { workQueue.offer(Work(MSG_HEARTBEAT, ByteArray(0))) }
+    /** Non-blocking: enqueue a connect check. */
+    fun requestConnect() { workQueue.offer(work("status")) }
 
     fun disconnect() { synchronized(ioLock) { disconnectLocked() } }
 
-    /** Locked: close any existing socket. */
     private fun disconnectLocked() {
         val was = isConnected
-        try { socket?.close() } catch (_: IOException) {}
-        socket = null
+        try { reader?.close() } catch (_: Exception) {}
+        try { writer?.close() } catch (_: Exception) {}
+        try { socket?.close() } catch (_: Exception) {}
+        reader = null; writer = null; socket = null
         isConnected = false
         if (was) notifyListeners(false)
     }
 
-    /** Locked: open a new socket to the daemon. */
     private fun doConnectLocked(): Boolean {
         disconnectLocked()
         return try {
@@ -120,235 +110,219 @@ object ZenithDaemonClient {
             s.connect(LocalSocketAddress(SOCKET_PATH, LocalSocketAddress.Namespace.FILESYSTEM))
             s.soTimeout = IO_TIMEOUT_MS
             socket = s
+            reader = BufferedReader(InputStreamReader(s.inputStream, Charsets.UTF_8), 4096)
+            writer = PrintWriter(s.outputStream, true)
             isConnected = true
             notifyListeners(true)
-            Log.i(TAG, "Connected")
+            Log.i(TAG, "Connected to $SOCKET_PATH")
             true
-        } catch (e: IOException) {
+        } catch (e: Exception) {
             Log.w(TAG, "Connect failed: ${e.message}")
-            socket = null
-            isConnected = false
-            notifyListeners(false)
+            disconnectLocked()
             false
         }
     }
 
+    // ---- Request / Response ----
+
+    /** Build a Work item from a JSON request object. */
+    private fun work(cmd: String, args: JSONObject? = null): Work {
+        val req = JSONObject()
+        req.put("cmd", cmd)
+        if (args != null) req.put("args", args)
+        return Work(req)
+    }
+
     /**
-     * Send a command and wait. Safe from any thread (including main).
-     * Runs the socket I/O on the daemon thread; the caller blocks until the
-     * result is ready (up to IO_TIMEOUT_MS).
+     * Enqueue a JSON command and block up to IO_TIMEOUT_MS for the result.
+     * Returns the "data" object, null on error/disconnect, or a JSONObject with
+     * "error" key on daemon error (callers that check for errors use [sendRequest]).
      */
-    fun sendCommand(msgType: Byte, payload: ByteArray = ByteArray(0)): ByteArray? {
-        val w = Work(msgType, payload)
+    fun sendCommand(cmd: String, args: JSONObject? = null): JSONObject? {
+        val w = work(cmd, args)
         workQueue.offer(w)
         val ok = w.latch.await(IO_TIMEOUT_MS.toLong(), TimeUnit.MILLISECONDS)
-        return if (ok) w.result[0] else { Log.w(TAG, "Command timed out"); null }
+        if (!ok) { Log.w(TAG, "Command '$cmd' timed out"); return null }
+        if (w.failed.get()) return null
+        @Suppress("UNCHECKED_CAST")
+        return w.result[0] as? JSONObject
     }
 
-    /** Locked: full request/response exchange on the current socket. */
-    private fun doSendRecv(msgType: Byte, payload: ByteArray): ByteArray? {
-        sendLocked(msgType, payload)
-        return readResponseLocked()
+    /** Like [sendCommand] but returns error string on daemon error, null on exception. */
+    fun sendRequest(cmd: String, args: JSONObject? = null): String? {
+        val data = sendCommand(cmd, args) ?: return null
+        return if (data.has("error")) data.getString("error") else data.toString()
     }
 
-    private fun sendLocked(msgType: Byte, payload: ByteArray) {
-        val s = socket ?: throw IOException("No socket")
-        val curSeq = seq.getAndIncrement()
-        val totalSize = HEADER_SIZE + payload.size
-        val buf = ByteBuffer.allocate(totalSize).order(ByteOrder.LITTLE_ENDIAN)
-        buf.put(MSG_VERSION.toByte())
-        buf.put(msgType)
-        buf.putShort(payload.size.toShort())
-        buf.putInt(curSeq)
-        buf.putInt(0) // crc placeholder
-        buf.put(payload)
-        val bytes = buf.array()
-        val crc = crc32(bytes)
-        ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).putInt(6, crc)
-        s.outputStream.write(bytes)
-        s.outputStream.flush()
-    }
-
-    private fun readResponseLocked(): ByteArray? {
-        val s = socket ?: throw IOException("No socket")
-        val header = ByteArray(HEADER_SIZE)
-        readFully(s, header)
-        val hdr = ByteBuffer.wrap(header).order(ByteOrder.LITTLE_ENDIAN)
-        val version = hdr.get().toInt() and 0xFF
-        val msgType = hdr.get()
-        val payloadLen = hdr.getShort().toInt() and 0xFFFF
-        val recvCrc = hdr.getInt()
-        if (version != MSG_VERSION) { Log.w(TAG, "Bad version: $version"); return null }
-        if (payloadLen > 4096) { Log.w(TAG, "Payload too large"); return null }
-        val payload = if (payloadLen > 0) {
-            val p = ByteArray(payloadLen); readFully(s, p); p
-        } else ByteArray(0)
-        // CRC verify (crc field zeroed like the daemon does)
-        val fullPacket = header + payload
-        val crcBuf = fullPacket.copyOf()
-        crcBuf[6] = 0; crcBuf[7] = 0; crcBuf[8] = 0; crcBuf[9] = 0
-        if (crc32(crcBuf) != recvCrc) { Log.w(TAG, "CRC mismatch"); return null }
-        if (msgType == MSG_ERROR) {
-            val msg = if (payload.size >= 2) String(payload, 2, payload.size - 2, Charsets.UTF_8).trim('\u0000') else "unknown"
-            Log.w(TAG, "Daemon error: $msg")
-            return null
-        }
-        return payload
-    }
-
-    private fun readFully(s: LocalSocket, buf: ByteArray) {
-        var off = 0
-        while (off < buf.size) {
-            val n = s.inputStream.read(buf, off, buf.size - off)
-            if (n == -1) throw IOException("EOF")
-            off += n
-        }
-    }
-
-    private fun crc32(data: ByteArray): Int {
-        var crc = -1
-        for (b in data) {
-            crc = crc xor (b.toInt() and 0xFF)
-            for (j in 0 until 8) crc = (crc ushr 1) xor (0xEDB88320.toInt() and (-(crc and 1)))
-        }
-        return crc xor -1
+    /** Locked: write one JSON line, read one JSON line. */
+    private fun doSendRecv(request: JSONObject): JSONObject? {
+        val w = writer ?: throw Exception("No writer")
+        val r = reader ?: throw Exception("No reader")
+        w.println(request.toString())
+        if (w.checkError()) throw Exception("Write failed")
+        val line = r.readLine() ?: throw Exception("EOF")
+        return try { JSONObject(line) } catch (e: Exception) { null }
     }
 
     // ---- Typed helpers ----
 
-    fun getStatus(): StatusResponse? = sendCommand(MSG_GET_STATUS)?.let { parseStatusPayload(it) }
+    data class ThermalZone(val id: Int, val tempC: Double, val throttled: Boolean)
 
-    fun setProfile(profileId: Int): Boolean {
-        val data = profileId.toString().toByteArray(Charsets.UTF_8)
-        val padded = ByteArray(32); data.copyInto(padded)
-        return sendCommand(MSG_SET_PROFILE, padded) != null
+    data class BatteryInfo(
+        val online: Boolean, val capacityPct: Double,
+        val currentUa: Int, val drainPctPerHr: Double
+    ) {
+        val currentMa: Double get() = kotlin.math.abs(currentUa / 1000.0)
+        val charging: Boolean get() = online && currentUa >= 0
     }
 
-    // MSG_SET_APP_PROFILE (0x42): [pkg:64][profile_id:int32]
+    data class StatusResponse(
+        val activeProfile: String,
+        val thermalZones: List<ThermalZone>,
+        val battery: BatteryInfo,
+        val fpsShort: Int, val fpsLong: Int,
+        val fpsAvg: Int, val fpsMin: Int, val fpsMax: Int
+    ) {
+        val batteryCapacityPct: Double get() = battery.capacityPct
+        val batteryCurrentUa: Int get() = battery.currentUa
+        val batteryCurrentMa: Double get() = battery.currentMa
+        val batteryCharging: Boolean get() = battery.charging
+        val batteryOnline: Boolean get() = battery.online
+        val batteryDrainPctPerHr: Double get() = battery.drainPctPerHr
+        val currentProfileId: Int get() = activeProfile.toIntOrNull() ?: 0
+        val foregroundPid: Int get() = 0 // not in new protocol
+    }
+
+    fun getStatus(): StatusResponse? {
+        val data = sendCommand("status") ?: return null
+        return try {
+            val t = data.optJSONObject("thermal")
+            val bat = data.optJSONObject("battery")
+            val fps = data.optJSONObject("fps")
+            val session = fps?.optJSONObject("session")
+
+            StatusResponse(
+                activeProfile = t?.optString("active_profile", "0") ?: "0",
+                thermalZones = parseThermalZones(data.optJSONObject("snapshot")),
+                battery = BatteryInfo(
+                    online = bat?.optBoolean("online", false) ?: false,
+                    capacityPct = bat?.optDouble("capacity_pct", 0.0) ?: 0.0,
+                    currentUa = bat?.optInt("current_ua", 0) ?: 0,
+                    drainPctPerHr = bat?.optDouble("drain_pct_per_hr", 0.0) ?: 0.0
+                ),
+                fpsShort = fps?.optInt("short", 0) ?: 0,
+                fpsLong = fps?.optInt("long", 0) ?: 0,
+                fpsAvg = session?.optInt("avg", 0) ?: 0,
+                fpsMin = session?.optInt("min", 0) ?: 0,
+                fpsMax = session?.optInt("max", 0) ?: 0
+            )
+        } catch (e: Exception) { Log.w(TAG, "Parse status: ${e.message}"); null }
+    }
+
+    fun setProfile(profileId: Int): Boolean {
+        val args = JSONObject().put("id", profileId.toString())
+        return sendCommand("apply_profile", args) != null
+    }
+
     fun setAppProfile(pkg: String, profileId: Int): Boolean {
-        val buf = ByteBuffer.allocate(64 + 4).order(ByteOrder.LITTLE_ENDIAN)
-        val pkgBytes = pkg.toByteArray(Charsets.UTF_8)
-        buf.put(pkgBytes, 0, minOf(pkgBytes.size, 64))
-        repeat(64 - minOf(pkgBytes.size, 64)) { buf.put(0) }
-        buf.putInt(profileId)
-        return sendCommand(MSG_SET_APP_PROFILE, buf.array()) != null
+        val args = JSONObject().put("package", pkg).put("profile_id", profileId)
+        return sendCommand("map_app", args) != null
     }
 
     fun getForegroundApp(): String? {
-        val payload = sendCommand(MSG_GET_APPS) ?: return null
-        val end = payload.indexOf(0).takeIf { it >= 0 } ?: payload.size
-        return String(payload, 0, end.coerceAtMost(payload.size), Charsets.UTF_8).trim().ifEmpty { null }
+        val data = sendCommand("detect_fg") ?: return null
+        return data.optString("package", null).takeIf { it?.isNotEmpty() == true }
     }
 
-    // MSG_GET_APPS_MAP (0x32) → [count][pkg:32][profile_id:int32] repeated
     fun getAppsMap(): Map<String, Int> {
-        val payload = sendCommand(MSG_GET_APPS_MAP) ?: return emptyMap()
-        val buf = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN)
-        if (buf.remaining() < 1) return emptyMap()
-        val count = buf.get().toInt() and 0xFF
-        val map = HashMap<String, Int>()
-        for (i in 0 until count.coerceAtMost(20)) {
-            if (buf.remaining() < 32 + 4) break
-            val pkg = ByteArray(32); buf.get(pkg)
-            val end = pkg.indexOf(0).takeIf { it >= 0 } ?: pkg.size
-            val name = String(pkg, 0, end, Charsets.UTF_8).trim()
-            val profileId = buf.getInt()
-            if (name.isNotEmpty()) map[name] = profileId
+        val data = sendCommand("list_profiles") ?: return emptyMap()
+        val mapJson = data.optJSONObject("package_map") ?: return emptyMap()
+        val result = HashMap<String, Int>()
+        for (key in mapJson.keys()) {
+            val v = mapJson.optInt(key, -1)
+            if (v >= 0) result[key] = v
         }
-        return map
-    }
-
-    private fun parseStatusPayload(data: ByteArray): StatusResponse? {
-        if (data.size < 6) return null
-        val buf = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
-        val fgPid = buf.get().toInt() and 0xFF
-        val profileId = buf.getInt()
-        val zoneCount = buf.get().toInt() and 0xFF
-        data class Z(val id: Int, val tempMilli: Int, val throttle: Int)
-        val zones = mutableListOf<Z>()
-        for (i in 0 until zoneCount.coerceAtMost(16)) {
-            if (buf.remaining() < 9) break
-            zones.add(Z(buf.get().toInt() and 0xFF, buf.getInt(), buf.getInt()))
-        }
-        if (buf.remaining() < 13) return null
-        return StatusResponse(
-            foregroundPid = fgPid,
-            currentProfileId = profileId,
-            thermalZones = zones.map { ThermalZone(it.id, it.tempMilli / 1000.0, it.throttle != 0) },
-            batteryOnline = buf.get().toInt() and 0xFF != 0,
-            batteryCapacityPct = buf.getInt() / 10.0,
-            batteryCurrentUa = buf.getInt(),
-            batteryDrainPctPerHr = buf.getInt() / 10.0
-        )
-    }
-
-    data class ThermalZone(val id: Int, val tempC: Double, val throttled: Boolean)
-
-    data class StatusResponse(
-        val foregroundPid: Int,
-        val currentProfileId: Int,
-        val thermalZones: List<ThermalZone>,
-        val batteryOnline: Boolean,
-        val batteryCapacityPct: Double,
-        val batteryCurrentUa: Int,
-        val batteryDrainPctPerHr: Double
-    ) {
-        val batteryCurrentMa: Double get() = kotlin.math.abs(batteryCurrentUa / 1000.0)
-        val batteryCharging: Boolean get() = batteryOnline && batteryCurrentUa >= 0
+        return result
     }
 
     // ---- FPS / Benchmark ----
 
-    // MSG_GET_FPS_R (0x61) → 5 x uint16, each is value * 10
-    data class FpsResponse(
-        val shortFps: Int,
-        val longFps: Int,
-        val avgFps: Int,
-        val minFps: Int,
-        val maxFps: Int
-    )
+    data class FpsResponse(val shortFps: Int, val longFps: Int, val avgFps: Int, val minFps: Int, val maxFps: Int)
 
     fun getFps(): FpsResponse? {
-        val payload = sendCommand(MSG_GET_FPS) ?: return null
-        if (payload.size < 10) return null
-        val buf = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN)
-        return FpsResponse(
-            buf.short.toInt() and 0xFFFF,
-            buf.short.toInt() and 0xFFFF,
-            buf.short.toInt() and 0xFFFF,
-            buf.short.toInt() and 0xFFFF,
-            buf.short.toInt() and 0xFFFF
-        )
+        val status = getStatus() ?: return null
+        return FpsResponse(status.fpsShort, status.fpsLong, status.fpsAvg, status.fpsMin, status.fpsMax)
     }
 
-    fun startBenchmark(): Boolean = sendCommand(MSG_BENCH_START) != null
-    fun stopBenchmark(): Boolean = sendCommand(MSG_BENCH_STOP) != null
+    fun getFpsAvg(): FpsResponse? {
+        val data = sendCommand("fps_avg") ?: return null
+        return try {
+            FpsResponse(0, 0, data.getInt("avg"), data.getInt("min"), data.getInt("max"))
+        } catch (e: Exception) { null }
+    }
 
-    // MSG_BENCH_DATA (0x64) → [running:u8][elapsed_ms:u32][frames:u32] then
-    // optional stats block when benchmark finished/final: 5 x uint16 (x10)
-    data class BenchmarkData(
-        val running: Boolean,
-        val elapsedMs: Long,
-        val frames: Long,
-        val fps: FpsResponse?
-    )
+    fun startBenchmark(): Boolean = sendCommand("bench_start") != null
+    fun stopBenchmark(): Boolean = sendCommand("bench_stop") != null
+
+    data class BenchmarkData(val running: Boolean, val elapsedMs: Long, val frames: Long, val fps: FpsResponse?)
 
     fun getBenchmarkData(): BenchmarkData? {
-        val payload = sendCommand(MSG_BENCH_DATA) ?: return null
-        if (payload.size < 9) return null
-        val buf = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN)
-        val running = buf.get().toInt() and 0xFF != 0
-        val elapsedMs = buf.int.toLong() and 0xFFFFFFFFL
-        val frames = buf.int.toLong() and 0xFFFFFFFFL
-        val fps = if (buf.remaining() >= 10) {
-            FpsResponse(
-                buf.short.toInt() and 0xFFFF,
-                buf.short.toInt() and 0xFFFF,
-                buf.short.toInt() and 0xFFFF,
-                buf.short.toInt() and 0xFFFF,
-                buf.short.toInt() and 0xFFFF
+        val data = sendCommand("bench_data") ?: return null
+        return try {
+            val arr = data.optJSONArray("data")
+            if (arr != null && arr.length() > 0) {
+                val last = arr.getJSONObject(arr.length() - 1)
+                val fpsArr = last.optJSONArray("fps")
+                val fps = if (fpsArr != null && fpsArr.length() >= 3) {
+                    FpsResponse(0, 0, fpsArr.getInt(0), fpsArr.getInt(1), fpsArr.getInt(2))
+                } else null
+                BenchmarkData(
+                    running = last.optBoolean("running", false),
+                    elapsedMs = last.optLong("elapsed_ms", 0),
+                    frames = last.optLong("frames", 0),
+                    fps = fps
+                )
+            } else BenchmarkData(false, 0, 0, null)
+        } catch (e: Exception) { Log.w(TAG, "Parse bench_data: ${e.message}"); null }
+    }
+
+    fun readSysfs(path: String): String? {
+        val args = JSONObject().put("path", path)
+        val data = sendCommand("read_sysfs", args) ?: return null
+        return data.optString("value", null)
+    }
+
+    fun getBatteryStats(): BatteryInfo? {
+        val data = sendCommand("battery_stats") ?: return null
+        return try {
+            BatteryInfo(
+                online = data.optBoolean("online", false),
+                capacityPct = data.optDouble("capacity_pct", 0.0),
+                currentUa = data.optInt("current_ua", 0),
+                drainPctPerHr = data.optDouble("drain_pct_per_hr", 0.0)
             )
-        } else null
-        return BenchmarkData(running, elapsedMs, frames, fps)
+        } catch (e: Exception) { null }
+    }
+
+    fun resetFpsSession(): Boolean = sendCommand("reset_fps_session") != null
+
+    /** Lightweight keep-alive ping — just checks connection health. */
+    fun sendStatus(): StatusResponse? = getStatus()
+
+    // ---- Private parsers ----
+
+    private fun parseThermalZones(snapshot: JSONObject?): List<ThermalZone> {
+        if (snapshot == null) return emptyList()
+        val zonesJson = snapshot.optJSONArray("zones") ?: return emptyList()
+        val zones = mutableListOf<ThermalZone>()
+        for (i in 0 until zonesJson.length()) {
+            val z = zonesJson.optJSONObject(i) ?: continue
+            zones.add(ThermalZone(
+                id = z.optInt("id", i),
+                tempC = z.optDouble("temp_c", 0.0),
+                throttled = z.optBoolean("throttled", false)
+            ))
+        }
+        return zones
     }
 }

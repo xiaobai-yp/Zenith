@@ -312,7 +312,7 @@ class MainActivity : android.app.Activity() {
 
         val scroll = ScrollView(this)
         val message = TextView(this).apply {
-            text = "Zenith Thermal is an Android UI controller for the zenithd thermal daemon. It lets you apply thermal profiles (Default, Dynamic, Game, Game 2, Pubg, AR & VR, Camera, YouTube, …) via socket IPC to the daemon, which owns all hardware interaction.\n\nGLOBAL PROFILE\nSelecting a profile sends MSG_SET_PROFILE to zenithd, which applies the matching profile from /vendor/etc/profiles.json. Per-app profile switching is handled automatically by the daemon's foreground-app monitor.\n\nDAEMON STATUS\nThis app is a pure UI controller: it does not read or write sysfs directly. All battery and thermal data shown here comes from the daemon via MSG_GET_STATUS. If the daemon is not running, the app shows a \"Daemon not available\" state and keeps retrying.\n\nBATTERY MONITOR\nThe Battery Monitor displays battery current, level and drain rate reported by the daemon. It keeps user settings locally (reset target, temperature unit, power display).\n\nNOTE\nzenithd runs from init.rc and reads /vendor/etc/profiles.json. Without the daemon, profile changes cannot be applied."
+            text = "Zenith Thermal is an Android UI controller for the zenithd thermal daemon. It lets you apply thermal profiles (Default, Dynamic, Game, Game 2, Pubg, AR & VR, Camera, YouTube, …) via socket IPC to the daemon, which owns all hardware interaction.\n\nGLOBAL PROFILE\nSelecting a profile sends apply_profile to zenithd via JSON IPC, which applies the matching profile from /vendor/etc/profiles.json. Per-app profile switching is handled automatically by the daemon's foreground-app monitor.\n\nDAEMON STATUS\nThis app is a pure UI controller: it does not read or write sysfs directly. All battery and thermal data shown here comes from the daemon via the status command. If the daemon is not running, the app shows a \"Daemon not available\" state and keeps retrying.\n\nBATTERY MONITOR\nThe Battery Monitor displays battery current, level and drain rate reported by the daemon. It keeps user settings locally (reset target, temperature unit, power display).\n\nNOTE\nzenithd runs from init.rc and reads /vendor/etc/profiles.json. Without the daemon, profile changes cannot be applied."
             setTextColor(TEXT)
             textSize = 14f
             setLineSpacing(0f, 1.12f)
@@ -655,16 +655,16 @@ class MainActivity : android.app.Activity() {
 
             val fps = data.fps
             if (fps != null) {
-                benchAvgFpsText?.text = String.format(Locale.US, "%.1f", fps.avgFps / 10.0)
-                benchMinFpsText?.text = String.format(Locale.US, "%.1f", fps.minFps / 10.0)
-                benchMaxFpsText?.text = String.format(Locale.US, "%.1f", fps.maxFps / 10.0)
+                benchAvgFpsText?.text = String.format(Locale.US, "%.1f", fps.avgFps.toDouble())
+                benchMinFpsText?.text = String.format(Locale.US, "%.1f", fps.minFps.toDouble())
+                benchMaxFpsText?.text = String.format(Locale.US, "%.1f", fps.maxFps.toDouble())
             }
 
             if (fps != null && elapsedMs > 0) {
                 val tsSec = elapsedMs / 1000
                 val exists = benchFpsHistory.any { it.tsSec == tsSec }
                 if (!exists) {
-                    benchFpsHistory.add(FpsSample(tsSec, fps.avgFps / 10.0))
+                    benchFpsHistory.add(FpsSample(tsSec, fps.avgFps.toDouble()))
                     while (benchFpsHistory.size > 300) benchFpsHistory.removeAt(0)
                     benchChartView?.setData(benchFpsHistory)
                 }
@@ -733,9 +733,9 @@ class MainActivity : android.app.Activity() {
             obj.put("totalFrames", data.frames)
             data.fps?.let { fpsVal ->
                 val fpsObj = JSONObject()
-                fpsObj.put("avg", fpsVal.avgFps / 10.0)
-                fpsObj.put("min", fpsVal.minFps / 10.0)
-                fpsObj.put("max", fpsVal.maxFps / 10.0)
+                fpsObj.put("avg", fpsVal.avgFps.toDouble())
+                fpsObj.put("min", fpsVal.minFps.toDouble())
+                fpsObj.put("max", fpsVal.maxFps.toDouble())
                 obj.put("fps", fpsObj)
             }
         }

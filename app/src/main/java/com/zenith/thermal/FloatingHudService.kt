@@ -169,8 +169,8 @@ class FloatingHudService : Service() {
                     cpuTemp = status?.thermalZones?.firstOrNull()?.tempC,
                     batteryPct = status?.batteryCapacityPct,
                     currentMa = status?.batteryCurrentMa,
-                    shortFps = fps?.shortFps?.let { it / 10.0 },
-                    longFps = fps?.longFps?.let { it / 10.0 },
+                    shortFps = fps?.shortFps?.toDouble(),
+                    longFps = fps?.longFps?.toDouble(),
                     benchmarkRunning = benchmarkRunning,
                     benchElapsed = bench?.elapsedMs
                 )

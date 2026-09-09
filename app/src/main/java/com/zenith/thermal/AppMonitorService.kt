@@ -47,8 +47,8 @@ class AppMonitorService : Service() {
         override fun run() {
             if (destroyed) return
             if (ZenithDaemonClient.isConnected) {
-                // Keep-alive ping
-                ZenithDaemonClient.sendCommand(ZenithDaemonClient.MSG_HEARTBEAT)
+                // Keep-alive: verify connection with a lightweight status check
+                ZenithDaemonClient.sendStatus()
             } else {
                 Log.i(TAG, "Daemon disconnected, reconnecting…")
                 ZenithDaemonClient.requestConnect()
