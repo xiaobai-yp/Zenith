@@ -13,3 +13,5 @@ local.properties
 keystore/
 app-debug-ci.apk
 .git-credentials
+zenithd
+zenithd-*.zip
