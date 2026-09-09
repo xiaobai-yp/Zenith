@@ -32,15 +32,15 @@ object DaemonManager {
         }
 
         val binFile = File(context.filesDir, "zenithd")
-        val assetLength = context.assets.openFd(ASSET_NAME).use { it.declaredLength }
+        val assetBytes = context.assets.open(ASSET_NAME).use { it.readBytes() }
 
-        // Only extract if missing or the asset changed (size differs)
-        val needsExtract = !binFile.exists() || binFile.length() != assetLength
+        // Only extract if missing or the asset changed (size differs).
+        // open() + readBytes() — NOT openFd(), which throws when the asset
+        // is compressed in the APK (default for large assets).
+        val needsExtract = !binFile.exists() || binFile.length() != assetBytes.size
         if (needsExtract) {
-            Log.i(TAG, "Extracting $ASSET_NAME to ${binFile.absolutePath}")
-            context.assets.open(ASSET_NAME).use { input ->
-                binFile.outputStream().use { output -> input.copyTo(output) }
-            }
+            Log.i(TAG, "Extracting $ASSET_NAME (${assetBytes.size} bytes)")
+            binFile.outputStream().use { it.write(assetBytes) }
         }
 
         // Make executable

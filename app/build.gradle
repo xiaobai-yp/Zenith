@@ -7,6 +7,9 @@ plugins {
 android {
     namespace 'com.zenith.thermal'
     compileSdk 35
+    aaptOptions {
+        noCompress 'zenithd'
+    }
 
     defaultConfig {
         applicationId 'com.zenith.thermal'
