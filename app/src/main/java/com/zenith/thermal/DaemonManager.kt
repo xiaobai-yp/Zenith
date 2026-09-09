@@ -37,7 +37,7 @@ object DaemonManager {
         // Only extract if missing or the asset changed (size differs).
         // open() + readBytes() — NOT openFd(), which throws when the asset
         // is compressed in the APK (default for large assets).
-        val needsExtract = !binFile.exists() || binFile.length() != assetBytes.size
+        val needsExtract = !binFile.exists() || binFile.length() != assetBytes.size.toLong()
         if (needsExtract) {
             Log.i(TAG, "Extracting $ASSET_NAME (${assetBytes.size} bytes)")
             binFile.outputStream().use { it.write(assetBytes) }
