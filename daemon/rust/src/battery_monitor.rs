@@ -338,7 +338,7 @@ pub async fn init() {
     refresh_batterystats().await;
     // Seed initial readings.
     update_sensors().await;
-    crate::log!("[battery_monitor] init: loaded acc {:?}", lock().acc.screen_on_ms > 0 || lock().acc.screen_off_ms > 0);
+    let _ = writeln!(std::io::stderr(), "[battery_monitor] init: loaded acc {}", lock().acc.screen_on_ms > 0 || lock().acc.screen_off_ms > 0);
 }
 
 async fn update_sensors() {
@@ -380,11 +380,11 @@ pub async fn update(screen_on: bool) {
     // state transition: charging ↔ discharging
     if charging && !st.acc.charging_paused {
         st.acc.charging_paused = true; // freeze accounting
-        crate::log!("[battery_monitor] charging started — accounting paused");
+        let _ = writeln!(std::io::stderr(), "[battery_monitor] charging started — accounting paused");
         let _ = persist_maybe(&mut st);
     } else if !charging && st.acc.charging_paused {
         st.acc.charging_paused = false;
-        crate::log!("[battery_monitor] charging ended — accounting resumed");
+        let _ = writeln!(std::io::stderr(), "[battery_monitor] charging ended — accounting resumed");
         st.screen_on_start_pct = st.readings.capacity;
         st.screen_off_start_pct = st.readings.capacity;
         let _ = persist_maybe(&mut st);
@@ -453,13 +453,13 @@ fn step_attribution(st: &mut Inner, screen_on: bool, pct: i32, cap_mah: i64) {
 fn persist_maybe(st: &mut Inner) -> Result<(), ()> {
     let now = elapsed_ms();
     let delta = now.saturating_sub(st.last_persist_ms);
-    crate::log!("[battery_monitor] persist_maybe: now={}, last={}, delta={}, target={}", now, st.last_persist_ms, delta, PERSIST_EVERY_MS);
+    let _ = writeln!(std::io::stderr(), "[battery_monitor] persist_maybe: now={}, last={}, delta={}, target={}", now, st.last_persist_ms, delta, PERSIST_EVERY_MS);
     if delta >= PERSIST_EVERY_MS {
         st.last_persist_ms = now;
         let data = serde_json::to_vec(&st.acc).unwrap_or_default();
         match std::fs::write(STATE_FILE, &data) {
-            Ok(()) => crate::log!("[battery_monitor] persisted {} bytes to {}", data.len(), STATE_FILE),
-            Err(e) => crate::log!("[battery_monitor] persist FAILED: {} (path={})", e, STATE_FILE),
+            Ok(()) => { let _ = writeln!(std::io::stderr(), "[battery_monitor] persisted {} bytes to {}", data.len(), STATE_FILE); }
+            Err(e) => { let _ = writeln!(std::io::stderr(), "[battery_monitor] persist FAILED: {} (path={})", e, STATE_FILE); }
         }
     }
     Ok(())
