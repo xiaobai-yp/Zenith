@@ -239,6 +239,8 @@ async fn handle_cmd(req: Request) -> Response {
 
 #[tokio::main]
 async fn main() {
+    // Custom panic hook: exit cleanly instead of SIGABRT on broken stderr pipe.
+    std::panic::set_hook(Box::new(|_| std::process::exit(1)));
     let _ = writeln!(std::io::stderr(), "[zenithd] starting daemon");
 
     // Init all modules
