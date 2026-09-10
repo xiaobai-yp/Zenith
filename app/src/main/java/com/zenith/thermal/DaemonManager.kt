@@ -53,6 +53,12 @@ object DaemonManager {
             return true
         }
 
+        // Kill stale daemon from previous session (setsid may keep it alive)
+        try {
+            Runtime.getRuntime().exec(arrayOf("su", "-c", "killall zenithd")).waitFor()
+            Thread.sleep(200)
+        } catch (_: Exception) {}
+
         val binFile = File(context.filesDir, "zenithd")
         val assetBytes = context.assets.open(ASSET_NAME).use { it.readBytes() }
 
