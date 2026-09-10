@@ -109,9 +109,22 @@ async fn handle_cmd(req: Request) -> Response {
             let times = battery_monitor::get_screen_times();
             let current_ma = bat.current_ua.abs() as f64 / 1000.0;
             let status = if bat.online { "Charging" } else { "Discharging" };
-            let temp = bat.temp_centi as f64 / 10.0;
-            let pct_of = |ms: u64| -> f64 {
-                if times.total_ms > 0 { ms as f64 / times.total_ms as f64 * 100.0 } else { 0.0 }
+
+            // Read args from request
+            let temp_unit = req.args.get("temp_unit")
+                .and_then(|v| v.as_str()).unwrap_or("C");
+            let show_power = req.args.get("show_power")
+                .and_then(|v| v.as_bool()).unwrap_or(true);
+
+            let (temp_val, temp_suffix) = match temp_unit {
+                "F" => (bat.temp_centi as f64 / 10.0 * 9.0 / 5.0 + 32.0, "°F"),
+                "K" => (bat.temp_centi as f64 / 10.0 + 273.15, "K"),
+                _ => (bat.temp_centi as f64 / 10.0, "°C"),
+            };
+            let temp = temp_val;
+
+            let pct_of = |ms: u64| -> u64 {
+                if times.total_ms > 0 { ms * 100 / times.total_ms } else { 0 }
             };
             let fmt_time = |ms: u64| -> String {
                 let s = ms / 1000;
@@ -122,24 +135,24 @@ async fn handle_cmd(req: Request) -> Response {
                 else { format!("{}s", s) }
             };
             let power_w = bat.power_mw as f64 / 1000.0;
-            let power_str = if power_w > 0.05 {
+            let power_str = if show_power && power_w > 0.05 {
                 format!(" ({:.2}W)", if bat.online { power_w } else { -power_w })
             } else { String::new() };
             let body = format!(
-                "{}% {:.1}°C {} {:.0} mA{}\n\
+                "{}% {:.1}{} {} {:.0} mA{}\n\
                  Active: {:.2}%/hr Idle: {:.2}%/hr\n\
-                 Screen on: {} ({:.1}%)\n\
-                 Screen off: {} ({:.1}%)\n\
-                 Deep sleep: {} ({:.1}%)\n\
-                 Awake: {} ({:.1}%)",
-                bat.capacity, temp, status, current_ma, power_str,
+                 Screen on: {} ({}%)\n\
+                 Screen off: {} ({}%)\n\
+                 Deep sleep: {} ({}%)\n\
+                 Awake: {} ({}%)",
+                bat.capacity, temp, temp_suffix, status, current_ma, power_str,
                 stats.screen_on_drain_pct_per_hr, stats.idle_drain_pct_per_hr,
                 fmt_time(times.screen_on_ms), pct_of(times.screen_on_ms),
                 fmt_time(times.screen_off_ms), pct_of(times.screen_off_ms),
                 fmt_time(times.deep_sleep_ms), pct_of(times.deep_sleep_ms),
                 fmt_time(times.awake_ms), pct_of(times.awake_ms),
             );
-            Response::ok(json!({ "body": body }))
+            Response::ok(json!({ "body": body, "stats": stats }))
         }
 
         "reset_battery" => {
