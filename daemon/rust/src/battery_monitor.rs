@@ -1,4 +1,5 @@
 use std::io::Write;
+use std::sync::OnceLock;
 
 /// Screen time tracking with battery consumption attribution
 /// and deep sleep / awake power state residency.
@@ -24,8 +25,10 @@ struct ScreenState {
     is_deep_sleep: bool,
 }
 
-static STATE: once_cell::sync::Lazy<std::sync::Mutex<ScreenState>> =
-    once_cell::sync::Lazy::new(|| {
+static STATE: OnceLock<std::sync::Mutex<ScreenState>> = OnceLock::new();
+
+pub fn init() {
+    let m = STATE.get_or_init(|| {
         std::sync::Mutex::new(ScreenState {
             screen_on_duration_ms: 0,
             screen_off_duration_ms: 0,
@@ -42,31 +45,15 @@ static STATE: once_cell::sync::Lazy<std::sync::Mutex<ScreenState>> =
             is_deep_sleep: false,
         })
     });
-
-pub fn init() {
-    let mut state = STATE.lock().unwrap();
-    *state = ScreenState {
-        screen_on_duration_ms: 0,
-        screen_off_duration_ms: 0,
-        screen_on_battery_used: 0,
-        screen_off_battery_used: 0,
-        deep_sleep_ms: 0,
-        awake_ms: 0,
-        last_update_ms: 0,
-        last_sleep_update_ms: 0,
-        screen_on_start_battery: 0,
-        screen_off_start_battery: 0,
-        current_battery: 0,
-        is_screen_on: false,
-        is_deep_sleep: false,
-    };
+    let mut state = m.lock().unwrap();
+    state.last_update_ms = 0;
 }
 
 /// Update screen state and battery levels.
 /// `current_ua`: raw microamps (for deep sleep heuristic).
 pub fn update(screen_on: bool, battery_level: i32, current_ua: i64) {
     let now = current_ms();
-    let mut state = STATE.lock().unwrap();
+    let mut state = STATE.get().unwrap().lock().unwrap();
 
     if state.last_update_ms == 0 {
         state.last_update_ms = now;
@@ -125,7 +112,7 @@ pub fn update(screen_on: bool, battery_level: i32, current_ua: i64) {
 }
 
 pub fn reset() {
-    let mut state = STATE.lock().unwrap();
+    let mut state = STATE.get().unwrap().lock().unwrap();
     *state = ScreenState {
         screen_on_duration_ms: 0,
         screen_off_duration_ms: 0,
@@ -153,7 +140,7 @@ pub struct ScreenTimes {
 }
 
 pub fn get_screen_times() -> ScreenTimes {
-    let state = STATE.lock().unwrap();
+    let state = STATE.get().unwrap().lock().unwrap();
     // Live elapsed so time moves in real-time
     let now = current_ms();
     let live = now.saturating_sub(state.last_update_ms);
@@ -184,6 +171,7 @@ pub fn get_screen_times() -> ScreenTimes {
     }
 }
 
+#[derive(serde::Serialize)]
 pub struct DrainRates {
     pub active_drain_pct_per_hr: f64,
     pub idle_drain_pct_per_hr: f64,
