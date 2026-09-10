@@ -21,6 +21,7 @@ pub struct BatteryInfo {
     pub voltage_uv: i64,
     pub temp_centi: i64,
     pub online: bool,
+    pub power_mw: i64,  // voltage_uv * current_ua / 1e9 → milliwatt
 }
 
 #[derive(Debug, Clone, Serialize, Default)]
@@ -120,22 +121,27 @@ pub async fn read() -> SysfsSnapshot {
 
     // Battery
     let batt_base = zen_path!("/sys/class/power_supply/battery");
+    let voltage_uv = read_i64(&format!("{batt_base}/voltage_now")).await.unwrap_or(0);
+    let current_ua = read_i64(&format!("{batt_base}/current_now")).await.unwrap_or(0);
+    // Power: voltage_uv * current_ua / 1e9 = milliwatt
+    let power_mw = if voltage_uv > 0 && current_ua != 0 {
+        voltage_uv * current_ua.abs() / 1_000_000_000
+    } else {
+        0
+    };
     let battery = BatteryInfo {
         capacity: read_u32(&format!("{batt_base}/capacity"))
             .await
             .unwrap_or(0) as i32,
-        current_ua: read_i64(&format!("{batt_base}/current_now"))
-            .await
-            .unwrap_or(0),
-        voltage_uv: read_i64(&format!("{batt_base}/voltage_now"))
-            .await
-            .unwrap_or(0),
+        current_ua,
+        voltage_uv,
         temp_centi: read_i64(&format!("{batt_base}/temp"))
             .await
             .unwrap_or(0),
         online: read_str(&format!("{batt_base}/online"))
             .await
             == "1",
+        power_mw,
     };
 
     // CPU

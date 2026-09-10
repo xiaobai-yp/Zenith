@@ -121,14 +121,18 @@ async fn handle_cmd(req: Request) -> Response {
                 else if m > 0 { format!("{}m {}s", m, s % 60) }
                 else { format!("{}s", s) }
             };
+            let power_w = bat.power_mw as f64 / 1000.0;
+            let power_str = if power_w > 0.05 {
+                format!(" ({:.2}W)", if bat.online { power_w } else { -power_w })
+            } else { String::new() };
             let body = format!(
-                "{}% {:.1}°C {} {:.0} mA\n\
+                "{}% {:.1}°C {} {:.0} mA{}\n\
                  Active: {:.2}%/hr Idle: {:.2}%/hr\n\
                  Screen on: {} ({:.1}%)\n\
                  Screen off: {} ({:.1}%)\n\
                  Deep sleep: {} ({:.1}%)\n\
                  Awake: {} ({:.1}%)",
-                bat.capacity, temp, status, current_ma,
+                bat.capacity, temp, status, current_ma, power_str,
                 stats.screen_on_drain_pct_per_hr, stats.idle_drain_pct_per_hr,
                 fmt_time(times.screen_on_ms), pct_of(times.screen_on_ms),
                 fmt_time(times.screen_off_ms), pct_of(times.screen_off_ms),
@@ -339,6 +343,11 @@ async fn main() {
                 );
                 battery_monitor::update_screen_times(now_ms(), snap.screen_on, snap.battery.current_ua);
                 update_snapshot(snap);
+
+                // Save session every 30s for persistence across restarts
+                if crate::now_ms() % 30_000 < 10_000 {
+                    battery_monitor::save_session();
+                }
 
                 // fps + benchmark (5 iterations x 1s = 5s total)
                 for _ in 0..5 {
