@@ -23,7 +23,8 @@ object DaemonManager {
         init { isDaemon = true }
         override fun run() {
             while (!isInterrupted) {
-                val p = process ?: run {
+                val p = process
+                if (p == null) {
                     try { sleep(500) } catch (_: InterruptedException) { return }
                     continue
                 }
