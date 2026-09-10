@@ -23,7 +23,7 @@ use crate::zen_path;
 
 const STATE_DIR: &str = "/data/local/tmp/zenith";
 const STATE_FILE: &str = "/data/local/tmp/zenith/battery_stats.json";
-const BATTERYSTATS_TTL_MS: u64 = 3_000;
+const BATTERYSTATS_TTL_MS: u64 = 30_000;
 const PERSIST_EVERY_MS: u64 = 10_000;
 const CAPACITY_FALLBACK_MAH: i64 = 5_000;
 
@@ -252,12 +252,11 @@ fn parse_mah_line(text: &str, needle: &str) -> Option<f64> {
 }
 
 /// Refreshes batterystats values if TTL expired. Returns (on_mah, off_mah) options.
+/// Dumpsys runs every 30s (was 3s) — %-step owns drain attribution; batterystats
+/// is only a re-baseline. Longer TTL avoids blocking the 1s monitor tick.
 async fn refresh_batterystats() -> (Option<f64>, Option<f64>) {
     {
         let st = lock();
-        if !st.battstats_ok && st.last_batterystats_ms > 0 {
-            // previously failed within TTL — still return cached -1
-        }
         if st.last_batterystats_ms != 0
             && elapsed_ms().saturating_sub(st.last_batterystats_ms) < BATTERYSTATS_TTL_MS
         {
