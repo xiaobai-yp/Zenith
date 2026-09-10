@@ -107,7 +107,7 @@ class BatteryMonitorService : Service() {
 
         // Initial screen state
         val bm = getSystemService(BATTERY_SERVICE) as android.os.BatteryManager
-        screenOn = !bm.is Charging // rough guess; actual state comes from receiver
+        screenOn = !bm.isCharging // rough guess; actual state comes from receiver
 
         // Get initial level
         val batteryIntent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
