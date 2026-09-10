@@ -103,10 +103,9 @@ async fn handle_cmd(req: Request) -> Response {
         }
 
         "battery_notif" => {
-            let snap = get_snapshot();
-            let bat = &snap.battery;
             let times = battery_monitor::get_screen_times();
             let drain = battery_monitor::get_drain_rates();
+            let bat = battery_monitor::readings();
 
             // Read args from request
             let temp_unit = req.args.get("temp_unit")
@@ -114,11 +113,11 @@ async fn handle_cmd(req: Request) -> Response {
             let show_power = req.args.get("show_power")
                 .and_then(|v| v.as_bool()).unwrap_or(true);
 
-            let charging = bat.online;
+            let charging = bat.charging;
 
             // Charging status label based on power wattage.
             let power_w = bat.power_mw as f64 / 1000.0;
-            let current_ma = bat.current_ua.abs() as f64 / 1000.0;
+            let current_ma = bat.current_ma as f64;
             let status = if charging {
                 if bat.capacity >= 100 && current_ma < 100.0 {
                     "Full Charge"
@@ -325,7 +324,11 @@ async fn handle_cmd(req: Request) -> Response {
         }
 
         "battery_stats" => {
-            Response::ok(json!(battery_monitor::get_drain_rates()))
+            Response::ok(json!({
+                "drain": battery_monitor::get_drain_rates(),
+                "times": battery_monitor::get_screen_times(),
+                "readings": battery_monitor::readings(),
+            }))
         }
 
         _ => Response::err(&format!("unknown cmd: {}", req.cmd)),
@@ -349,7 +352,7 @@ async fn main() {
 
     app_monitor::init();
     sysfs_monitor::init().await;
-    battery_monitor::init();
+    battery_monitor::init().await;
     fps_monitor::init();
     benchmark::init();
 
@@ -382,15 +385,14 @@ async fn main() {
 
             let mut tick = 0u64;
             loop {
-                // Battery state update every 1s (for real-time stats)
-                {
+                // Screen state from brightness
+                let screen_on = {
                     let snap = get_snapshot();
-                    battery_monitor::update(
-                        snap.screen_on,
-                        snap.battery.capacity,
-                        snap.battery.current_ua,
-                    );
-                }
+                    snap.screen_on
+                };
+
+                // Battery state update every 1s (new API: async)
+                rt.block_on(battery_monitor::update(screen_on));
 
                 // Full sysfs snapshot every 5 ticks
                 tick += 1;
