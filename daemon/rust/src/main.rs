@@ -14,7 +14,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 // std::net::UnixListener used locally for socket2 conversion
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::net::UnixListener;
+use std::os::fd::FromRawFd;
+use std::os::unix::net::UnixListener;
+use tokio::net::UnixListener as TokioListener;
 use tokio::sync::watch;
 
 // Abstract socket name (no filesystem path — bypasses DAC/SELinux).
@@ -273,7 +275,9 @@ async fn main() {
     let mut sun: libc::sockaddr_un = unsafe { std::mem::zeroed() };
     sun.sun_family = libc::AF_UNIX as libc::sa_family_t;
     // Abstract socket: sun_path[0] = 0 (zeroed), name starts at sun_path[1]
-    sun.sun_path[1..1 + name.len()].copy_from_slice(name);
+    for (i, b) in name.iter().enumerate() {
+        sun.sun_path[1 + i] = *b as libc::c_char;
+    }
     let addrlen = (2 + 1 + name.len()) as libc::socklen_t;
     let rc = unsafe {
         libc::bind(fd, &sun as *const libc::sockaddr_un as *const libc::sockaddr, addrlen)
@@ -288,7 +292,7 @@ async fn main() {
     let std_listener =
         unsafe { std::os::unix::net::UnixListener::from_raw_fd(fd) };
     std_listener.set_nonblocking(true).expect("nonblocking");
-    let listener = UnixListener::from_std(std_listener).expect("tokio wrap");
+    let listener = TokioListener::from_std(std_listener).expect("tokio wrap");
     eprintln!("[zenithd] listening on abstract socket @{SOCKET_NAME}");
 
     // Shutdown signal
