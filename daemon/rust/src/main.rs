@@ -143,9 +143,6 @@ async fn handle_cmd(req: Request) -> Response {
             let pct_of = |ms: u64| -> u64 {
                 if times.total_ms > 0 { ms * 100 / times.total_ms } else { 0 }
             };
-            let pct_of_f = |ms: u64| -> f64 {
-                if times.total_ms > 0 { ms as f64 * 100.0 / times.total_ms as f64 } else { 0.0 }
-            };
             let fmt_time = |ms: u64| -> String {
                 let s = ms / 1000;
                 let m = s / 60;
@@ -182,15 +179,15 @@ async fn handle_cmd(req: Request) -> Response {
                  Active: {:.2}%/hr Idle: {:.2}%/hr\n\
                  Screen on: {} ({}%)\n\
                  Screen off: {} ({}%)\n\
-                 Deep sleep: {} ({:.1}%)\n\
-                 Awake: {} ({:.1}%)",
+                 Deep sleep: {} ({}%)\n\
+                 Awake: {} ({}%)",
                 bat.capacity, temp_val, temp_suffix, status,
                 current_str, power_str,
                 active_drain, idle_drain,
                 fmt_time(s_on), pct_of(s_on),
                 fmt_time(s_off), pct_of(s_off),
-                fmt_time(ds), pct_of_f(ds),
-                fmt_time(aw), pct_of_f(aw),
+                fmt_time(ds), pct_of(ds),
+                fmt_time(aw), pct_of(aw),
             );
             Response::ok(json!({ "body": body, "stats": stats }))
         }
