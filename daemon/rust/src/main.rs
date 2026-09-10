@@ -119,14 +119,14 @@ async fn handle_cmd(req: Request) -> Response {
             let power_w = bat.power_mw as f64 / 1000.0;
             let current_ma = bat.current_ma as f64;
             let status = if charging {
-                if bat.capacity >= 100 && current_ma < 100.0 {
+                if bat.capacity >= 100 && current_ma <= 50.0 {
                     "Full Charge"
                 } else if power_w >= 7.0 {
                     "Charging rapidly ⚡"
                 } else if power_w >= 2.0 {
-                    "Charging"
+                    "Charging ⚡"
                 } else {
-                    "Charging slowly"
+                    "Charging slowly ⚡"
                 }
             } else {
                 "Discharging"
@@ -147,15 +147,20 @@ async fn handle_cmd(req: Request) -> Response {
                 else { format!("{}s", s) }
             };
 
-            // Power string: only when charging
-            let power_str = if charging && show_power && power_w > 0.05 {
+            // Power string: only when charging (not Full Charge)
+            let is_full_charge = bat.capacity >= 100 && current_ma <= 50.0;
+            let power_str = if charging && !is_full_charge && show_power && power_w > 0.05 {
                 format!(" • {:.1}W", power_w)
             } else {
                 String::new()
             };
 
-            // Current: always show
-            let current_str = format!(" {:.0} mA", current_ma);
+            // Current: always show except Full Charge
+            let current_str = if is_full_charge {
+                String::new()
+            } else {
+                format!(" {:.0} mA", current_ma)
+            };
 
             // Deep sleep / awake % = time residency (always show, even while charging)
             let ds_total = times.deep_sleep_ms + times.awake_ms;
@@ -179,8 +184,8 @@ async fn handle_cmd(req: Request) -> Response {
                  Active: {:.2}%/hr Idle: {:.2}%/hr\n\
                  Screen on: {} ({}%)\n\
                  Screen off: {} ({}%)\n\
-                 Deep sleep: {} ({:.2}%)\n\
-                 Awake: {} ({:.2}%)",
+                 Deep sleep: {} ({:.1}%)\n\
+                 Awake: {} ({:.1}%)",
                 bat.capacity, temp_val, temp_suffix, status, current_str, power_str,
                 active_drain, idle_drain,
                 fmt_time(s_on), on_pct,
