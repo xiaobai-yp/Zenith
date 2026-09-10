@@ -275,7 +275,7 @@ async fn main() {
     // Make the socket accessible to the app's uid (root-owned socket in the
     // app dir is blocked by SELinux for app-domain processes).
     if let Some(uid) = app_uid {
-        let _ = std::process::Command::new("chown")
+        let _ = std::process::Command::new("/system/bin/chown")
             .args([&format!("{uid}:{uid}"), socket_path])
             .status();
     }
