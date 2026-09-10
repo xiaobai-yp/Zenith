@@ -18,13 +18,12 @@ struct Sample {
 
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct BatteryStats {
-    pub avg_drain_ma: f64,
-    pub avg_drain_screen_on_ma: f64,
-    pub avg_drain_screen_off_ma: f64,
-    pub idle_drain_ma: f64,
+    pub drain_pct_per_hr: f64,
+    pub screen_on_drain_pct_per_hr: f64,
+    pub screen_off_drain_pct_per_hr: f64,
+    pub idle_drain_pct_per_hr: f64,
     pub sample_count: usize,
     pub last_capacity: i32,
-    pub estimated_hours_left: f64,
 }
 
 struct MonitorState {
@@ -95,7 +94,7 @@ pub fn update(
             / 3_600_000.0;
         if dt_hours > 0.01 {
             let capacity_drop = oldest.capacity as f64 - newest.capacity as f64;
-            let drain_rate = (capacity_drop / dt_hours * 40.0).max(0.0); // assume ~4000mAh
+            let drain_rate = (capacity_drop / dt_hours).max(0.0); // %/hr
 
             if !s.initialized_ema {
                 s.screen_on_drain = drain_rate;
@@ -130,20 +129,13 @@ pub fn get_stats() -> BatteryStats {
         0.0
     };
 
-    let hours_left = if avg_drain > 0.5 {
-        s.last_capacity as f64 / avg_drain * 40.0 // capacity% → hours
-    } else {
-        0.0
-    };
-
     BatteryStats {
-        avg_drain_ma: avg_drain,
-        avg_drain_screen_on_ma: s.screen_on_drain,
-        avg_drain_screen_off_ma: s.screen_off_drain,
-        idle_drain_ma: s.idle_drain,
+        drain_pct_per_hr: avg_drain,
+        screen_on_drain_pct_per_hr: s.screen_on_drain,
+        screen_off_drain_pct_per_hr: s.screen_off_drain,
+        idle_drain_pct_per_hr: s.idle_drain,
         sample_count: s.samples.len(),
         last_capacity: s.last_capacity,
-        estimated_hours_left: hours_left,
     }
 }
 

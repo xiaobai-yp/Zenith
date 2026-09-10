@@ -129,7 +129,7 @@ async fn handle_cmd(req: Request) -> Response {
                  Deep sleep: {} ({:.1}%)\n\
                  Awake: {} ({:.1}%)",
                 bat.capacity, temp, status, current_ma,
-                stats.avg_drain_screen_on_ma, stats.idle_drain_ma,
+                stats.screen_on_drain_pct_per_hr, stats.idle_drain_pct_per_hr,
                 fmt_time(times.screen_on_ms), pct_of(times.screen_on_ms),
                 fmt_time(times.screen_off_ms), pct_of(times.screen_off_ms),
                 fmt_time(times.deep_sleep_ms), pct_of(times.deep_sleep_ms),
@@ -350,8 +350,14 @@ async fn main() {
                     }
                 }
 
-                // foreground app detection
-                let _ = app_monitor::detect_fg();
+                // foreground app detection + perapp profile apply
+                if let Some(fg) = app_monitor::detect_fg() {
+                    let profile_id = profile_engine::lookup(&fg.package);
+                    let active = thermal_core::get_active_profile().unwrap_or_default();
+                    if profile_id != 0 && active != profile_id.to_string() {
+                        let _ = rt.block_on(thermal_core::apply_profile(&profile_id.to_string()));
+                    }
+                }
 
                 // property poll
                 if let Ok(v) = rt.block_on(read_prop("persist.sys.zenith.thermal")) {
