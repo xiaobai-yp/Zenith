@@ -28,7 +28,7 @@ class BatteryMonitorService : Service() {
         private const val CHANNEL_WARN = "battery_warning"
         private const val NOTIFICATION_ID = 102
         private const val NOTIFICATION_ID_WARN = 103
-        private const val POLL_INTERVAL_MS = 3_000L
+        private const val POLL_INTERVAL_MS = 1_000L
         const val ACTION_STOP = "com.zenith.thermal.action.STOP_BATTERY_MONITOR"
         const val ACTION_RESET = "com.zenith.thermal.action.RESET_BATTERY_STATS"
     }
@@ -99,6 +99,11 @@ class BatteryMonitorService : Service() {
         if (prefs.getBoolean("reset_on_plugged", false) && isCharging && !wasCharging) {
             ZenithDaemonClient.sendCommand("reset_battery")
             Log.i(TAG, "Auto-reset: charger connected")
+        }
+        // Always reset stats when unplugged (charging → discharging) — new session
+        if (wasCharging && !isCharging) {
+            ZenithDaemonClient.sendCommand("reset_battery")
+            Log.i(TAG, "Auto-reset: unplugged, new session")
         }
         wasCharging = isCharging
 
