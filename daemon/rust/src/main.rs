@@ -120,7 +120,7 @@ async fn handle_cmd(req: Request) -> Response {
             let current_ma = bat.current_ma as f64;
             let status = if charging {
                 if bat.capacity >= 100 && current_ma <= 50.0 {
-                    "Full Charge"
+                    "Fully charged"
                 } else if power_w >= 7.0 {
                     "Charging rapidly ⚡"
                 } else if power_w >= 2.0 {
