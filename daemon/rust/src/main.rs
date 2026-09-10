@@ -167,10 +167,11 @@ async fn handle_cmd(req: Request) -> Response {
             } else {
                 (drain.active_drain_pct_per_hr, drain.idle_drain_pct_per_hr)
             };
-            let (s_on, s_off, ds, aw, on_pct, off_pct) = if charging {
-                (0u64, 0u64, 0u64, 0u64, 0u32, 0u32)
+            // Active/idle screen times freeze during charging; deep sleep/awake always live.
+            let (s_on, s_off, on_pct, off_pct) = if charging {
+                (0u64, 0u64, 0u32, 0u32)
             } else {
-                (times.screen_on_ms, times.screen_off_ms, times.deep_sleep_ms, times.awake_ms, times.screen_on_pct, times.screen_off_pct)
+                (times.screen_on_ms, times.screen_off_ms, times.screen_on_pct, times.screen_off_pct)
             };
 
             let body = format!(
@@ -184,8 +185,8 @@ async fn handle_cmd(req: Request) -> Response {
                 active_drain, idle_drain,
                 fmt_time(s_on), on_pct,
                 fmt_time(s_off), off_pct,
-                fmt_time(ds), ds_pct,
-                fmt_time(aw), aw_pct,
+                fmt_time(times.deep_sleep_ms), ds_pct,
+                fmt_time(times.awake_ms), aw_pct,
             );
             Response::ok(json!({ "body": body, "drain": drain }))
         }
