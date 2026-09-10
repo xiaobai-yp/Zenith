@@ -100,6 +100,9 @@ struct Inner {
     screen_off_start_pct: i32,
     last_batterystats_ms: u64,
     last_persist_ms: u64,
+    // EMA-smoothed instantaneous drain rates (from current sensor)
+    ema_active_rate: f64, // %/hr, screen-on instantaneous (EMA α=0.3)
+    ema_idle_rate: f64,   // %/hr, screen-off instantaneous (EMA α=0.3)
 }
 
 static STATE: OnceLock<Mutex<Inner>> = OnceLock::new();
@@ -328,6 +331,8 @@ pub async fn init() {
         screen_off_start_pct: -1,
         last_batterystats_ms: 0,
         last_persist_ms: now,
+        ema_active_rate: 0.0,
+        ema_idle_rate: 0.0,
     };
     let _ = STATE.set(Mutex::new(inner));
     // Seed batterystats in background (fire-and-forget).
@@ -380,6 +385,21 @@ pub async fn update(screen_on: bool) {
     let suspend = de.saturating_sub(du);
 
     let charging = st.readings.charging;
+
+    // Instantaneous rate EMA: current_ma / capacity_mah × 3600 = %/hr
+    // α=0.3 for responsiveness; reset on charge.
+    if !charging && !st.acc.charging_paused {
+        let cm = st.readings.capacity_mah.max(1) as f64;
+        let raw = (st.readings.current_ma as f64 / cm) * 3600.0;
+        if screen_on {
+            st.ema_active_rate = 0.3 * raw + 0.7 * st.ema_active_rate;
+        } else {
+            st.ema_idle_rate = 0.3 * raw + 0.7 * st.ema_idle_rate;
+        }
+    } else {
+        st.ema_active_rate = 0.0;
+        st.ema_idle_rate = 0.0;
+    }
 
     // screen transition bookkeeping FIRST — before attribution, so the
     // first tick of a new screen state uses a fresh start_pct.
@@ -497,6 +517,13 @@ pub fn get_screen_times() -> ScreenTimes {
         screen_on_pct: on_pct,
         screen_off_pct: off_pct,
     }
+}
+
+/// Returns EMA-smoothed instantaneous drain rates from the live current sensor.
+/// (active_rate, idle_rate) — each in %/hr, 0 when charging.
+pub fn get_inst_rates() -> (f64, f64) {
+    let st = lock();
+    (st.ema_active_rate, st.ema_idle_rate)
 }
 
 pub fn get_drain_rates() -> DrainRates {

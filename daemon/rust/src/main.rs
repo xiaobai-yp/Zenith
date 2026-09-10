@@ -173,6 +173,14 @@ async fn handle_cmd(req: Request) -> Response {
             } else {
                 (drain.active_drain_pct_per_hr, drain.idle_drain_pct_per_hr)
             };
+
+            // Instantaneous rate from live current sensor (like Thermal Services):
+            // current_ma / capacity_mah * 3600 = %/hr. EMA-smoothed in daemon.
+            let (inst_active, inst_idle) = if charging {
+                (0.0, 0.0)
+            } else {
+                battery_monitor::get_inst_rates()
+            };
             // Active/idle screen times freeze during charging; deep sleep/awake always live.
             let (s_on, s_off, on_pct, off_pct) = if charging {
                 (0u64, 0u64, 0u32, 0u32)
@@ -182,13 +190,13 @@ async fn handle_cmd(req: Request) -> Response {
 
             let body = format!(
                 "{}% • {:.1}{} • {}{}{}\n\
-                 Active: {:.2}%/hr Idle: {:.2}%/hr\n\
+                 Active: {:.2}%/hr ({:.1}%/hr now) Idle: {:.2}%/hr ({:.1}%/hr now)\n\
                  Screen on: {} ({}%)\n\
                  Screen off: {} ({}%)\n\
                  Deep sleep: {} ({:.1}%)\n\
                  Awake: {} ({:.1}%)",
                 bat.capacity, temp_val, temp_suffix, status, current_str, power_str,
-                active_drain, idle_drain,
+                active_drain, inst_active, idle_drain, inst_idle,
                 fmt_time(s_on), on_pct,
                 fmt_time(s_off), off_pct,
                 fmt_time(times.deep_sleep_ms), ds_pct,
