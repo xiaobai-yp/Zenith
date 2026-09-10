@@ -119,7 +119,8 @@ async fn handle_cmd(req: Request) -> Response {
             let power_w = bat.power_mw as f64 / 1000.0;
             let current_ma = bat.current_ma as f64;
             let status = if charging {
-                if bat.capacity >= 100 && current_ma <= 50.0 {
+                // status=="Full" is the kernel's full-charge signal
+                if bat.status == "Full" {
                     "Fully charged"
                 } else if power_w >= 7.0 {
                     "Charging rapidly ⚡"
@@ -148,7 +149,7 @@ async fn handle_cmd(req: Request) -> Response {
             };
 
             // Power string: only when charging (not Full Charge)
-            let is_full_charge = bat.capacity >= 100 && current_ma <= 50.0;
+            let is_full_charge = bat.status == "Full";
             let power_str = if charging && !is_full_charge && show_power && power_w > 0.05 {
                 format!(" • {:.1}W", power_w)
             } else {
