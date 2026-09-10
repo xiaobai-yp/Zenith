@@ -1,10 +1,10 @@
 package com.zenith.thermal
 
-import android.net.LocalSocket
-import android.net.LocalSocketAddress
 import android.util.Log
 import java.io.BufferedReader
+import java.io.InputStream
 import java.io.InputStreamReader
+import java.io.OutputStream
 import java.io.PrintWriter
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.LinkedBlockingQueue
@@ -13,25 +13,24 @@ import java.util.concurrent.atomic.AtomicBoolean
 import org.json.JSONObject
 
 /**
- * Singleton client for IPC with zenithd via newline-delimited JSON.
+ * Singleton client for IPC with zenithd via newline-delimited JSON over
+ * Process stdin/stdout pipes.
  *
  * Wire format:
  *   Request:  {"cmd":"...","args":{...}}\n
  *   Response: {"ok":true,"data":{...}}\n  or  {"ok":false,"error":"..."}\n
  *
- * Persistent connection — socket stays open across requests.
+ * DaemonManager calls [attachProcess] when the child process starts.
  * All blocking I/O runs on a dedicated daemon thread.
  */
 object ZenithDaemonClient {
 
     private const val TAG = "ZDaemonClient"
-    private const val SOCKET_PATH = "zenithd"
     private const val IO_TIMEOUT_MS = 5_000
 
     private val ioLock = Any()
     private var reader: BufferedReader? = null
     private var writer: PrintWriter? = null
-    private var socket: LocalSocket? = null
     @Volatile var isConnected: Boolean = false
         private set
 
@@ -57,14 +56,13 @@ object ZenithDaemonClient {
 
     private val workQueue = LinkedBlockingQueue<Work>(64)
 
-    // Dedicated I/O thread — processes one request at a time, socket stays open.
+    // Dedicated I/O thread — processes one request at a time.
     private val ioThread = Thread({
         while (!Thread.currentThread().isInterrupted) {
             try {
                 val w = workQueue.take()
                 val result = synchronized(ioLock) {
-                    if (socket == null || socket?.isConnected != true) doConnectLocked()
-                    if (socket == null || socket?.isConnected != true) {
+                    if (reader == null || writer == null) {
                         w.failed.set(true)
                         null
                     } else {
@@ -86,9 +84,20 @@ object ZenithDaemonClient {
 
     // ---- Connection management ----
 
-    fun connect(): Boolean = synchronized(ioLock) { doConnectLocked() }
+    /**
+     * Attach streams from a launched daemon process. Called by DaemonManager
+     * right after launching zenithd via su.
+     */
+    fun attachProcess(inputStream: InputStream, outputStream: OutputStream) = synchronized(ioLock) {
+        disconnectLocked()
+        reader = BufferedReader(InputStreamReader(inputStream, Charsets.UTF_8), 4096)
+        writer = PrintWriter(outputStream, true)
+        isConnected = true
+        notifyListeners(true)
+        Log.i(TAG, "Attached to daemon process streams")
+    }
 
-    /** Non-blocking: enqueue a connect check. */
+    /** Non-blocking: enqueue a status check through existing streams. */
     fun requestConnect() { workQueue.offer(work("status")) }
 
     fun disconnect() { synchronized(ioLock) { disconnectLocked() } }
@@ -97,35 +106,22 @@ object ZenithDaemonClient {
         val was = isConnected
         try { reader?.close() } catch (_: Exception) {}
         try { writer?.close() } catch (_: Exception) {}
-        try { socket?.close() } catch (_: Exception) {}
-        reader = null; writer = null; socket = null
+        reader = null; writer = null
         isConnected = false
         if (was) notifyListeners(false)
     }
 
-    private fun doConnectLocked(): Boolean {
-        disconnectLocked()
-        return try {
-            val s = LocalSocket()
-            s.connect(LocalSocketAddress(SOCKET_PATH, LocalSocketAddress.Namespace.ABSTRACT))
-            s.soTimeout = IO_TIMEOUT_MS
-            socket = s
-            reader = BufferedReader(InputStreamReader(s.inputStream, Charsets.UTF_8), 4096)
-            writer = PrintWriter(s.outputStream, true)
-            isConnected = true
-            notifyListeners(true)
-            Log.i(TAG, "Connected to $SOCKET_PATH")
-            true
-        } catch (e: Exception) {
-            Log.w(TAG, "Connect failed: ${e.message}")
-            disconnectLocked()
-            false
-        }
+    /**
+     * Called by DaemonManager when the child process exits unexpectedly.
+     * Closes streams and notifies listeners without killing anything.
+     */
+    fun onProcessDied() {
+        Log.w(TAG, "Daemon process died")
+        synchronized(ioLock) { disconnectLocked() }
     }
 
     // ---- Request / Response ----
 
-    /** Build a Work item from a JSON request object. */
     private fun work(cmd: String, args: JSONObject? = null): Work {
         val req = JSONObject()
         req.put("cmd", cmd)
@@ -133,11 +129,6 @@ object ZenithDaemonClient {
         return Work(req)
     }
 
-    /**
-     * Enqueue a JSON command and block up to IO_TIMEOUT_MS for the result.
-     * Returns the "data" object, null on error/disconnect, or a JSONObject with
-     * "error" key on daemon error (callers that check for errors use [sendRequest]).
-     */
     fun sendCommand(cmd: String, args: JSONObject? = null): JSONObject? {
         val w = work(cmd, args)
         workQueue.offer(w)
@@ -148,13 +139,11 @@ object ZenithDaemonClient {
         return w.result[0] as? JSONObject
     }
 
-    /** Like [sendCommand] but returns error string on daemon error, null on exception. */
     fun sendRequest(cmd: String, args: JSONObject? = null): String? {
         val data = sendCommand(cmd, args) ?: return null
         return if (data.has("error")) data.getString("error") else data.toString()
     }
 
-    /** Locked: write one JSON line, read one JSON line. */
     private fun doSendRecv(request: JSONObject): JSONObject? {
         val w = writer ?: throw Exception("No writer")
         val r = reader ?: throw Exception("No reader")
@@ -190,7 +179,7 @@ object ZenithDaemonClient {
         val batteryOnline: Boolean get() = battery.online
         val batteryDrainPctPerHr: Double get() = battery.drainPctPerHr
         val currentProfileId: Int get() = activeProfile.toIntOrNull() ?: 0
-        val foregroundPid: Int get() = 0 // not in new protocol
+        val foregroundPid: Int get() = 0
     }
 
     fun getStatus(): StatusResponse? {
@@ -229,7 +218,6 @@ object ZenithDaemonClient {
         return sendCommand("map_app", args) != null
     }
 
-    /** Reset all per-app profile mappings in the daemon. */
     fun resetProfiles(): Boolean {
         return sendCommand("reset_profiles") != null
     }
@@ -311,7 +299,6 @@ object ZenithDaemonClient {
 
     fun resetFpsSession(): Boolean = sendCommand("reset_fps_session") != null
 
-    /** Lightweight keep-alive ping — just checks connection health. */
     fun sendStatus(): StatusResponse? = getStatus()
 
     // ---- Private parsers ----

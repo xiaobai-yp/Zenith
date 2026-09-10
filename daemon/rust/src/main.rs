@@ -1,5 +1,6 @@
 // main.rs — ZenithThermal daemon: full integration.
-// Unix socket JSON protocol, periodic sysfs/app/fps/benchmark monitoring.
+// stdin/stdout JSON protocol (newline-delimited), periodic
+// sysfs/app/fps/benchmark monitoring. stderr for logging.
 
 mod app_monitor;
 mod benchmark;
@@ -12,15 +13,8 @@ mod thermal_core;
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-// std::net::UnixListener used locally for socket2 conversion
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use std::os::fd::FromRawFd;
-use std::os::unix::net::UnixListener;
-use tokio::net::UnixListener as TokioListener;
-use tokio::sync::watch;
 
-// Abstract socket name (no filesystem path — bypasses DAC/SELinux).
-const SOCKET_NAME: &str = "zenithd";
 const PROFILES_PATH: &str =
     "/data/data/com.zenith.thermal/files/profiles.json";
 
@@ -261,45 +255,8 @@ async fn main() {
 
     let _ = LAST_SNAPSHOT.set(RwLock::new(sysfs_monitor::SysfsSnapshot::default()));
 
-    // Bind abstract socket (\0zenithd) — no filesystem node, so no
-    // chown/chmod/chcon needed and DAC/SELinux file rules don't apply.
-    // App-domain processes connect via the abstract namespace.
-    // Raw libc calls: works on Android target without any unstable APIs.
-    let name = SOCKET_NAME.as_bytes();
-    let fd = unsafe {
-        libc::socket(libc::AF_UNIX, libc::SOCK_STREAM | libc::SOCK_CLOEXEC, 0)
-    };
-    if fd < 0 {
-        panic!("socket create failed: {}", std::io::Error::last_os_error());
-    }
-    let mut sun: libc::sockaddr_un = unsafe { std::mem::zeroed() };
-    sun.sun_family = libc::AF_UNIX as libc::sa_family_t;
-    // Abstract socket: sun_path[0] = 0 (zeroed), name starts at sun_path[1]
-    for (i, b) in name.iter().enumerate() {
-        sun.sun_path[1 + i] = *b as libc::c_char;
-    }
-    let addrlen = (2 + 1 + name.len()) as libc::socklen_t;
-    let rc = unsafe {
-        libc::bind(fd, &sun as *const libc::sockaddr_un as *const libc::sockaddr, addrlen)
-    };
-    if rc != 0 {
-        panic!("bind failed: {}", std::io::Error::last_os_error());
-    }
-    let rc = unsafe { libc::listen(fd, 16) };
-    if rc != 0 {
-        panic!("listen failed: {}", std::io::Error::last_os_error());
-    }
-    let std_listener =
-        unsafe { std::os::unix::net::UnixListener::from_raw_fd(fd) };
-    std_listener.set_nonblocking(true).expect("nonblocking");
-    let listener = TokioListener::from_std(std_listener).expect("tokio wrap");
-    eprintln!("[zenithd] listening on abstract socket @{SOCKET_NAME}");
-
-    // Shutdown signal
-    let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
-    let mut monitor_rx = shutdown_rx.clone();
-
-    // Periodic monitoring tasks
+    // Periodic monitoring tasks (no shutdown channel needed — exits when
+    // the tokio runtime drops, which happens when main returns).
     let monitor_handle = tokio::spawn(async move {
         let mut interval_sysfs =
             tokio::time::interval(std::time::Duration::from_secs(5));
@@ -321,7 +278,6 @@ async fn main() {
 
         loop {
             tokio::select! {
-                _ = monitor_rx.changed() => break,
                 _ = interval_sysfs.tick() => {
                     let snap = sysfs_monitor::read().await;
                     battery_monitor::update(
@@ -356,55 +312,35 @@ async fn main() {
         }
     });
 
-    // Socket accept loop
-    loop {
-        tokio::select! {
-            _ = shutdown_rx.changed() => break,
-            result = listener.accept() => {
-                match result {
-                    Ok((mut stream, _)) => {
-                        tokio::spawn(async move {
-                            let (reader, mut writer) = stream.split();
-                            let mut lines =
-                                BufReader::new(reader).lines();
+    // Stdin/stdout command loop.
+    // stdin carries newline-delimited JSON requests from the Java Process.
+    // stdout carries newline-delimited JSON responses back.
+    // When the Java side destroys the Process, the pipe closes, stdin
+    // reaches EOF, and the loop breaks — triggering clean shutdown.
+    eprintln!("[zenithd] ready — reading commands from stdin");
 
-                            while let Ok(Some(line)) =
-                                lines.next_line().await
-                            {
-                                if line.is_empty() {
-                                    continue;
-                                }
-                                let resp = match serde_json::from_str::<
-                                    Request,
-                                >(&line) {
-                                    Ok(req) => handle_cmd(req).await,
-                                    Err(e) => Response::err(
-                                        &format!("parse: {e}"),
-                                    ),
-                                };
-                                let mut out =
-                                    serde_json::to_string(&resp)
-                                        .unwrap_or_default();
-                                out.push('\n');
-                                let _ =
-                                    writer.write_all(out.as_bytes()).await;
-                            }
-                            // Client disconnected — do NOT trigger
-                            // daemon shutdown on disconnect (C code
-                            // only shuts down on signal).
-                        });
-                    }
-                    Err(e) => {
-                        eprintln!("[zenithd] accept error: {e}");
-                    }
-                }
-            }
+    let stdin = tokio::io::stdin();
+    let mut stdout = tokio::io::stdout();
+    let mut lines = BufReader::new(stdin).lines();
+
+    while let Ok(Some(line)) = lines.next_line().await {
+        if line.is_empty() {
+            continue;
         }
+        let resp = match serde_json::from_str::<Request>(&line) {
+            Ok(req) => handle_cmd(req).await,
+            Err(e) => Response::err(&format!("parse: {e}")),
+        };
+        let mut out = serde_json::to_string(&resp).unwrap_or_default();
+        out.push('\n');
+        if stdout.write_all(out.as_bytes()).await.is_err() {
+            break; // stdout broken — pipe closed
+        }
+        let _ = stdout.flush().await;
     }
 
     monitor_handle.abort();
-    // Abstract sockets have no filesystem node to remove.
-    eprintln!("[zenithd] shutdown");
+    eprintln!("[zenithd] stdin EOF — shutting down");
 }
 
 fn now_ms() -> u64 {
