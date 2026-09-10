@@ -21,7 +21,8 @@ use tokio::process::Command;
 
 use crate::zen_path;
 
-const STATE_FILE: &str = "/data/data/com.zenith.thermal/files/battery_stats.json";
+const STATE_DIR: &str = "/data/local/tmp/zenith";
+const STATE_FILE: &str = "/data/local/tmp/zenith/battery_stats.json";
 const BATTERYSTATS_TTL_MS: u64 = 3_000;
 const PERSIST_EVERY_MS: u64 = 10_000;
 const CAPACITY_FALLBACK_MAH: i64 = 5_000;
@@ -265,7 +266,7 @@ async fn refresh_batterystats() -> (Option<f64>, Option<f64>) {
     }
     let start = elapsed_ms();
     let text = match tokio::time::timeout(
-        std::time::Duration::from_millis(1500),
+        std::time::Duration::from_millis(1000),
         run_batterystats(),
     )
     .await
@@ -304,6 +305,7 @@ fn st_lastpersist_update() {
 // ── public API ──
 
 pub async fn init() {
+    let _ = std::fs::create_dir_all(STATE_DIR);
     let mut acc = AccState::default();
     if let Ok(text) = tokio::fs::read_to_string(STATE_FILE).await {
         if let Ok(x) = serde_json::from_str::<AccState>(&text) {

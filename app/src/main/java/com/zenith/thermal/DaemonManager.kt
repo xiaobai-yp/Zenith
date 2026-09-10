@@ -18,6 +18,9 @@ object DaemonManager {
     private const val ASSET_PROFILES = "profiles.json"
 
     @Volatile private var process: Process? = null
+    @Volatile private var daemonContext: Context? = null
+    private var restartCount = 0
+    private val MAX_RESTARTS = 5
 
     private val monitorThread = object : Thread("zenithd-monitor") {
         init { isDaemon = true }
@@ -35,6 +38,17 @@ object DaemonManager {
                 catch (e: Exception) { Log.w(TAG, "waitFor: ${e.message}") }
                 process = null
                 ZenithDaemonClient.onProcessDied()
+                // Auto-restart with backoff
+                val ctx = daemonContext
+                if (ctx != null && restartCount < MAX_RESTARTS) {
+                    restartCount++
+                    val delay = 2000L * restartCount
+                    Log.i(TAG, "Auto-restarting daemon in ${delay}ms (attempt $restartCount/$MAX_RESTARTS)")
+                    try { sleep(delay) } catch (_: InterruptedException) { return }
+                    startDaemon(ctx)
+                } else if (restartCount >= MAX_RESTARTS) {
+                    Log.e(TAG, "Max restarts ($MAX_RESTARTS) reached — daemon stays dead until app restart")
+                }
             }
         }
     }.apply { start() }
@@ -48,6 +62,7 @@ object DaemonManager {
      */
     fun startDaemon(context: Context): Boolean {
         Log.i(TAG, "startDaemon called")
+        daemonContext = context
         if (isDaemonRunning()) {
             Log.i(TAG, "Daemon already running")
             return true
@@ -64,7 +79,9 @@ object DaemonManager {
         val binFile = File("/data/local/tmp/zenithd")
         val assetBytes = context.assets.open(ASSET_NAME).use { it.readBytes() }
 
-        val needsExtract = !binFile.exists() || binFile.length() != assetBytes.size.toLong()
+        val needsExtract = !binFile.exists() ||
+            binFile.lastModified() < context.packageManager
+                .getPackageInfo(context.packageName, 0).lastUpdateTime
         if (needsExtract) {
             Log.i(TAG, "Extracting $ASSET_NAME (${assetBytes.size} bytes)")
             val su = Runtime.getRuntime().exec(arrayOf("su", "-c", "cat > /data/local/tmp/zenithd"))
@@ -107,6 +124,7 @@ object DaemonManager {
 
             // Attach the process stdin/stdout to the IPC client
             ZenithDaemonClient.attachProcess(p.inputStream, p.outputStream)
+            restartCount = 0
             Log.i(TAG, "Daemon launched and attached")
             return true
         } catch (e: Exception) {
