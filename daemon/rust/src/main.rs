@@ -116,10 +116,19 @@ async fn handle_cmd(req: Request) -> Response {
 
             let charging = bat.online;
 
-            // When charging: freeze to 0s, show Charging
-            // When discharging: show real data
+            // Charging status label based on power wattage
             let (current_ma, status) = if charging {
-                (0.0f64, "Charging")
+                let power_w = bat.power_mw as f64 / 1000.0;
+                let label = if bat.capacity >= 100 && bat.current_ua.abs() as f64 / 1000.0 < 100.0 {
+                    "Full Charge"
+                } else if power_w >= 7.0 {
+                    "Charging rapidly ⚡"
+                } else if power_w >= 2.0 {
+                    "Charging"
+                } else {
+                    "Charging slowly"
+                };
+                (0.0f64, label)
             } else {
                 (bat.current_ua.abs() as f64 / 1000.0, "Discharging")
             };
@@ -150,11 +159,6 @@ async fn handle_cmd(req: Request) -> Response {
             } else {
                 String::new()
             };
-            let current_str = if charging {
-                String::new()
-            } else {
-                format!(" {:.0} mA", current_ma)
-            };
 
             // When charging: freeze drain rates and times to 0
             let (active_drain, idle_drain) = if charging {
@@ -169,13 +173,16 @@ async fn handle_cmd(req: Request) -> Response {
             };
 
             let body = format!(
-                "{}% {:.1}{} {}{}{}\n\
+                "{}% • {:.1}{} • {}{}{}{}\n\
                  Active: {:.2}%/hr Idle: {:.2}%/hr\n\
                  Screen on: {} ({}%)\n\
                  Screen off: {} ({}%)\n\
                  Deep sleep: {} ({}%)\n\
                  Awake: {} ({}%)",
-                bat.capacity, temp_val, temp_suffix, status, current_str, power_str,
+                bat.capacity, temp_val, temp_suffix, status,
+                if current_ma > 0.0 { format!(" {:.0}", current_ma) } else { String::new() },
+                if current_ma > 0.0 { " mA" } else { "" },
+                power_str,
                 active_drain, idle_drain,
                 fmt_time(s_on), pct_of(s_on),
                 fmt_time(s_off), pct_of(s_off),
