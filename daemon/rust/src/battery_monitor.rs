@@ -378,6 +378,17 @@ pub async fn update(screen_on: bool) {
 
     let charging = st.readings.charging;
 
+    // screen transition bookkeeping FIRST — before attribution, so the
+    // first tick of a new screen state uses a fresh start_pct.
+    if screen_on != st.acc.screen_on {
+        st.acc.screen_on = screen_on;
+        if screen_on {
+            st.screen_on_start_pct = st.readings.capacity;
+        } else {
+            st.screen_off_start_pct = st.readings.capacity;
+        }
+    }
+
     // state transition: charging ↔ discharging
     if charging && !st.acc.charging_paused {
         st.acc.charging_paused = true; // freeze accounting
@@ -420,16 +431,6 @@ pub async fn update(screen_on: bool) {
         st.last_batt_off_mah = d_off.unwrap_or(st.last_batt_off_mah);
         st.screen_on_start_pct = st.readings.capacity;
         st.screen_off_start_pct = st.readings.capacity;
-    }
-
-    // screen transition bookkeeping for % fallback
-    if screen_on != st.acc.screen_on {
-        st.acc.screen_on = screen_on;
-        if screen_on {
-            st.screen_on_start_pct = st.readings.capacity;
-        } else {
-            st.screen_off_start_pct = st.readings.capacity;
-        }
     }
 
     let _ = persist_maybe(&mut st);
