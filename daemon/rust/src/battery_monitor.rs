@@ -251,38 +251,42 @@ fn parse_mah_line(text: &str, needle: &str) -> Option<f64> {
     num.parse().ok()
 }
 
-/// Refreshes batterystats values if TTL expired. Returns (on_mah, off_mah) options.
-/// Dumpsys runs every 30s (was 3s) — %-step owns drain attribution; batterystats
-/// is only a re-baseline. Longer TTL avoids blocking the 1s monitor tick.
-async fn refresh_batterystats() -> (Option<f64>, Option<f64>) {
+/// Fire-and-forget: spawns a dumpsys batterystats task that updates the cached
+/// baselines when done. NEVER blocks the 1s monitor tick — %-step owns
+/// attribution, batterystats is only a periodic re-baseline.
+pub fn spawn_batterystats_refresh() {
     {
         let st = lock();
         if st.last_batterystats_ms != 0
             && elapsed_ms().saturating_sub(st.last_batterystats_ms) < BATTERYSTATS_TTL_MS
         {
-            return (None, None); // cached, no refresh
+            return; // cached, no refresh needed
         }
     }
-    let start = elapsed_ms();
-    let text = match tokio::time::timeout(
-        std::time::Duration::from_millis(1000),
-        run_batterystats(),
-    )
-    .await
-    {
-        Ok(Some(t)) => t,
-        _ => return (None, None),
-    };
-    let on = parse_mah_line(&text, "Screen on discharge:");
-    let off = parse_mah_line(&text, "Screen off discharge:");
-    let mut st = lock();
-    st.last_batterystats_ms = start;
-    if on.is_some() || off.is_some() {
-        st.battstats_ok = true;
-        st.last_batt_on_mah = on.unwrap_or(st.last_batt_on_mah);
-        st.last_batt_off_mah = off.unwrap_or(st.last_batt_off_mah);
-    }
-    (on, off)
+    tokio::spawn(async move {
+        let text = match tokio::time::timeout(
+            std::time::Duration::from_millis(1000),
+            run_batterystats(),
+        )
+        .await
+        {
+            Ok(Some(t)) => t,
+            _ => {
+                let mut st = lock();
+                st.last_batterystats_ms = elapsed_ms();
+                return;
+            }
+        };
+        let on = parse_mah_line(&text, "Screen on discharge:");
+        let off = parse_mah_line(&text, "Screen off discharge:");
+        let mut st = lock();
+        st.last_batterystats_ms = elapsed_ms();
+        if on.is_some() || off.is_some() {
+            st.battstats_ok = true;
+            st.last_batt_on_mah = on.unwrap_or(st.last_batt_on_mah);
+            st.last_batt_off_mah = off.unwrap_or(st.last_batt_off_mah);
+        }
+    });
 }
 
 // ── persistence ──
@@ -326,8 +330,8 @@ pub async fn init() {
         last_persist_ms: now,
     };
     let _ = STATE.set(Mutex::new(inner));
-    // Seed batterystats markers.
-    refresh_batterystats().await;
+    // Seed batterystats in background (fire-and-forget).
+    spawn_batterystats_refresh();
     // Seed initial readings.
     update_sensors().await;
     // Re-baseline start pct AFTER sensors are populated (init set -1).
@@ -362,7 +366,7 @@ async fn update_sensors() {
 /// Main 1s tick. `screen_on` from brightness snapshot.
 pub async fn update(screen_on: bool) {
     update_sensors().await;
-    let (d_on, d_off) = refresh_batterystats().await;
+    spawn_batterystats_refresh(); // fire-and-forget — never blocks
     let cap_mah = { lock().readings.capacity_mah };
 
     let e = elapsed_ms();
@@ -406,10 +410,6 @@ pub async fn update(screen_on: bool) {
     // on every unplug, so accumulated deltas stall at 0. We keep the
     // batterystats read for baseline only — no accumulation from it.
     if !st.acc.charging_paused {
-        // re-baseline batterystats markers (no accumulation — % step owns mAh)
-        st.last_batt_on_mah = d_on.unwrap_or(st.last_batt_on_mah);
-        st.last_batt_off_mah = d_off.unwrap_or(st.last_batt_off_mah);
-
         // %-step attribution — always on
         {
             let pct = st.readings.capacity;
@@ -425,9 +425,6 @@ pub async fn update(screen_on: bool) {
             st.acc.awake_ms += de.saturating_sub(suspend);
         }
     } else {
-        // keep start markers fresh so a huge gap is not attributed on resume
-        st.last_batt_on_mah = d_on.unwrap_or(st.last_batt_on_mah);
-        st.last_batt_off_mah = d_off.unwrap_or(st.last_batt_off_mah);
         st.screen_on_start_pct = st.readings.capacity;
         st.screen_off_start_pct = st.readings.capacity;
     }
