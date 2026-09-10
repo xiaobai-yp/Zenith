@@ -27,6 +27,7 @@ object DaemonManager {
      * @return true if the daemon is running (socket present) after the call.
      */
     fun startDaemon(context: Context): Boolean {
+        Log.i(TAG, "startDaemon called, filesDir=${context.filesDir}")
         if (isDaemonRunning()) {
             Log.i(TAG, "Daemon already running (socket exists)")
             return true
@@ -69,8 +70,13 @@ object DaemonManager {
         // created root-owned; the daemon chowns it to the app's uid so the
         // app can connect (root-owned socket in app dir is SELinux-blocked).
         val myUid = android.os.Process.myUid()
+        Log.i(TAG, "myUid=$myUid bin=${binFile.absolutePath}")
         try {
-            val cmd = "${binFile.absolutePath} $myUid &"
+            // setsid detaches daemon into its own session so it survives
+            // su shell exit. KernelSU kills background children of su -c
+            // on exit; setsid prevents that by creating a new process group.
+            val cmd = "setsid ${binFile.absolutePath} $myUid >/dev/null 2>&1 &"
+            Log.i(TAG, "Launch cmd: su -c '$cmd'")
             Runtime.getRuntime().exec(arrayOf("su", "-c", cmd))
             Log.i(TAG, "Launched: su -c '$cmd'")
         } catch (e: Exception) {
