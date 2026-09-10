@@ -65,11 +65,12 @@ pub fn update(
     _voltage_uv: i64,
     online: bool,
     timestamp_ms: u64,
+    screen_on: bool,
 ) {
     let mut s = state().write().unwrap();
 
     let current_ma = current_ua.abs() as f64 / 1000.0;
-    let is_screen_on = current_ma > 100.0; // heuristic
+    let is_screen_on = screen_on; // use sysfs screen state, not heuristic
     s.screen_on = is_screen_on;
 
     let sample = Sample {
@@ -143,5 +144,78 @@ pub fn get_stats() -> BatteryStats {
         sample_count: s.samples.len(),
         last_capacity: s.last_capacity,
         estimated_hours_left: hours_left,
+    }
+}
+
+// ── Screen time tracking ──
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+
+static SCREEN_ON_MS: AtomicU64 = AtomicU64::new(0);
+static SCREEN_OFF_MS: AtomicU64 = AtomicU64::new(0);
+static DEEP_SLEEP_MS: AtomicU64 = AtomicU64::new(0);
+static AWAKE_MS: AtomicU64 = AtomicU64::new(0);
+static LAST_SCREEN_STATE: AtomicBool = AtomicBool::new(true);
+static LAST_UPDATE_MS: AtomicU64 = AtomicU64::new(0);
+static SCREEN_ON_ACCUM_MS: AtomicU64 = AtomicU64::new(0);
+static SCREEN_OFF_ACCUM_MS: AtomicU64 = AtomicU64::new(0);
+static DEEP_SLEEP_ACCUM_MS: AtomicU64 = AtomicU64::new(0);
+static AWAKE_ACCUM_MS: AtomicU64 = AtomicU64::new(0);
+static TOTAL_MS: AtomicU64 = AtomicU64::new(0);
+
+pub fn reset_times() {
+    SCREEN_ON_MS.store(0, Ordering::Relaxed);
+    SCREEN_OFF_MS.store(0, Ordering::Relaxed);
+    DEEP_SLEEP_MS.store(0, Ordering::Relaxed);
+    AWAKE_MS.store(0, Ordering::Relaxed);
+    SCREEN_ON_ACCUM_MS.store(0, Ordering::Relaxed);
+    SCREEN_OFF_ACCUM_MS.store(0, Ordering::Relaxed);
+    DEEP_SLEEP_ACCUM_MS.store(0, Ordering::Relaxed);
+    AWAKE_ACCUM_MS.store(0, Ordering::Relaxed);
+    TOTAL_MS.store(0, Ordering::Relaxed);
+    LAST_UPDATE_MS.store(0, Ordering::Relaxed);
+}
+
+pub fn update_screen_times(now_ms: u64, screen_on: bool, current_ua: i64) {
+    let last = LAST_UPDATE_MS.swap(now_ms, Ordering::Relaxed);
+    if last == 0 {
+        LAST_SCREEN_STATE.store(screen_on, Ordering::Relaxed);
+        return;
+    }
+    let dt = now_ms.saturating_sub(last);
+    let was_on = LAST_SCREEN_STATE.swap(screen_on, Ordering::Relaxed);
+
+    if was_on {
+        SCREEN_ON_ACCUM_MS.fetch_add(dt, Ordering::Relaxed);
+    } else {
+        SCREEN_OFF_ACCUM_MS.fetch_add(dt, Ordering::Relaxed);
+    }
+
+    // Deep sleep: screen off AND current < 50mA
+    if !screen_on && current_ua.abs() < 50_000 {
+        DEEP_SLEEP_ACCUM_MS.fetch_add(dt, Ordering::Relaxed);
+    }
+    // Awake: current > 50mA (device actively drawing)
+    if current_ua.abs() > 50_000 {
+        AWAKE_ACCUM_MS.fetch_add(dt, Ordering::Relaxed);
+    }
+    TOTAL_MS.fetch_add(dt, Ordering::Relaxed);
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct ScreenTimes {
+    pub screen_on_ms: u64,
+    pub screen_off_ms: u64,
+    pub deep_sleep_ms: u64,
+    pub awake_ms: u64,
+    pub total_ms: u64,
+}
+
+pub fn get_screen_times() -> ScreenTimes {
+    ScreenTimes {
+        screen_on_ms: SCREEN_ON_ACCUM_MS.load(Ordering::Relaxed),
+        screen_off_ms: SCREEN_OFF_ACCUM_MS.load(Ordering::Relaxed),
+        deep_sleep_ms: DEEP_SLEEP_ACCUM_MS.load(Ordering::Relaxed),
+        awake_ms: AWAKE_ACCUM_MS.load(Ordering::Relaxed),
+        total_ms: TOTAL_MS.load(Ordering::Relaxed),
     }
 }

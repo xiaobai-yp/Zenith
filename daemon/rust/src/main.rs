@@ -102,6 +102,47 @@ async fn handle_cmd(req: Request) -> Response {
             }))
         }
 
+        "battery_notif" => {
+            let snap = get_snapshot();
+            let bat = &snap.battery;
+            let stats = battery_monitor::get_stats();
+            let times = battery_monitor::get_screen_times();
+            let current_ma = bat.current_ua.abs() as f64 / 1000.0;
+            let status = if bat.online { "Charging" } else { "Discharging" };
+            let temp = bat.temp_centi as f64 / 10.0;
+            let pct_of = |ms: u64| -> f64 {
+                if times.total_ms > 0 { ms as f64 / times.total_ms as f64 * 100.0 } else { 0.0 }
+            };
+            let fmt_time = |ms: u64| -> String {
+                let s = ms / 1000;
+                let m = s / 60;
+                let h = m / 60;
+                if h > 0 { format!("{}h {}m", h, m % 60) }
+                else if m > 0 { format!("{}m {}s", m, s % 60) }
+                else { format!("{}s", s) }
+            };
+            let body = format!(
+                "{}% {:.1}°C {} {:.0} mA\n\
+                 Active: {:.2}%/hr Idle: {:.2}%/hr\n\
+                 Screen on: {} ({:.1}%)\n\
+                 Screen off: {} ({:.1}%)\n\
+                 Deep sleep: {} ({:.1}%)\n\
+                 Awake: {} ({:.1}%)",
+                bat.capacity, temp, status, current_ma,
+                stats.avg_drain_screen_on_ma, stats.idle_drain_ma,
+                fmt_time(times.screen_on_ms), pct_of(times.screen_on_ms),
+                fmt_time(times.screen_off_ms), pct_of(times.screen_off_ms),
+                fmt_time(times.deep_sleep_ms), pct_of(times.deep_sleep_ms),
+                fmt_time(times.awake_ms), pct_of(times.awake_ms),
+            );
+            Response::ok(json!({ "body": body }))
+        }
+
+        "reset_battery" => {
+            battery_monitor::reset_times();
+            Response::ok(json!({ "reset": true }))
+        }
+
         "set" => {
             if let Some(obj) = req.args.as_object() {
                 let mut applied = vec![];
@@ -269,7 +310,12 @@ async fn main() {
     let monitor_handle = std::thread::Builder::new()
         .name("zenith-monitor".into())
         .spawn(move || {
-            let rt = tokio::runtime::Handle::current();
+            // Create a dedicated single-threaded tokio runtime for this OS thread.
+            // Handle::current() would panic here since we're not in a tokio context.
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("create monitor runtime");
 
             // Read initial property
             let mut last_prop = String::new();
@@ -289,7 +335,9 @@ async fn main() {
                     snap.battery.voltage_uv,
                     snap.battery.online,
                     now_ms(),
+                    snap.screen_on,
                 );
+                battery_monitor::update_screen_times(now_ms(), snap.screen_on, snap.battery.current_ua);
                 update_snapshot(snap);
 
                 // fps + benchmark (5 iterations x 1s = 5s total)

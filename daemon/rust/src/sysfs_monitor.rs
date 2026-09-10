@@ -37,6 +37,7 @@ pub struct SysfsSnapshot {
     pub cpu_policy0: CpuInfo,
     pub cpu_policy4: Option<CpuInfo>,
     pub cpu_policy7: Option<CpuInfo>,
+    pub screen_on: bool,
 }
 
 struct MonitorState {
@@ -154,11 +155,25 @@ pub async fn read() -> SysfsSnapshot {
         None
     };
 
+    // Screen state: brightness > 0 means screen on
+    let screen_brightness = read_i64("/sys/class/leds/lcd-backlight/brightness")
+        .await
+        .unwrap_or(-1);
+    let screen_on = if screen_brightness >= 0 {
+        screen_brightness > 0
+    } else {
+        // fallback: check panel backlight
+        read_i64("/sys/class/backlight/panel0-backlight/brightness")
+            .await
+            .map_or(true, |v| v > 0)
+    };
+
     SysfsSnapshot {
         thermal_zones,
         battery,
         cpu_policy0,
         cpu_policy4,
         cpu_policy7,
+        screen_on,
     }
 }
