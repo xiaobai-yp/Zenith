@@ -232,16 +232,7 @@ async fn read_charging() -> (bool, String) {
 // ── batterystats ──
 
 async fn run_batterystats() -> Option<String> {
-    // daemon is root: try direct first, fall back to su.
-    let direct = Command::new(zen_path!("/system/bin/dumpsys"))
-        .args(["batterystats", "--charged"])
-        .output()
-        .await;
-    if let Ok(out) = direct {
-        if out.status.success() {
-            return Some(String::from_utf8_lossy(&out.stdout).to_string());
-        }
-    }
+    // daemon runs as root — use su for dumpsys access (direct without su can hang).
     let via_su = Command::new(zen_path!("/system/bin/su"))
         .args(["-c", "dumpsys batterystats --charged"])
         .output()
