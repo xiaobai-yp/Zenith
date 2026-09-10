@@ -17,8 +17,8 @@ import org.json.JSONObject
 
 /**
  * Foreground service — battery stats notification.
- * All data comes from daemon's battery_notif command.
- * Handles auto-reset (charge, target%, reboot) and idle drain warning.
+ * All accounting logic lives in daemon's battery_monitor.rs.
+ * This service: polls daemon, renders notification, handles auto-reset, idle warning.
  */
 class BatteryMonitorService : Service() {
 
@@ -64,12 +64,10 @@ class BatteryMonitorService : Service() {
             }
         )
 
-        // Initial battery state
         val bm = getSystemService(BATTERY_SERVICE) as BatteryManager
         wasCharging = bm.isCharging
         lastLevel = getCurrentLevel()
 
-        // Reset on reboot if enabled
         val prefs = getSharedPreferences("zenith_battery", MODE_PRIVATE)
         if (prefs.getBoolean("reset_on_restart", false)) {
             ZenithDaemonClient.sendCommand("reset_battery")
@@ -95,19 +93,17 @@ class BatteryMonitorService : Service() {
         val isCharging = bm.isCharging
         val level = getCurrentLevel()
 
-        // Reset on charge (when plugged in)
         if (prefs.getBoolean("reset_on_plugged", false) && isCharging && !wasCharging) {
             ZenithDaemonClient.sendCommand("reset_battery")
             Log.i(TAG, "Auto-reset: charger connected")
         }
-        // Always reset stats when unplugged (charging → discharging) — new session
+        // Always reset on unplug — new session
         if (wasCharging && !isCharging) {
             ZenithDaemonClient.sendCommand("reset_battery")
-            Log.i(TAG, "Auto-reset: unplugged, new session")
+            Log.i(TAG, "Auto-reset: unplugged")
         }
         wasCharging = isCharging
 
-        // Reset on target battery %
         if (prefs.getBoolean("reset_on_target", false)) {
             val target = prefs.getInt("reset_target", 100)
             if (lastLevel >= target && level < target) {
@@ -123,7 +119,6 @@ class BatteryMonitorService : Service() {
         val tempUnit = prefs.getString("temperature_unit", "C") ?: "C"
         val showPower = prefs.getBoolean("show_power", true)
 
-        // Build command args
         val args = JSONObject()
             .put("temp_unit", tempUnit)
             .put("show_power", showPower)
@@ -137,8 +132,6 @@ class BatteryMonitorService : Service() {
             val data = response.optJSONObject("data")
             val body = data?.optString("body", "No data") ?: "No data"
             notificationManager.notify(NOTIFICATION_ID, buildNotification(body))
-
-            // Check idle drain warning
             checkIdleDrainWarning(data)
         } catch (_: Exception) {
             notificationManager.notify(NOTIFICATION_ID, buildNotification("Parse error"))
