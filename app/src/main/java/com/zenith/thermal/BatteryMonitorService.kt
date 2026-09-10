@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.BatteryManager
 import android.os.Build
 import android.os.Handler
@@ -164,7 +165,7 @@ class BatteryMonitorService : Service() {
     }
 
     private fun getCurrentLevel(): Int {
-        val intent = registerReceiver(null, Intent(Intent.ACTION_BATTERY_CHANGED))
+        val intent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         return intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, 0) ?: 0
     }
 
