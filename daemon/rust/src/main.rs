@@ -278,6 +278,12 @@ async fn main() {
         let _ = std::process::Command::new("/system/bin/chown")
             .args([&format!("{uid}:{uid}"), socket_path])
             .status();
+        // Socket needs write perm for connect() — chown alone leaves mode 755
+        // (unix socket connect requires rw; owner-only write is not enough
+        // because UnixListener::bind creates with 755).
+        let _ = std::process::Command::new("/system/bin/chmod")
+            .args(["660", socket_path])
+            .status();
     }
     eprintln!("[zenithd] listening on {socket_path}");
 
