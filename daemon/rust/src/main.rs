@@ -136,17 +136,13 @@ async fn handle_cmd(req: Request) -> Response {
                 .as_str()
                 .or_else(|| {
                     req.args.get("id").and_then(|v| v.as_str())
-                }).unwrap();
-            match id {
-                Some(id_str) => {
-                    match thermal_core::apply_profile(id_str).await {
-                        Ok(()) => {
-                            Response::ok(json!({ "applied": id_str }))
-                        }
-                        Err(e) => Response::err(&e),
-                    }
-                }
-                None => Response::err("missing profile id"),
+                }).unwrap_or("");
+            if id.is_empty() {
+                return Response::err("missing profile id");
+            }
+            match thermal_core::apply_profile(id).await {
+                Ok(()) => Response::ok(json!({ "applied": id })),
+                Err(e) => Response::err(&e),
             }
         }
 
