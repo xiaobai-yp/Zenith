@@ -338,6 +338,14 @@ pub async fn init() {
     refresh_batterystats().await;
     // Seed initial readings.
     update_sensors().await;
+    // Re-baseline start pct AFTER sensors are populated (init set -1).
+    let cap = lock().readings.capacity;
+    {
+        let mut st = lock();
+        if st.screen_on_start_pct <= 0 { st.screen_on_start_pct = cap; }
+        if st.screen_off_start_pct <= 0 { st.screen_off_start_pct = cap; }
+        st.last_batterystats_ms = 0;
+    }
     let _ = writeln!(std::io::stderr(), "[battery_monitor] init: loaded acc {}", lock().acc.screen_on_ms > 0 || lock().acc.screen_off_ms > 0);
 }
 
@@ -503,17 +511,17 @@ pub fn get_screen_times() -> ScreenTimes {
 
 pub fn get_drain_rates() -> DrainRates {
     let t = get_screen_times();
-    let cap = t.active_mah + t.idle_mah;
+    let cap_mah = { lock().readings.capacity_mah } as f64;
     let on_h = t.screen_on_ms as f64 / 3_600_000.0;
     let off_h = t.screen_off_ms as f64 / 3_600_000.0;
     DrainRates {
         active_drain_pct_per_hr: if on_h > 0.01 {
-            t.active_mah / cap.max(0.001) * 100.0 / on_h
+            t.active_mah / cap_mah.max(1.0) * 100.0 / on_h
         } else {
             0.0
         },
         idle_drain_pct_per_hr: if off_h > 0.01 {
-            t.idle_mah / cap.max(0.001) * 100.0 / off_h
+            t.idle_mah / cap_mah.max(1.0) * 100.0 / off_h
         } else {
             0.0
         },
