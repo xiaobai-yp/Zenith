@@ -410,7 +410,7 @@ pub async fn update(screen_on: bool) {
         // %-step fallback (only when batterystats dead)
         if !st.battstats_ok {
             let pct = st.readings.capacity;
-            step_attribution(&mut st, &mut st.acc, screen_on, pct, cap_mah);
+            step_attribution(&mut st, screen_on, pct, cap_mah);
         }
 
         // time attribution
@@ -442,17 +442,17 @@ pub async fn update(screen_on: bool) {
     let _ = persist_maybe(&mut st);
 }
 
-fn step_attribution(st: &mut Inner, acc: &mut AccState, screen_on: bool, pct: i32, cap_mah: i64) {
+fn step_attribution(st: &mut Inner, screen_on: bool, pct: i32, cap_mah: i64) {
     if screen_on {
         if st.screen_on_start_pct > 0 {
             let used = st.screen_on_start_pct.saturating_sub(pct);
-            acc.active_mah += used as f64 * cap_mah as f64 / 100.0;
+            st.acc.active_mah += used as f64 * cap_mah as f64 / 100.0;
             st.screen_on_start_pct = pct;
         }
     } else {
         if st.screen_off_start_pct > 0 {
             let used = st.screen_off_start_pct.saturating_sub(pct);
-            acc.idle_mah += used as f64 * cap_mah as f64 / 100.0;
+            st.acc.idle_mah += used as f64 * cap_mah as f64 / 100.0;
             st.screen_off_start_pct = pct;
         }
     }
