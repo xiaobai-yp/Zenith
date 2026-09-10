@@ -1,4 +1,5 @@
 // thermal_core.rs — Port of thermal_core.c
+use std::io::Write;
 // Applies thermal profiles: governor, freq limits, thermal zone limits.
 // Per-cluster: cores 0-3=little, 4-6=big, 7=prime.
 

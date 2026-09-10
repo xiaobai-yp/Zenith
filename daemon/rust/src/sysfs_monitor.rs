@@ -1,4 +1,5 @@
 // sysfs_monitor.rs — Read all sysfs state: thermal zones, battery, CPU.
+use std::io::Write;
 
 use crate::zen_path;
 use serde::Serialize;

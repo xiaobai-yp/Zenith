@@ -1,4 +1,5 @@
 // benchmark.rs — 300-point ring buffer for benchmark recording.
+use std::io::Write;
 
 use crate::sysfs_monitor::SysfsSnapshot;
 use serde::Serialize;

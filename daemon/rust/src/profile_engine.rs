@@ -1,4 +1,5 @@
 // profile_engine.rs — Load profiles.json, map packages → profile IDs,
+use std::io::Write;
 // register each profile with thermal_core.
 
 use crate::thermal_core;

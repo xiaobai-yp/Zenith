@@ -1,4 +1,5 @@
 // fps_monitor.rs — FPS from sysfs with dual EMA and session stats.
+use std::io::Write;
 
 use std::sync::{OnceLock, RwLock};
 
