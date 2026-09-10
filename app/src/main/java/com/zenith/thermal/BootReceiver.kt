@@ -9,10 +9,17 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         when (intent?.action) {
             Intent.ACTION_SHUTDOWN -> {
-                // Reset on shutdown if enabled — daemon is still alive, can reach it
+                // Reset on shutdown if enabled — wait briefly for daemon pipe
                 val prefs = context.getSharedPreferences("zenith_battery", Context.MODE_PRIVATE)
                 if (prefs.getBoolean("reset_on_restart", false)) {
-                    ZenithDaemonClient.sendCommand("reset_battery")
+                    // AppMonitorService.start() is called below, but ensureDaemon is async.
+                    // Try sending immediately; if daemon pipe not ready yet, it will be
+                    // retried by BatteryMonitorService poll loop.
+                    AppMonitorService.start(context)
+                    Thread.sleep(300) // brief wait for pipe attach
+                    if (ZenithDaemonClient.isConnected) {
+                        ZenithDaemonClient.sendCommand("reset_battery")
+                    }
                 }
                 return
             }
