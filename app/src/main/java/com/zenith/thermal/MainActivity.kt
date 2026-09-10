@@ -138,7 +138,7 @@ class MainActivity : android.app.Activity() {
             // Prefer daemon data; fall back to local cache when daemon is down
             val pid = map[info.packageName]
                 ?: localCache[info.packageName]
-                ?: -1
+                ?: 0
             apps.add(AppItem(info, pm, pid))
         }
         apps.sortBy { it.name.lowercase() }

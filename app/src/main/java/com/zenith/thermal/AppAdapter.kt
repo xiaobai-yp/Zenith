@@ -41,16 +41,15 @@ class AppAdapter(context: Context) : BaseAdapter() {
         view.findViewById<TextView>(R.id.name).text = item.name
         view.findViewById<TextView>(R.id.packageName).text = item.pkg
         val badge = view.findViewById<TextView>(R.id.profile)
-        if (item.profileId >= 0) {
-            badge.text = Profile.name(item.profileId)
-            badge.visibility = View.VISIBLE
-            badge.backgroundTintList = android.content.res.ColorStateList.valueOf(
-                if (item.profileId == 0) android.graphics.Color.rgb(58, 74, 90)
-                else android.graphics.Color.rgb(92, 167, 255)
-            )
-        } else {
-            badge.visibility = View.GONE
-        }
+        badge.text = Profile.name(item.profileId)
+        badge.visibility = View.VISIBLE
+        badge.background = view.context.getDrawable(
+            if (item.profileId == 0) R.drawable.bg_profile_default else R.drawable.bg_profile_active
+        )
+        badge.setTextColor(
+            if (item.profileId == 0) android.graphics.Color.rgb(150, 170, 175)
+            else android.graphics.Color.rgb(94, 167, 255)
+        )
         return view
     }
 }
