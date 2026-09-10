@@ -47,42 +47,34 @@ object DaemonManager {
      * @return true if the daemon is running after the call.
      */
     fun startDaemon(context: Context): Boolean {
-        Log.i(TAG, "startDaemon called, filesDir=${context.filesDir}")
+        Log.i(TAG, "startDaemon called")
         if (isDaemonRunning()) {
             Log.i(TAG, "Daemon already running")
             return true
         }
 
-        // Kill stale daemon from previous session (setsid may keep it alive)
+        // Kill stale daemon from previous session
         try {
             Runtime.getRuntime().exec(arrayOf("su", "-c", "killall zenithd")).waitFor()
             Thread.sleep(200)
         } catch (_: Exception) {}
 
-        val binFile = File(context.filesDir, "zenithd")
+        // Extract to /data/local/tmp/ — SELinux allows exec there.
+        // App data files dir has system_data_file label which blocks exec.
+        val binFile = File("/data/local/tmp/zenithd")
         val assetBytes = context.assets.open(ASSET_NAME).use { it.readBytes() }
 
         val needsExtract = !binFile.exists() || binFile.length() != assetBytes.size.toLong()
         if (needsExtract) {
             Log.i(TAG, "Extracting $ASSET_NAME (${assetBytes.size} bytes)")
-            binFile.outputStream().use { it.write(assetBytes) }
-        }
-
-        // Extract profiles.json alongside the daemon
-        val profilesFile = File(context.filesDir, ASSET_PROFILES)
-        if (!profilesFile.exists()) {
-            try {
-                val profilesBytes = context.assets.open(ASSET_PROFILES).use { it.readBytes() }
-                profilesFile.outputStream().use { it.write(profilesBytes) }
-                Log.i(TAG, "Extracted $ASSET_PROFILES (${profilesBytes.size} bytes)")
-            } catch (e: Exception) {
-                Log.e(TAG, "profiles.json extract failed: ${e.message}")
-            }
+            val su = Runtime.getRuntime().exec(arrayOf("su", "-c", "cat > /data/local/tmp/zenithd"))
+            su.outputStream.use { it.write(assetBytes) }
+            su.waitFor()
         }
 
         // Make executable
         try {
-            Runtime.getRuntime().exec(arrayOf("su", "-c", "chmod 755 ${binFile.absolutePath}")).waitFor()
+            Runtime.getRuntime().exec(arrayOf("su", "-c", "chmod 755 /data/local/tmp/zenithd")).waitFor()
         } catch (e: Exception) {
             Log.e(TAG, "chmod failed: ${e.message}")
             return false
@@ -92,9 +84,7 @@ object DaemonManager {
         // setsid detaches into its own session so it survives su shell exit.
         // KernelSU kills background children of `su -c` on exit;
         // setsid prevents that by creating a new process group.
-        // We use exec(String[]) to avoid shell interpretation issues.
-        // stdout/stderr are piped so we own the process lifecycle.
-        val cmd = arrayOf("su", "-c", "setsid ${binFile.absolutePath}")
+        val cmd = arrayOf("su", "-c", "setsid /data/local/tmp/zenithd")
         Log.i(TAG, "Launch: ${cmd.joinToString(" ")}")
         try {
             val p = Runtime.getRuntime().exec(cmd)
