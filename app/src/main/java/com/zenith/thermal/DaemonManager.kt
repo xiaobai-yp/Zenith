@@ -19,21 +19,24 @@ object DaemonManager {
 
     @Volatile private var process: Process? = null
 
-    private val monitorThread = Thread({
-        while (!Thread.currentThread().isInterrupted) {
-            val p = process ?: run {
-                try { Thread.sleep(500) } catch (_: InterruptedException) { break }
-                continue
+    private val monitorThread = object : Thread("zenithd-monitor") {
+        init { isDaemon = true }
+        override fun run() {
+            while (!isInterrupted) {
+                val p = process ?: run {
+                    try { sleep(500) } catch (_: InterruptedException) { return }
+                    continue
+                }
+                try {
+                    p.waitFor()
+                    Log.w(TAG, "Daemon process exited with code ${p.exitValue()}")
+                } catch (_: InterruptedException) { return }
+                catch (e: Exception) { Log.w(TAG, "waitFor: ${e.message}") }
+                process = null
+                ZenithDaemonClient.onProcessDied()
             }
-            try {
-                p.waitFor()
-                Log.w(TAG, "Daemon process exited with code ${p.exitValue()}")
-            } catch (e: InterruptedException) { break }
-            catch (e: Exception) { Log.w(TAG, "waitFor: ${e.message}") }
-            process = null
-            ZenithDaemonClient.onProcessDied()
         }
-    }, "zenithd-monitor").apply { isDaemon = true; start() }
+    }.apply { start() }
 
     /**
      * Start zenithd if not already running.

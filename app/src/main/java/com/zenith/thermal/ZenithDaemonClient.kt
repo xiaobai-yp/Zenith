@@ -57,30 +57,33 @@ object ZenithDaemonClient {
     private val workQueue = LinkedBlockingQueue<Work>(64)
 
     // Dedicated I/O thread — processes one request at a time.
-    private val ioThread = Thread({
-        while (!Thread.currentThread().isInterrupted) {
-            try {
-                val w = workQueue.take()
-                val result = synchronized(ioLock) {
-                    if (reader == null || writer == null) {
-                        w.failed.set(true)
-                        null
-                    } else {
-                        try {
-                            doSendRecv(w.request)
-                        } catch (e: Exception) {
-                            Log.w(TAG, "IPC error: ${e.message}")
-                            disconnectLocked()
+    private val ioThread = object : Thread("zenith-daemon-io") {
+        init { isDaemon = true }
+        override fun run() {
+            while (!isInterrupted) {
+                try {
+                    val w = workQueue.take()
+                    val result = synchronized(ioLock) {
+                        if (reader == null || writer == null) {
                             w.failed.set(true)
                             null
+                        } else {
+                            try {
+                                doSendRecv(w.request)
+                            } catch (e: Exception) {
+                                Log.w(TAG, "IPC error: ${e.message}")
+                                disconnectLocked()
+                                w.failed.set(true)
+                                null
+                            }
                         }
                     }
-                }
-                w.result[0] = result
-                w.latch.countDown()
-            } catch (_: InterruptedException) { Thread.currentThread().interrupt(); break }
+                    w.result[0] = result
+                    w.latch.countDown()
+                } catch (_: InterruptedException) { return }
+            }
         }
-    }, "zenith-daemon-io").apply { isDaemon = true; start() }
+    }.apply { start() }
 
     // ---- Connection management ----
 
