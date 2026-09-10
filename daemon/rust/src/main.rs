@@ -136,7 +136,7 @@ async fn handle_cmd(req: Request) -> Response {
                 .as_str()
                 .or_else(|| {
                     req.args.get("id").and_then(|v| v.as_str())
-                });
+                }).unwrap();
             match id {
                 Some(id_str) => {
                     match thermal_core::apply_profile(id_str).await {
@@ -266,60 +266,60 @@ async fn main() {
 
     // Periodic monitoring tasks (no shutdown channel needed — exits when
     // the tokio runtime drops, which happens when main returns).
-    let monitor_handle = tokio::spawn(async move {
-        let mut interval_sysfs =
-            tokio::time::interval(std::time::Duration::from_secs(5));
-        let mut interval_app =
-            tokio::time::interval(std::time::Duration::from_secs(2));
-        let mut interval_fps =
-            tokio::time::interval(std::time::Duration::from_secs(1));
-        let mut interval_prop =
-            tokio::time::interval(std::time::Duration::from_secs(3));
+    // ── Monitoring thread ──
+    // Runs on a dedicated OS thread with std::thread::sleep.
+    // Uses Handle::block_on() to call async sysfs/fps functions.
+    // Never competes with tokio stdin I/O.
+    let monitor_handle = std::thread::Builder::new()
+        .name("zenith-monitor".into())
+        .spawn(move || {
+            let rt = tokio::runtime::Handle::current();
 
-        // Track last applied property value (persist.sys.zenith.thermal)
-        let mut last_prop = String::new();
-        if let Ok(v) = read_prop("persist.sys.zenith.thermal").await {
-            last_prop = v;
-            if !last_prop.is_empty() {
-                let _ = thermal_core::apply_profile(&last_prop).await;
-            }
-        }
-
-        loop {
-            tokio::select! {
-                _ = interval_sysfs.tick() => {
-                    let snap = sysfs_monitor::read().await;
-                    battery_monitor::update(
-                        snap.battery.capacity,
-                        snap.battery.current_ua,
-                        snap.battery.voltage_uv,
-                        snap.battery.online,
-                        now_ms(),
-                    );
-                    update_snapshot(snap);
+            // Read initial property
+            let mut last_prop = String::new();
+            if let Ok(v) = rt.block_on(read_prop("persist.sys.zenith.thermal")) {
+                last_prop = v;
+                if !last_prop.is_empty() {
+                    let _ = rt.block_on(thermal_core::apply_profile(&last_prop));
                 }
-                _ = interval_fps.tick() => {
+            }
+
+            loop {
+                // sysfs snapshot (every 5s)
+                let snap = rt.block_on(sysfs_monitor::read());
+                battery_monitor::update(
+                    snap.battery.capacity,
+                    snap.battery.current_ua,
+                    snap.battery.voltage_uv,
+                    snap.battery.online,
+                    now_ms(),
+                );
+                update_snapshot(snap);
+
+                // fps + benchmark (5 iterations x 1s = 5s total)
+                for _ in 0..5 {
+                    std::thread::sleep(std::time::Duration::from_secs(1));
                     let (short, _long) = fps_monitor::read();
                     if benchmark::is_active() {
                         let snap = get_snapshot();
                         benchmark::record(&snap, short);
                     }
                 }
-                _ = interval_app.tick() => {
-                    let _ = app_monitor::detect_fg();
-                }
-                _ = interval_prop.tick() => {
-                    if let Ok(v) = read_prop("persist.sys.zenith.thermal").await {
-                        if !v.is_empty() && v != last_prop {
-                            let _ = writeln!(std::io::stderr(), "[zenithd] property change: {last_prop} -> {v}");
-                            let _ = thermal_core::apply_profile(&v).await;
-                            last_prop = v;
-                        }
+
+                // foreground app detection
+                let _ = app_monitor::detect_fg();
+
+                // property poll
+                if let Ok(v) = rt.block_on(read_prop("persist.sys.zenith.thermal")) {
+                    if !v.is_empty() && v != last_prop {
+                        let _ = writeln!(std::io::stderr(), "[zenithd] property change: {last_prop} -> {v}");
+                        last_prop = v;
+                        let _ = rt.block_on(thermal_core::apply_profile(&last_prop));
                     }
                 }
             }
-        }
-    });
+        })
+        .expect("spawn monitor thread");
 
     // Stdin/stdout command loop.
     // stdin carries newline-delimited JSON requests from the Java Process.
@@ -348,7 +348,7 @@ async fn main() {
         let _ = stdout.flush().await;
     }
 
-    monitor_handle.abort();
+    drop(monitor_handle); // thread dies with process
     let _ = writeln!(std::io::stderr(), "[zenithd] stdin EOF - shutting down");
 }
 
