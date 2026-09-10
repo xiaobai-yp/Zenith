@@ -240,6 +240,15 @@ async fn handle_cmd(req: Request) -> Response {
 async fn main() {
     eprintln!("[zenithd] starting daemon");
 
+    // Accept app uid as first arg (e.g. `zenithd 10260`). Daemon chowns the
+    // socket to this uid so the app can connect.
+    let app_uid: Option<u32> = std::env::args()
+        .nth(1)
+        .and_then(|s| s.parse().ok());
+    if let Some(uid) = app_uid {
+        eprintln!("[zenithd] will chown socket to uid {uid}");
+    }
+
     // Init all modules
     thermal_core::init()
         .await
@@ -263,6 +272,13 @@ async fn main() {
     }
 
     let listener = UnixListener::bind(socket_path).expect("bind socket");
+    // Make the socket accessible to the app's uid (root-owned socket in the
+    // app dir is blocked by SELinux for app-domain processes).
+    if let Some(uid) = app_uid {
+        let _ = std::process::Command::new("chown")
+            .args([&format!("{uid}:{uid}"), socket_path])
+            .status();
+    }
     eprintln!("[zenithd] listening on {socket_path}");
 
     // Shutdown signal

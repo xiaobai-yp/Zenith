@@ -65,10 +65,12 @@ object DaemonManager {
             return false
         }
 
-        // Launch daemon via su. Note: `su -c` takes a single arg and does not
-        // expand `~`, so always pass the absolute filesDir path.
+        // Launch daemon via su as root (needs sysfs write access). The socket is
+        // created root-owned; the daemon chowns it to the app's uid so the
+        // app can connect (root-owned socket in app dir is SELinux-blocked).
+        val myUid = android.os.Process.myUid()
         try {
-            val cmd = "${binFile.absolutePath} &"
+            val cmd = "${binFile.absolutePath} $myUid &"
             Runtime.getRuntime().exec(arrayOf("su", "-c", cmd))
             Log.i(TAG, "Launched: su -c '$cmd'")
         } catch (e: Exception) {
