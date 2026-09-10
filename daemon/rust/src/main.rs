@@ -142,8 +142,8 @@ async fn handle_cmd(req: Request) -> Response {
                 let s = ms / 1000;
                 let m = s / 60;
                 let h = m / 60;
-                if h > 0 { format!("{}h {}m {}s", h, m % 60, s % 60) }
-                else if m > 0 { format!("{}m {}s", m, s % 60) }
+                if h > 0 { format!("{}h {}m", h, m % 60) }
+                else if m > 0 { format!("{}m", m) }
                 else { format!("{}s", s) }
             };
 
@@ -176,15 +176,17 @@ async fn handle_cmd(req: Request) -> Response {
 
             let body = format!(
                 "{}% • {:.1}{} • {}{}{}\n\
-                 Active: {:.2}%/hr Idle: {:.2}%/hr\n\
-                 Screen on: {} ({}%)\n\
-                 Screen off: {} ({}%)\n\
-                 Deep sleep: {} ({:.0}%)\n\
-                 Awake: {} ({:.0}%)",
+                 Active: {:.2}%/hr\n\
+                 Idle: {:.2}%/hr\n\
+                 Screen time: {}\n\
+                 Screen on: {}%\n\
+                 Screen off: {}%\n\
+                 Deep sleep: {} ({:.2}%)\n\
+                 Awake: {} ({:.2}%)",
                 bat.capacity, temp_val, temp_suffix, status, current_str, power_str,
                 active_drain, idle_drain,
-                fmt_time(s_on), on_pct,
-                fmt_time(s_off), off_pct,
+                fmt_time(s_on),
+                on_pct, off_pct,
                 fmt_time(ds), if charging { 0.0 } else { ds_pct },
                 fmt_time(aw), if charging { 0.0 } else { aw_pct },
             );
