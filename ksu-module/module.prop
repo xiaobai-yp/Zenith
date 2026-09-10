@@ -1,0 +1,6 @@
+id=zenith-selinux-fix
+name=Zenith Thermal SELinux Fix
+version=v1.0
+versionCode=1
+author=zenith
+description=Allow priv_app to connect to ksu domain sockets

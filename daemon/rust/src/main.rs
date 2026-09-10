@@ -12,7 +12,7 @@ mod thermal_core;
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::os::linux::net::SocketAddrExt;
+// std::net::UnixListener used locally for socket2 conversion
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixListener;
 use tokio::sync::watch;
@@ -262,10 +262,18 @@ async fn main() {
     // Bind abstract socket (\0zenithd) — no filesystem node, so no
     // chown/chmod/chcon needed and DAC/SELinux file rules don't apply.
     // App-domain processes connect via the abstract namespace.
-    let addr =
-        std::os::unix::net::SocketAddr::new_abstract(SOCKET_NAME.as_bytes())
-            .expect("abstract socket addr");
-    let listener = UnixListener::bind_addr(&addr).expect("bind socket");
+    let addr = socket2::SockAddr::from_abstract_name(SOCKET_NAME.as_bytes())
+        .expect("abstract socket addr");
+    let sock = socket2::Socket::new(socket2::Domain::UNIX, socket2::Type::STREAM, None)
+        .expect("create socket");
+    sock.bind(&addr).expect("bind socket");
+    sock.listen(1).expect("listen socket");
+    sock.set_nonblocking(true).expect("nonblocking");
+    // socket2::Socket implements Into<OwnedFd>; wrap via owned fd into tokio
+    let std_listener = std::os::unix::net::UnixListener::from(
+        std::os::fd::OwnedFd::from(sock)
+    );
+    let listener = UnixListener::from_std(std_listener).expect("tokio wrap");
     eprintln!("[zenithd] listening on abstract socket @{SOCKET_NAME}");
 
     // Shutdown signal
