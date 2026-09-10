@@ -15,6 +15,7 @@
 // Persistence: JSON to app files dir (daemon is root).
 
 use serde::{Deserialize, Serialize};
+use std::io::Write;
 use std::sync::{Mutex, OnceLock};
 use tokio::process::Command;
 

@@ -168,10 +168,10 @@ async fn handle_cmd(req: Request) -> Response {
             } else {
                 (drain.active_drain_pct_per_hr, drain.idle_drain_pct_per_hr)
             };
-            let (s_on, s_off, on_used, off_used, ds, aw) = if charging {
-                (0u64, 0u64, 0u32, 0u32, 0u64, 0u64)
+            let (s_on, s_off, ds, aw, on_pct, off_pct) = if charging {
+                (0u64, 0u64, 0u64, 0u64, 0u32, 0u32)
             } else {
-                (times.screen_on_ms, times.screen_off_ms, times.screen_on_battery_used, times.screen_off_battery_used, times.deep_sleep_ms, times.awake_ms)
+                (times.screen_on_ms, times.screen_off_ms, times.deep_sleep_ms, times.awake_ms, times.screen_on_pct, times.screen_off_pct)
             };
 
             let body = format!(
@@ -183,8 +183,8 @@ async fn handle_cmd(req: Request) -> Response {
                  Awake: {} ({:.0}%)",
                 bat.capacity, temp_val, temp_suffix, status, current_str, power_str,
                 active_drain, idle_drain,
-                fmt_time(s_on), on_used,
-                fmt_time(s_off), off_used,
+                fmt_time(s_on), on_pct,
+                fmt_time(s_off), off_pct,
                 fmt_time(ds), if charging { 0.0 } else { ds_pct },
                 fmt_time(aw), if charging { 0.0 } else { aw_pct },
             );
