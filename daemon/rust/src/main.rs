@@ -142,8 +142,8 @@ async fn handle_cmd(req: Request) -> Response {
                 let s = ms / 1000;
                 let m = s / 60;
                 let h = m / 60;
-                if h > 0 { format!("{}h {}m", h, m % 60) }
-                else if m > 0 { format!("{}m", m) }
+                if h > 0 { format!("{}h {}m {}s", h, m % 60, s % 60) }
+                else if m > 0 { format!("{}m {}s", m, s % 60) }
                 else { format!("{}s", s) }
             };
 
@@ -157,12 +157,11 @@ async fn handle_cmd(req: Request) -> Response {
             // Current: always show
             let current_str = format!(" {:.0} mA", current_ma);
 
-            // Deep sleep / awake % = time residency
+            // Deep sleep / awake % = time residency (always show, even while charging)
             let ds_total = times.deep_sleep_ms + times.awake_ms;
             let ds_pct = if ds_total > 0 { times.deep_sleep_ms as f64 / ds_total as f64 * 100.0 } else { 0.0 };
             let aw_pct = if ds_total > 0 { times.awake_ms as f64 / ds_total as f64 * 100.0 } else { 0.0 };
 
-            // When charging: freeze all to 0
             let (active_drain, idle_drain) = if charging {
                 (0.0, 0.0)
             } else {
@@ -176,19 +175,17 @@ async fn handle_cmd(req: Request) -> Response {
 
             let body = format!(
                 "{}% • {:.1}{} • {}{}{}\n\
-                 Active: {:.2}%/hr\n\
-                 Idle: {:.2}%/hr\n\
-                 Screen time: {}\n\
-                 Screen on: {}%\n\
-                 Screen off: {}%\n\
+                 Active: {:.2}%/hr Idle: {:.2}%/hr\n\
+                 Screen on: {} ({}%)\n\
+                 Screen off: {} ({}%)\n\
                  Deep sleep: {} ({:.2}%)\n\
                  Awake: {} ({:.2}%)",
                 bat.capacity, temp_val, temp_suffix, status, current_str, power_str,
                 active_drain, idle_drain,
-                fmt_time(s_on),
-                on_pct, off_pct,
-                fmt_time(ds), if charging { 0.0 } else { ds_pct },
-                fmt_time(aw), if charging { 0.0 } else { aw_pct },
+                fmt_time(s_on), on_pct,
+                fmt_time(s_off), off_pct,
+                fmt_time(ds), ds_pct,
+                fmt_time(aw), aw_pct,
             );
             Response::ok(json!({ "body": body, "drain": drain }))
         }
