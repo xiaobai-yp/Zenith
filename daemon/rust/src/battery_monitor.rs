@@ -390,25 +390,17 @@ pub async fn update(screen_on: bool) {
         let _ = persist_maybe(&mut st);
     }
 
-    // mAh attribution (batterystats deltas), skip while charging.
+    // mAh attribution — % step is PRIMARY (monotonic, always available).
+    // batterystats deltas were unreliable on this device: the stats reset
+    // on every unplug, so accumulated deltas stall at 0. We keep the
+    // batterystats read for baseline only — no accumulation from it.
     if !st.acc.charging_paused {
-        if let Some(on) = d_on {
-            let d = on - st.last_batt_on_mah;
-            if d > 0.0 {
-                st.acc.active_mah += d;
-            }
-            st.last_batt_on_mah = on;
-        }
-        if let Some(off) = d_off {
-            let d = off - st.last_batt_off_mah;
-            if d > 0.0 {
-                st.acc.idle_mah += d;
-            }
-            st.last_batt_off_mah = off;
-        }
+        // re-baseline batterystats markers (no accumulation — % step owns mAh)
+        st.last_batt_on_mah = d_on.unwrap_or(st.last_batt_on_mah);
+        st.last_batt_off_mah = d_off.unwrap_or(st.last_batt_off_mah);
 
-        // %-step fallback (only when batterystats dead)
-        if !st.battstats_ok {
+        // %-step attribution — always on
+        {
             let pct = st.readings.capacity;
             step_attribution(&mut st, screen_on, pct, cap_mah);
         }
@@ -460,10 +452,15 @@ fn step_attribution(st: &mut Inner, screen_on: bool, pct: i32, cap_mah: i64) {
 
 fn persist_maybe(st: &mut Inner) -> Result<(), ()> {
     let now = elapsed_ms();
-    if now.saturating_sub(st.last_persist_ms) >= PERSIST_EVERY_MS {
+    let delta = now.saturating_sub(st.last_persist_ms);
+    crate::log!("[battery_monitor] persist_maybe: now={}, last={}, delta={}, target={}", now, st.last_persist_ms, delta, PERSIST_EVERY_MS);
+    if delta >= PERSIST_EVERY_MS {
         st.last_persist_ms = now;
         let data = serde_json::to_vec(&st.acc).unwrap_or_default();
-        let _ = std::fs::write(STATE_FILE, &data);
+        match std::fs::write(STATE_FILE, &data) {
+            Ok(()) => crate::log!("[battery_monitor] persisted {} bytes to {}", data.len(), STATE_FILE),
+            Err(e) => crate::log!("[battery_monitor] persist FAILED: {} (path={})", e, STATE_FILE),
+        }
     }
     Ok(())
 }
