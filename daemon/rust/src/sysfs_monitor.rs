@@ -141,7 +141,7 @@ pub async fn read() -> SysfsSnapshot {
         online: {
             let status = read_str(&format!("{batt_base}/status"))
                 .await;
-            matches!(status.as_deref(), Some("Charging") | Some("Full"))
+            status == "Charging" || status == "Full"
         },
         power_mw,
     };
