@@ -182,7 +182,7 @@ async fn handle_cmd(req: Request) -> Response {
 
             let body = format!(
                 "{}% • {:.1}{} • {}{}{}\n\
-                 Active: {:.2}%/hr Idle: {:.2}%/hr\n\
+                 Active: {:.2}%/hr • Idle: {:.2}%/hr\n\
                  Screen on: {} ({}%)\n\
                  Screen off: {} ({}%)\n\
                  Deep sleep: {} ({:.1}%)\n\
