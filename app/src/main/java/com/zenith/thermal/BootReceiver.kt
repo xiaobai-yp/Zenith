@@ -8,7 +8,14 @@ import android.os.Build
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         when (intent?.action) {
-            Intent.ACTION_SHUTDOWN -> return
+            Intent.ACTION_SHUTDOWN -> {
+                // Reset on shutdown if enabled — daemon is still alive, can reach it
+                val prefs = context.getSharedPreferences("zenith_battery", Context.MODE_PRIVATE)
+                if (prefs.getBoolean("reset_on_restart", false)) {
+                    ZenithDaemonClient.sendCommand("reset_battery")
+                }
+                return
+            }
             Intent.ACTION_BOOT_COMPLETED -> Unit
             else -> return
         }
