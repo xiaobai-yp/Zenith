@@ -13,6 +13,7 @@ mod thermal_core;
 
 
 /// Safe stderr logging — never panics even on broken pipe.
+#[macro_export]
 macro_rules! log {
     ($($arg:tt)*) => { let _ = writeln!(std::io::stderr(), $($arg)*); };
 }

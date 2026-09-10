@@ -57,8 +57,8 @@ fn state() -> &'static RwLock<ThermalState> {
 
 async fn write_sysfs(path: &str, value: &str) -> bool {
     match fs::write(path, format!("{value}\n")).await {
-        Ok(_) => { log!("[thermal_core] wrote '{value}' to {path}"); true }
-        Err(e) => { log!("[thermal_core] write {path}: {e}"); false }
+        Ok(_) => { crate::log!("[thermal_core] wrote '{value}' to {path}"); true }
+        Err(e) => { crate::log!("[thermal_core] write {path}: {e}"); false }
     }
 }
 
@@ -117,7 +117,7 @@ pub async fn init() -> Result<(), String> {
         zone_mode_paths,
     }));
 
-    log!("[thermal_core] init: {core_count} cores, {zone_count} writable zones");
+    crate::log!("[thermal_core] init: {core_count} cores, {zone_count} writable zones");
     Ok(())
 }
 
@@ -205,7 +205,7 @@ pub async fn apply_profile(profile_id: &str) -> Result<(), String> {
         s.active_profile = Some(profile_id.to_string());
     }
 
-    log!("[thermal_core] applied profile: {profile_id}");
+    crate::log!("[thermal_core] applied profile: {profile_id}");
     Ok(())
 }
 
@@ -224,7 +224,7 @@ pub async fn set_governor(core_id: Option<i32>, governor: &str) -> Result<(), St
         }
         _ => return Err(format!("invalid core_id: {core_id:?}")),
     }
-    log!("[thermal_core] governor → '{governor}' core={core_id:?}");
+    crate::log!("[thermal_core] governor → '{governor}' core={core_id:?}");
     Ok(())
 }
 
@@ -241,7 +241,7 @@ pub async fn set_max_freq(core_id: Option<i32>, freq_khz: u32) -> Result<(), Str
         }
         _ => return Err(format!("invalid core_id: {core_id:?}")),
     }
-    log!("[thermal_core] max_freq → {freq_khz} kHz core={core_id:?}");
+    crate::log!("[thermal_core] max_freq → {freq_khz} kHz core={core_id:?}");
     Ok(())
 }
 
@@ -256,7 +256,7 @@ pub async fn set_thermal_limit(zone_id: usize, temp_milli: u32) -> Result<(), St
         write_sysfs_u32(path, temp_milli).await;
     }
 
-    log!("[thermal_core] zone {zone_id} limit → {temp_milli} mC");
+    crate::log!("[thermal_core] zone {zone_id} limit → {temp_milli} mC");
     Ok(())
 }
 

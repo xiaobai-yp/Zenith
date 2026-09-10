@@ -67,7 +67,7 @@ pub async fn init(path: &str) -> Result<(), String> {
         }
     }
 
-    log!(
+    crate::log!(
         "[profile_engine] loaded {} profiles from {path}",
         profiles.len()
     );
@@ -87,13 +87,13 @@ pub fn lookup(package: &str) -> i32 {
 
 pub fn map_app(package: &str, profile_id: i32) {
     state().write().unwrap().pkg_map.insert(package.to_string(), profile_id);
-    log!("[profile_engine] mapped {package} → profile {profile_id}");
+    crate::log!("[profile_engine] mapped {package} → profile {profile_id}");
 }
 
 /** Clear all per-app mappings (reset to daemon default = profile 0 lookup). */
 pub fn reset_map() {
     state().write().unwrap().pkg_map.clear();
-    log!("[profile_engine] package map cleared");
+    crate::log!("[profile_engine] package map cleared");
 }
 
 pub async fn reload() -> Result<(), String> {

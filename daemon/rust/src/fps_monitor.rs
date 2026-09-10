@@ -41,9 +41,9 @@ pub fn init() {
         .map(|s| s.to_string());
 
     if let Some(ref p) = active {
-        log!("[fps_monitor] using path: {p}");
+        crate::log!("[fps_monitor] using path: {p}");
     } else {
-        log!("[fps_monitor] no sysfs FPS path found, fallback=60fps");
+        crate::log!("[fps_monitor] no sysfs FPS path found, fallback=60fps");
     }
 
     let _ = STATE.set(RwLock::new(FpsMonitor {

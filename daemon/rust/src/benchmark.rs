@@ -39,12 +39,12 @@ pub fn start() {
     let mut s = state().write().unwrap();
     s.points.clear();
     s.recording = true;
-    log!("[benchmark] recording started");
+    crate::log!("[benchmark] recording started");
 }
 
 pub fn stop() {
     state().write().unwrap().recording = false;
-    log!(
+    crate::log!(
         "[benchmark] recording stopped, {} points",
         state().read().unwrap().points.len()
     );
