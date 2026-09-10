@@ -38,6 +38,7 @@ class BatteryMonitorService : Service() {
     private lateinit var notificationManager: NotificationManager
     private var wasCharging = false
     private var lastLevel = -1
+    private var restartResetSent = false
 
     private val poll = object : Runnable {
         override fun run() {
@@ -69,10 +70,8 @@ class BatteryMonitorService : Service() {
         lastLevel = getCurrentLevel()
 
         val prefs = getSharedPreferences("zenith_battery", MODE_PRIVATE)
-        if (prefs.getBoolean("reset_on_restart", false)) {
-            ZenithDaemonClient.sendCommand("reset_battery")
-            prefs.edit().putBoolean("has_restarted", true).apply()
-        }
+        // Defer reset_on_restart to poll loop — daemon might not be attached yet.
+        // Actual reset happens in poll when isConnected becomes true.
 
         val notification = buildNotification("Loading...")
         try {
@@ -93,6 +92,12 @@ class BatteryMonitorService : Service() {
         val isCharging = bm.isCharging
         val level = getCurrentLevel()
 
+        // Deferred reset_on_restart — fire once when daemon is connected.
+        if (!restartResetSent && prefs.getBoolean("reset_on_restart", false) && ZenithDaemonClient.isConnected) {
+            ZenithDaemonClient.sendCommand("reset_battery")
+            restartResetSent = true
+            Log.i(TAG, "Auto-reset: on restart (deferred until daemon attached)")
+        }
         if (prefs.getBoolean("reset_on_plugged", false) && isCharging && !wasCharging) {
             ZenithDaemonClient.sendCommand("reset_battery")
             Log.i(TAG, "Auto-reset: charger connected")
