@@ -138,9 +138,11 @@ pub async fn read() -> SysfsSnapshot {
         temp_centi: read_i64(&format!("{batt_base}/temp"))
             .await
             .unwrap_or(0),
-        online: read_str(&format!("{batt_base}/online"))
-            .await
-            == "1",
+        online: {
+            let status = read_str(&format!("{batt_base}/status"))
+                .await;
+            matches!(status.as_deref(), Some("Charging") | Some("Full"))
+        },
         power_mw,
     };
 

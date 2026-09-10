@@ -107,8 +107,6 @@ async fn handle_cmd(req: Request) -> Response {
             let bat = &snap.battery;
             let stats = battery_monitor::get_stats();
             let times = battery_monitor::get_screen_times();
-            let current_ma = bat.current_ua.abs() as f64 / 1000.0;
-            let status = if bat.online { "Charging" } else { "Discharging" };
 
             // Read args from request
             let temp_unit = req.args.get("temp_unit")
@@ -116,12 +114,21 @@ async fn handle_cmd(req: Request) -> Response {
             let show_power = req.args.get("show_power")
                 .and_then(|v| v.as_bool()).unwrap_or(true);
 
+            let charging = bat.online;
+
+            // When charging: freeze to 0s, show Charging
+            // When discharging: show real data
+            let (current_ma, status) = if charging {
+                (0.0f64, "Charging")
+            } else {
+                (bat.current_ua.abs() as f64 / 1000.0, "Discharging")
+            };
+
             let (temp_val, temp_suffix) = match temp_unit {
                 "F" => (bat.temp_centi as f64 / 10.0 * 9.0 / 5.0 + 32.0, "°F"),
                 "K" => (bat.temp_centi as f64 / 10.0 + 273.15, "K"),
                 _ => (bat.temp_centi as f64 / 10.0, "°C"),
             };
-            let temp = temp_val;
 
             let pct_of = |ms: u64| -> u64 {
                 if times.total_ms > 0 { ms * 100 / times.total_ms } else { 0 }
@@ -134,23 +141,46 @@ async fn handle_cmd(req: Request) -> Response {
                 else if m > 0 { format!("{}m {}s", m, s % 60) }
                 else { format!("{}s", s) }
             };
+
+            // Power (W): only show when charging
+            // mA: only show when discharging
             let power_w = bat.power_mw as f64 / 1000.0;
-            let power_str = if show_power && power_w > 0.05 {
-                format!(" ({:.2}W)", if bat.online { power_w } else { -power_w })
-            } else { String::new() };
+            let power_str = if charging && show_power && power_w > 0.05 {
+                format!(" ({:.2}W)", power_w)
+            } else {
+                String::new()
+            };
+            let current_str = if charging {
+                String::new()
+            } else {
+                format!(" {:.0} mA", current_ma)
+            };
+
+            // When charging: freeze drain rates and times to 0
+            let (active_drain, idle_drain) = if charging {
+                (0.0, 0.0)
+            } else {
+                (stats.screen_on_drain_pct_per_hr, stats.idle_drain_pct_per_hr)
+            };
+            let (s_on, s_off, ds, aw) = if charging {
+                (0u64, 0u64, 0u64, 0u64)
+            } else {
+                (times.screen_on_ms, times.screen_off_ms, times.deep_sleep_ms, times.awake_ms)
+            };
+
             let body = format!(
-                "{}% {:.1}{} {} {:.0} mA{}\n\
+                "{}% {:.1}{} {}{}{}\n\
                  Active: {:.2}%/hr Idle: {:.2}%/hr\n\
                  Screen on: {} ({}%)\n\
                  Screen off: {} ({}%)\n\
                  Deep sleep: {} ({}%)\n\
                  Awake: {} ({}%)",
-                bat.capacity, temp, temp_suffix, status, current_ma, power_str,
-                stats.screen_on_drain_pct_per_hr, stats.idle_drain_pct_per_hr,
-                fmt_time(times.screen_on_ms), pct_of(times.screen_on_ms),
-                fmt_time(times.screen_off_ms), pct_of(times.screen_off_ms),
-                fmt_time(times.deep_sleep_ms), pct_of(times.deep_sleep_ms),
-                fmt_time(times.awake_ms), pct_of(times.awake_ms),
+                bat.capacity, temp_val, temp_suffix, status, current_str, power_str,
+                active_drain, idle_drain,
+                fmt_time(s_on), pct_of(s_on),
+                fmt_time(s_off), pct_of(s_off),
+                fmt_time(ds), pct_of(ds),
+                fmt_time(aw), pct_of(aw),
             );
             Response::ok(json!({ "body": body, "stats": stats }))
         }
