@@ -13,6 +13,7 @@ mod thermal_core;
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::io::Write;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 const PROFILES_PATH: &str =
@@ -238,12 +239,12 @@ async fn handle_cmd(req: Request) -> Response {
 
 #[tokio::main]
 async fn main() {
-    eprintln!("[zenithd] starting daemon");
+    let _ = writeln!(std::io::stderr(), "[zenithd] starting daemon");
 
     // Init all modules
     thermal_core::init()
         .await
-        .unwrap_or_else(|e| eprintln!("[zenithd] thermal_core init: {e}"));
+        .unwrap_or_else(|e| { let _ = writeln!(std::io::stderr(), "[zenithd] thermal_core init: {e}"); });
 
     let _ = profile_engine::init(PROFILES_PATH).await;
 
@@ -302,7 +303,7 @@ async fn main() {
                 _ = interval_prop.tick() => {
                     if let Ok(v) = read_prop("persist.sys.zenith.thermal").await {
                         if !v.is_empty() && v != last_prop {
-                            eprintln!("[zenithd] property change: {last_prop} -> {v}");
+                            let _ = writeln!(std::io::stderr(), "[zenithd] property change: {last_prop} -> {v}");
                             let _ = thermal_core::apply_profile(&v).await;
                             last_prop = v;
                         }
@@ -317,7 +318,7 @@ async fn main() {
     // stdout carries newline-delimited JSON responses back.
     // When the Java side destroys the Process, the pipe closes, stdin
     // reaches EOF, and the loop breaks — triggering clean shutdown.
-    eprintln!("[zenithd] ready — reading commands from stdin");
+    let _ = writeln!(std::io::stderr(), "[zenithd] ready - reading commands from stdin");
 
     let stdin = tokio::io::stdin();
     let mut stdout = tokio::io::stdout();
@@ -340,7 +341,7 @@ async fn main() {
     }
 
     monitor_handle.abort();
-    eprintln!("[zenithd] stdin EOF — shutting down");
+    let _ = writeln!(std::io::stderr(), "[zenithd] stdin EOF - shutting down");
 }
 
 fn now_ms() -> u64 {
