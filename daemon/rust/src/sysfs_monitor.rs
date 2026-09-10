@@ -99,7 +99,7 @@ pub async fn init() {
     }
     zone_paths.sort_by_key(|z| z.0);
 
-    eprintln!("[sysfs_monitor] init: {} thermal zones", zone_paths.len());
+    log!("[sysfs_monitor] init: {} thermal zones", zone_paths.len());
     let _ = STATE.set(RwLock::new(MonitorState { zone_paths }));
 }
 

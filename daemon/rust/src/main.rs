@@ -11,6 +11,11 @@ mod secure;
 mod sysfs_monitor;
 mod thermal_core;
 
+
+/// Safe stderr logging — never panics even on broken pipe.
+macro_rules! log {
+    ($($arg:tt)*) => { let _ = writeln!(std::io::stderr(), $($arg)*); };
+}
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::io::Write;

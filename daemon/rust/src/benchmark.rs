@@ -38,12 +38,12 @@ pub fn start() {
     let mut s = state().write().unwrap();
     s.points.clear();
     s.recording = true;
-    eprintln!("[benchmark] recording started");
+    log!("[benchmark] recording started");
 }
 
 pub fn stop() {
     state().write().unwrap().recording = false;
-    eprintln!(
+    log!(
         "[benchmark] recording stopped, {} points",
         state().read().unwrap().points.len()
     );
