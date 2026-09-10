@@ -25,7 +25,7 @@ import org.json.JSONObject
 object ZenithDaemonClient {
 
     private const val TAG = "ZDaemonClient"
-    private const val SOCKET_PATH = "/data/data/com.zenith.thermal/files/zenithd.sock"
+    private const val SOCKET_PATH = "zenithd"
     private const val IO_TIMEOUT_MS = 5_000
 
     private val ioLock = Any()
@@ -107,7 +107,7 @@ object ZenithDaemonClient {
         disconnectLocked()
         return try {
             val s = LocalSocket()
-            s.connect(LocalSocketAddress(SOCKET_PATH, LocalSocketAddress.Namespace.FILESYSTEM))
+            s.connect(LocalSocketAddress(SOCKET_PATH, LocalSocketAddress.Namespace.ABSTRACT))
             s.soTimeout = IO_TIMEOUT_MS
             socket = s
             reader = BufferedReader(InputStreamReader(s.inputStream, Charsets.UTF_8), 4096)

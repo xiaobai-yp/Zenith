@@ -12,14 +12,13 @@ mod thermal_core;
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::path::PathBuf;
+use std::os::linux::net::SocketAddrExt;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixListener;
 use tokio::sync::watch;
 
-
-const SOCKET_PATH: &str =
-    "/data/data/com.zenith.thermal/files/zenithd.sock";
+// Abstract socket name (no filesystem path — bypasses DAC/SELinux).
+const SOCKET_NAME: &str = "zenithd";
 const PROFILES_PATH: &str =
     "/data/data/com.zenith.thermal/files/profiles.json";
 
@@ -245,15 +244,6 @@ async fn handle_cmd(req: Request) -> Response {
 async fn main() {
     eprintln!("[zenithd] starting daemon");
 
-    // Accept app uid as first arg (e.g. `zenithd 10260`). Daemon chowns the
-    // socket to this uid so the app can connect.
-    let app_uid: Option<u32> = std::env::args()
-        .nth(1)
-        .and_then(|s| s.parse().ok());
-    if let Some(uid) = app_uid {
-        eprintln!("[zenithd] will chown socket to uid {uid}");
-    }
-
     // Init all modules
     thermal_core::init()
         .await
@@ -269,34 +259,14 @@ async fn main() {
 
     let _ = LAST_SNAPSHOT.set(RwLock::new(sysfs_monitor::SysfsSnapshot::default()));
 
-    // Ensure socket dir exists
-    let socket_path = zen_path!(SOCKET_PATH);
-    let _ = tokio::fs::remove_file(socket_path).await;
-    if let Some(parent) = PathBuf::from(socket_path).parent() {
-        let _ = tokio::fs::create_dir_all(parent).await;
-    }
-
-    let listener = UnixListener::bind(socket_path).expect("bind socket");
-    // Make the socket accessible to the app's uid (root-owned socket in the
-    // app dir is blocked by SELinux for app-domain processes).
-    if let Some(uid) = app_uid {
-        let _ = std::process::Command::new("/system/bin/chown")
-            .args([&format!("{uid}:{uid}"), socket_path])
-            .status();
-        // Socket needs write perm for connect() — chown alone leaves mode 755
-        // (unix socket connect requires rw; owner-only write is not enough
-        // because UnixListener::bind creates with 755).
-        let _ = std::process::Command::new("/system/bin/chmod")
-            .args(["660", socket_path])
-            .status();
-        // SELinux MCS: app's files carry c512,c768 categories (per-app
-        // isolation); a socket labeled without categories is blocked from
-        // app-domain connect. Match the app_data_file label+categories.
-        let _ = std::process::Command::new("/system/bin/chcon")
-            .args(["u:object_r:privapp_data_file:s0:c512,c768", socket_path])
-            .status();
-    }
-    eprintln!("[zenithd] listening on {socket_path}");
+    // Bind abstract socket (\0zenithd) — no filesystem node, so no
+    // chown/chmod/chcon needed and DAC/SELinux file rules don't apply.
+    // App-domain processes connect via the abstract namespace.
+    let addr =
+        std::os::unix::net::SocketAddr::new_abstract(SOCKET_NAME.as_bytes())
+            .expect("abstract socket addr");
+    let listener = UnixListener::bind_addr(&addr).expect("bind socket");
+    eprintln!("[zenithd] listening on abstract socket @{SOCKET_NAME}");
 
     // Shutdown signal
     let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
@@ -406,10 +376,7 @@ async fn main() {
     }
 
     monitor_handle.abort();
-
-    // Clean up socket file (matches C socket_server_stop behavior)
-    let _ = tokio::fs::remove_file(socket_path).await;
-
+    // Abstract sockets have no filesystem node to remove.
     eprintln!("[zenithd] shutdown");
 }
 

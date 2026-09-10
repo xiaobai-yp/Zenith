@@ -13,7 +13,7 @@ import java.io.File
 object DaemonManager {
 
     private const val TAG = "DaemonManager"
-    private const val SOCKET_PATH = "/data/data/com.zenith.thermal/files/zenithd.sock"
+    private const val SOCKET_PATH = "zenithd"
     private const val ASSET_NAME = "zenithd"
     private const val ASSET_PROFILES = "profiles.json"
     private const val SOCKET_WAIT_MS = 3_000L
@@ -29,7 +29,7 @@ object DaemonManager {
     fun startDaemon(context: Context): Boolean {
         Log.i(TAG, "startDaemon called, filesDir=${context.filesDir}")
         if (isDaemonRunning()) {
-            Log.i(TAG, "Daemon already running (socket exists)")
+            Log.i(TAG, "Daemon already running (abstract socket alive)")
             return true
         }
 
@@ -66,16 +66,14 @@ object DaemonManager {
             return false
         }
 
-        // Launch daemon via su as root (needs sysfs write access). The socket is
-        // created root-owned; the daemon chowns it to the app's uid so the
-        // app can connect (root-owned socket in app dir is SELinux-blocked).
-        val myUid = android.os.Process.myUid()
-        Log.i(TAG, "myUid=$myUid bin=${binFile.absolutePath}")
+        // Launch daemon via su as root (needs sysfs write access). Abstract
+        // socket — no chown/chmod/chcon needed for app connectivity.
+        Log.i(TAG, "bin=${binFile.absolutePath}")
         try {
             // setsid detaches daemon into its own session so it survives
             // su shell exit. KernelSU kills background children of su -c
             // on exit; setsid prevents that by creating a new process group.
-            val cmd = "setsid ${binFile.absolutePath} $myUid >/dev/null 2>&1 &"
+            val cmd = "setsid ${binFile.absolutePath} >/dev/null 2>&1 &"
             Log.i(TAG, "Launch cmd: su -c '$cmd'")
             Runtime.getRuntime().exec(arrayOf("su", "-c", cmd))
             Log.i(TAG, "Launched: su -c '$cmd'")
@@ -84,11 +82,11 @@ object DaemonManager {
             return false
         }
 
-        // Wait up to SOCKET_WAIT_MS for the socket file to appear
+        // Wait up to SOCKET_WAIT_MS for the abstract socket to be connectable.
         val deadline = System.currentTimeMillis() + SOCKET_WAIT_MS
         while (System.currentTimeMillis() < deadline) {
-            if (File(SOCKET_PATH).exists()) {
-                Log.i(TAG, "Daemon socket appeared")
+            if (isDaemonRunning()) {
+                Log.i(TAG, "Daemon abstract socket connectable")
                 return true
             }
             try { Thread.sleep(SOCKET_POLL_MS) } catch (_: InterruptedException) { break }
@@ -108,8 +106,18 @@ object DaemonManager {
         }
     }
 
-    /** @return true if the daemon's IPC socket file exists. */
-    fun isDaemonRunning(): Boolean = File(SOCKET_PATH).exists()
+    /** Connect-ping: abstract sockets have no filesystem node to stat. */
+    fun isDaemonRunning(): Boolean = try {
+        android.net.LocalSocket().use { s ->
+            s.connect(
+                android.net.LocalSocketAddress(
+                    SOCKET_PATH,
+                    android.net.LocalSocketAddress.Namespace.ABSTRACT
+                )
+            )
+            true
+        }
+    } catch (_: Exception) { false }
 
     /** Start the daemon only if it is not already running. */
     fun ensureDaemon(context: Context): Boolean =
