@@ -63,6 +63,11 @@ pub fn update(screen_on: bool, battery_level: i32, current_ua: i64) {
         state.current_battery = battery_level;
         state.is_screen_on = screen_on;
         state.is_deep_sleep = !screen_on && current_ua.abs() < 20_000;
+        // First call also adds battery_used since this is the starting point
+        if screen_on {
+            state.screen_on_duration_ms = 0;
+            state.screen_off_duration_ms = 0;
+        }
         return;
     }
 
@@ -149,13 +154,13 @@ pub fn get_screen_times() -> ScreenTimes {
 
     // Live battery consumed in current state (not yet committed on transition)
     let on_used = state.screen_on_battery_used
-        + if state.is_screen_on && state.screen_on_start_battery > 0 {
+        + if state.is_screen_on && state.screen_on_start_battery > 0 && state.current_battery > 0 {
             state.screen_on_start_battery.saturating_sub(state.current_battery) as u32
         } else {
             0
         };
     let off_used = state.screen_off_battery_used
-        + if !state.is_screen_on && state.screen_off_start_battery > 0 {
+        + if !state.is_screen_on && state.screen_off_start_battery > 0 && state.current_battery > 0 {
             state.screen_off_start_battery.saturating_sub(state.current_battery) as u32
         } else {
             0
