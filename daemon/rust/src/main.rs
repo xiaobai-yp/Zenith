@@ -116,10 +116,12 @@ async fn handle_cmd(req: Request) -> Response {
 
             let charging = bat.online;
 
-            // Charging status label based on power wattage
-            let (current_ma, status) = if charging {
-                let power_w = bat.power_mw as f64 / 1000.0;
-                let label = if bat.capacity >= 100 && bat.current_ua.abs() as f64 / 1000.0 < 100.0 {
+            // Charging status label based on power wattage.
+            // Current is always shown inline (mA), power (W) only when charging.
+            let power_w = bat.power_mw as f64 / 1000.0;
+            let current_ma = bat.current_ua.abs() as f64 / 1000.0;
+            let status = if charging {
+                if bat.capacity >= 100 && current_ma < 100.0 {
                     "Full Charge"
                 } else if power_w >= 7.0 {
                     "Charging rapidly ⚡"
@@ -127,10 +129,9 @@ async fn handle_cmd(req: Request) -> Response {
                     "Charging"
                 } else {
                     "Charging slowly"
-                };
-                (0.0f64, label)
+                }
             } else {
-                (bat.current_ua.abs() as f64 / 1000.0, "Discharging")
+                "Discharging"
             };
 
             let (temp_val, temp_suffix) = match temp_unit {
@@ -142,6 +143,9 @@ async fn handle_cmd(req: Request) -> Response {
             let pct_of = |ms: u64| -> u64 {
                 if times.total_ms > 0 { ms * 100 / times.total_ms } else { 0 }
             };
+            let pct_of_f = |ms: u64| -> f64 {
+                if times.total_ms > 0 { ms as f64 * 100.0 / times.total_ms as f64 } else { 0.0 }
+            };
             let fmt_time = |ms: u64| -> String {
                 let s = ms / 1000;
                 let m = s / 60;
@@ -151,14 +155,15 @@ async fn handle_cmd(req: Request) -> Response {
                 else { format!("{}s", s) }
             };
 
-            // Power (W): only show when charging
-            // mA: only show when discharging
-            let power_w = bat.power_mw as f64 / 1000.0;
+            // Power string: charging shows both mA • W, discharging shows mA only
             let power_str = if charging && show_power && power_w > 0.05 {
-                format!(" ({:.2}W)", power_w)
+                format!(" • {:.1}W", power_w)
             } else {
                 String::new()
             };
+
+            // Current: always show mA inline
+            let current_str = format!(" {:.0} mA", current_ma);
 
             // When charging: freeze drain rates and times to 0
             let (active_drain, idle_drain) = if charging {
@@ -173,21 +178,19 @@ async fn handle_cmd(req: Request) -> Response {
             };
 
             let body = format!(
-                "{}% • {:.1}{} • {}{}{}{}\n\
+                "{}% • {:.1}{} • {}{}{}\n\
                  Active: {:.2}%/hr Idle: {:.2}%/hr\n\
                  Screen on: {} ({}%)\n\
                  Screen off: {} ({}%)\n\
-                 Deep sleep: {} ({}%)\n\
-                 Awake: {} ({}%)",
+                 Deep sleep: {} ({:.1}%)\n\
+                 Awake: {} ({:.1}%)",
                 bat.capacity, temp_val, temp_suffix, status,
-                if current_ma > 0.0 { format!(" {:.0}", current_ma) } else { String::new() },
-                if current_ma > 0.0 { " mA" } else { "" },
-                power_str,
+                current_str, power_str,
                 active_drain, idle_drain,
                 fmt_time(s_on), pct_of(s_on),
                 fmt_time(s_off), pct_of(s_off),
-                fmt_time(ds), pct_of(ds),
-                fmt_time(aw), pct_of(aw),
+                fmt_time(ds), pct_of_f(ds),
+                fmt_time(aw), pct_of_f(aw),
             );
             Response::ok(json!({ "body": body, "stats": stats }))
         }
