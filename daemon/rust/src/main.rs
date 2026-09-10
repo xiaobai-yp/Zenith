@@ -262,17 +262,32 @@ async fn main() {
     // Bind abstract socket (\0zenithd) — no filesystem node, so no
     // chown/chmod/chcon needed and DAC/SELinux file rules don't apply.
     // App-domain processes connect via the abstract namespace.
-    let addr = socket2::SockAddr::from_abstract_name(SOCKET_NAME.as_bytes())
-        .expect("abstract socket addr");
-    let sock = socket2::Socket::new(socket2::Domain::UNIX, socket2::Type::STREAM, None)
-        .expect("create socket");
-    sock.bind(&addr).expect("bind socket");
-    sock.listen(1).expect("listen socket");
-    sock.set_nonblocking(true).expect("nonblocking");
-    // socket2::Socket implements Into<OwnedFd>; wrap via owned fd into tokio
-    let std_listener = std::os::unix::net::UnixListener::from(
-        std::os::fd::OwnedFd::from(sock)
-    );
+    // Raw libc calls: works on Android target without any unstable APIs.
+    let name = SOCKET_NAME.as_bytes();
+    let fd = unsafe {
+        libc::socket(libc::AF_UNIX, libc::SOCK_STREAM | libc::SOCK_CLOEXEC, 0)
+    };
+    if fd < 0 {
+        panic!("socket create failed: {}", std::io::Error::last_os_error());
+    }
+    let mut sun: libc::sockaddr_un = unsafe { std::mem::zeroed() };
+    sun.sun_family = libc::AF_UNIX as libc::sa_family_t;
+    // Abstract socket: sun_path[0] = 0 (zeroed), name starts at sun_path[1]
+    sun.sun_path[1..1 + name.len()].copy_from_slice(name);
+    let addrlen = (2 + 1 + name.len()) as libc::socklen_t;
+    let rc = unsafe {
+        libc::bind(fd, &sun as *const libc::sockaddr_un as *const libc::sockaddr, addrlen)
+    };
+    if rc != 0 {
+        panic!("bind failed: {}", std::io::Error::last_os_error());
+    }
+    let rc = unsafe { libc::listen(fd, 16) };
+    if rc != 0 {
+        panic!("listen failed: {}", std::io::Error::last_os_error());
+    }
+    let std_listener =
+        unsafe { std::os::unix::net::UnixListener::from_raw_fd(fd) };
+    std_listener.set_nonblocking(true).expect("nonblocking");
     let listener = UnixListener::from_std(std_listener).expect("tokio wrap");
     eprintln!("[zenithd] listening on abstract socket @{SOCKET_NAME}");
 
