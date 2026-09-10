@@ -149,8 +149,8 @@ class BatteryMonitorService : Service() {
         val prefs = getSharedPreferences("zenith_battery", MODE_PRIVATE)
         if (!prefs.getBoolean("idle_warning_enabled", false)) return
 
-        val stats = data?.optJSONObject("stats") ?: return
-        val idleDrain = stats.optDouble("idle_drain_pct_per_hr", 0.0)
+        val drain = data?.optJSONObject("drain") ?: return
+        val idleDrain = drain.optDouble("idle_drain_pct_per_hr", 0.0)
         val threshold = prefs.getInt("idle_warning_target", 5).toDouble()
 
         if (idleDrain > threshold) {

@@ -200,7 +200,7 @@ object ZenithDaemonClient {
                     online = bat?.optBoolean("online", false) ?: false,
                     capacityPct = bat?.optDouble("capacity_pct", 0.0) ?: 0.0,
                     currentUa = bat?.optInt("current_ua", 0) ?: 0,
-                    drainPctPerHr = bat?.optDouble("drain_pct_per_hr", 0.0) ?: 0.0
+                    drainPctPerHr = bat?.optDouble("active_drain_pct_per_hr", 0.0) ?: 0.0
                 ),
                 fpsShort = fps?.optInt("short", 0) ?: 0,
                 fpsLong = fps?.optInt("long", 0) ?: 0,
@@ -295,7 +295,7 @@ object ZenithDaemonClient {
                 online = data.optBoolean("online", false),
                 capacityPct = data.optDouble("capacity_pct", 0.0),
                 currentUa = data.optInt("current_ua", 0),
-                drainPctPerHr = data.optDouble("drain_pct_per_hr", 0.0)
+                drainPctPerHr = data.optDouble("active_drain_pct_per_hr", 0.0)
             )
         } catch (e: Exception) { null }
     }

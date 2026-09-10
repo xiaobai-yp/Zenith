@@ -1,253 +1,208 @@
-// battery_monitor.rs — Drain rate tracking with EMA, screen-on/off split.
-// Persistent stats via battery_session.json.
-
-use serde::{Deserialize, Serialize};
-use std::collections::VecDeque;
 use std::io::Write;
-use std::sync::{OnceLock, RwLock};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
-const SAMPLE_BUF_SIZE: usize = 16;
-const EMA_ALPHA: f64 = 0.3; // 0.3 * new + 0.7 * old
-const SESSION_PATH: &str = "/data/data/com.zenith.thermal/files/battery_session.json";
+/// Screen time tracking with battery consumption attribution
+/// and deep sleep / awake power state residency.
+///
+/// Screen ON/OFF: tracks battery consumed during each state.
+/// Deep Sleep/Awake: tracks time residency (current heuristic: screen off + low current).
+///
+/// Drain rate = battery consumed during active/idle time / hours.
 
-#[derive(Debug, Clone, Copy)]
-struct Sample {
-    capacity: i32,
-    current_ua: i64,
-    online: bool,
-    timestamp_ms: u64,
+struct ScreenState {
+    screen_on_duration_ms: u64,
+    screen_off_duration_ms: u64,
+    screen_on_battery_used: u32,
+    screen_off_battery_used: u32,
+    deep_sleep_ms: u64,
+    awake_ms: u64,
+    last_update_ms: u64,
+    last_sleep_update_ms: u64,
+    screen_on_start_battery: i32,
+    screen_off_start_battery: i32,
+    current_battery: i32,
+    is_screen_on: bool,
+    is_deep_sleep: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Default)]
-pub struct BatteryStats {
-    pub drain_pct_per_hr: f64,
-    pub screen_on_drain_pct_per_hr: f64,
-    pub screen_off_drain_pct_per_hr: f64,
-    pub idle_drain_pct_per_hr: f64,
-    pub sample_count: usize,
-    pub last_capacity: i32,
-}
-
-struct MonitorState {
-    samples: VecDeque<Sample>,
-    screen_on_drain: f64,
-    screen_off_drain: f64,
-    idle_drain: f64,
-    initialized_ema: bool,
-    screen_on_seen: bool,
-    screen_off_seen: bool,
-    last_capacity: i32,
-    screen_on: bool,
-}
-
-static STATE: OnceLock<RwLock<MonitorState>> = OnceLock::new();
-
-fn state() -> &'static RwLock<MonitorState> {
-    STATE.get().expect("battery_monitor not initialized")
-}
+static STATE: once_cell::sync::Lazy<std::sync::Mutex<ScreenState>> =
+    once_cell::sync::Lazy::new(|| {
+        std::sync::Mutex::new(ScreenState {
+            screen_on_duration_ms: 0,
+            screen_off_duration_ms: 0,
+            screen_on_battery_used: 0,
+            screen_off_battery_used: 0,
+            deep_sleep_ms: 0,
+            awake_ms: 0,
+            last_update_ms: 0,
+            last_sleep_update_ms: 0,
+            screen_on_start_battery: 0,
+            screen_off_start_battery: 0,
+            current_battery: 0,
+            is_screen_on: false,
+            is_deep_sleep: false,
+        })
+    });
 
 pub fn init() {
-    let _ = STATE.set(RwLock::new(MonitorState {
-        samples: VecDeque::with_capacity(SAMPLE_BUF_SIZE),
-        screen_on_drain: 0.0,
-        screen_off_drain: 0.0,
-        idle_drain: 0.0,
-        initialized_ema: false,
-        screen_on_seen: false,
-        screen_off_seen: false,
-        last_capacity: 0,
-        screen_on: true,
-    }));
-    // Try restore from persistent session
-    restore_session();
-}
-
-pub fn update(
-    capacity: i32,
-    current_ua: i64,
-    _voltage_uv: i64,
-    online: bool,
-    timestamp_ms: u64,
-    screen_on: bool,
-) {
-    let mut s = state().write().unwrap();
-
-    let is_screen_on = screen_on;
-    s.screen_on = is_screen_on;
-
-    let sample = Sample {
-        capacity,
-        current_ua,
-        online,
-        timestamp_ms,
+    let mut state = STATE.lock().unwrap();
+    *state = ScreenState {
+        screen_on_duration_ms: 0,
+        screen_off_duration_ms: 0,
+        screen_on_battery_used: 0,
+        screen_off_battery_used: 0,
+        deep_sleep_ms: 0,
+        awake_ms: 0,
+        last_update_ms: 0,
+        last_sleep_update_ms: 0,
+        screen_on_start_battery: 0,
+        screen_off_start_battery: 0,
+        current_battery: 0,
+        is_screen_on: false,
+        is_deep_sleep: false,
     };
-
-    if s.samples.len() >= SAMPLE_BUF_SIZE {
-        s.samples.pop_front();
-    }
-    s.samples.push_back(sample);
-
-    s.last_capacity = capacity;
-
-    // Compute drain rate from capacity delta
-    if s.samples.len() >= 2 {
-        let oldest = s.samples.front().unwrap();
-        let newest = s.samples.back().unwrap();
-        let dt_hours = (newest.timestamp_ms as f64 - oldest.timestamp_ms as f64) / 3_600_000.0;
-        if dt_hours > 0.01 {
-            let capacity_drop = oldest.capacity as f64 - newest.capacity as f64;
-            let drain_rate = (capacity_drop / dt_hours).max(0.0); // %/hr
-
-            if !s.initialized_ema {
-                s.screen_on_drain = drain_rate;
-                s.screen_off_drain = drain_rate;
-                s.idle_drain = drain_rate;
-                s.initialized_ema = true;
-            } else if is_screen_on {
-                s.screen_on_drain = EMA_ALPHA * drain_rate + (1.0 - EMA_ALPHA) * s.screen_on_drain;
-                s.screen_on_seen = true;
-            } else {
-                s.screen_off_drain =
-                    EMA_ALPHA * drain_rate + (1.0 - EMA_ALPHA) * s.screen_off_drain;
-                s.screen_off_seen = true;
-                // Idle drain = drain during screen-off (per spec)
-                s.idle_drain = EMA_ALPHA * drain_rate + (1.0 - EMA_ALPHA) * s.idle_drain;
-            }
-        }
-    }
 }
 
-pub fn get_stats() -> BatteryStats {
-    let s = state().read().unwrap();
-    let avg_drain = if s.screen_on_seen && s.screen_off_seen {
-        (s.screen_on_drain + s.screen_off_drain) / 2.0
-    } else if s.screen_on_seen {
-        s.screen_on_drain
-    } else if s.screen_off_seen {
-        s.screen_off_drain
-    } else {
-        0.0
-    };
+/// Update screen state and battery levels.
+/// `current_ua`: raw microamps (for deep sleep heuristic).
+pub fn update(screen_on: bool, battery_level: i32, current_ua: i64) {
+    let now = current_ms();
+    let mut state = STATE.lock().unwrap();
 
-    BatteryStats {
-        drain_pct_per_hr: avg_drain,
-        screen_on_drain_pct_per_hr: s.screen_on_drain,
-        screen_off_drain_pct_per_hr: s.screen_off_drain,
-        idle_drain_pct_per_hr: s.idle_drain,
-        sample_count: s.samples.len(),
-        last_capacity: s.last_capacity,
-    }
-}
-
-// ── Screen time tracking ──
-
-static SCREEN_ON_ACCUM_MS: AtomicU64 = AtomicU64::new(0);
-static SCREEN_OFF_ACCUM_MS: AtomicU64 = AtomicU64::new(0);
-static DEEP_SLEEP_ACCUM_MS: AtomicU64 = AtomicU64::new(0);
-static AWAKE_ACCUM_MS: AtomicU64 = AtomicU64::new(0);
-static TOTAL_MS: AtomicU64 = AtomicU64::new(0);
-static LAST_SCREEN_STATE: AtomicBool = AtomicBool::new(true);
-static LAST_UPDATE_MS: AtomicU64 = AtomicU64::new(0);
-
-pub fn reset_times() {
-    SCREEN_ON_ACCUM_MS.store(0, Ordering::Relaxed);
-    SCREEN_OFF_ACCUM_MS.store(0, Ordering::Relaxed);
-    DEEP_SLEEP_ACCUM_MS.store(0, Ordering::Relaxed);
-    AWAKE_ACCUM_MS.store(0, Ordering::Relaxed);
-    TOTAL_MS.store(0, Ordering::Relaxed);
-    LAST_UPDATE_MS.store(0, Ordering::Relaxed);
-}
-
-pub fn update_screen_times(now_ms: u64, screen_on: bool, current_ua: i64) {
-    let last = LAST_UPDATE_MS.swap(now_ms, Ordering::Relaxed);
-    if last == 0 {
-        LAST_SCREEN_STATE.store(screen_on, Ordering::Relaxed);
+    if state.last_update_ms == 0 {
+        state.last_update_ms = now;
+        state.last_sleep_update_ms = now;
+        state.screen_on_start_battery = battery_level;
+        state.screen_off_start_battery = battery_level;
+        state.current_battery = battery_level;
+        state.is_screen_on = screen_on;
+        state.is_deep_sleep = !screen_on && current_ua.abs() < 20_000;
         return;
     }
-    let dt = now_ms.saturating_sub(last);
-    let was_on = LAST_SCREEN_STATE.swap(screen_on, Ordering::Relaxed);
 
-    if was_on {
-        SCREEN_ON_ACCUM_MS.fetch_add(dt, Ordering::Relaxed);
+    let elapsed = now.saturating_sub(state.last_update_ms);
+    if elapsed == 0 {
+        return;
+    }
+
+    // Attribute elapsed time to current screen state
+    if state.is_screen_on {
+        state.screen_on_duration_ms += elapsed;
     } else {
-        SCREEN_OFF_ACCUM_MS.fetch_add(dt, Ordering::Relaxed);
+        state.screen_off_duration_ms += elapsed;
     }
 
-    // Deep sleep: screen off AND current < 50mA (device sleeping)
-    if !screen_on && current_ua.abs() < 50_000 {
-        DEEP_SLEEP_ACCUM_MS.fetch_add(dt, Ordering::Relaxed);
+    // Deep sleep / awake
+    let deep_sleep = !screen_on && current_ua.abs() < 20_000;
+    let sleep_elapsed = now.saturating_sub(state.last_sleep_update_ms);
+    if sleep_elapsed > 0 {
+        if state.is_deep_sleep {
+            state.deep_sleep_ms += sleep_elapsed;
+        } else {
+            state.awake_ms += sleep_elapsed;
+        }
+        state.last_sleep_update_ms = now;
     }
-    // Awake: current > 50mA (device actively drawing)
-    if current_ua.abs() > 50_000 {
-        AWAKE_ACCUM_MS.fetch_add(dt, Ordering::Relaxed);
+
+    // Handle screen state transition
+    if screen_on != state.is_screen_on {
+        if screen_on {
+            // Transition to ON: close out OFF period
+            let used = state.screen_off_start_battery.saturating_sub(battery_level) as u32;
+            state.screen_off_battery_used += used;
+            state.screen_on_start_battery = battery_level;
+        } else {
+            // Transition to OFF: close out ON period
+            let used = state.screen_on_start_battery.saturating_sub(battery_level) as u32;
+            state.screen_on_battery_used += used;
+            state.screen_off_start_battery = battery_level;
+        }
+        state.is_screen_on = screen_on;
     }
-    TOTAL_MS.fetch_add(dt, Ordering::Relaxed);
+
+    state.current_battery = battery_level;
+    state.is_deep_sleep = deep_sleep;
+    state.last_update_ms = now;
 }
 
-#[derive(Debug, Clone, Serialize, Default)]
+pub fn reset() {
+    let mut state = STATE.lock().unwrap();
+    *state = ScreenState {
+        screen_on_duration_ms: 0,
+        screen_off_duration_ms: 0,
+        screen_on_battery_used: 0,
+        screen_off_battery_used: 0,
+        deep_sleep_ms: 0,
+        awake_ms: 0,
+        last_update_ms: 0,
+        last_sleep_update_ms: 0,
+        screen_on_start_battery: 0,
+        screen_off_start_battery: 0,
+        current_battery: 0,
+        is_screen_on: false,
+        is_deep_sleep: false,
+    };
+}
+
 pub struct ScreenTimes {
     pub screen_on_ms: u64,
     pub screen_off_ms: u64,
+    pub screen_on_battery_used: u32,
+    pub screen_off_battery_used: u32,
     pub deep_sleep_ms: u64,
     pub awake_ms: u64,
-    pub total_ms: u64,
 }
 
 pub fn get_screen_times() -> ScreenTimes {
+    let state = STATE.lock().unwrap();
+    // Live elapsed so time moves in real-time
+    let now = current_ms();
+    let live = now.saturating_sub(state.last_update_ms);
+    let on_ms = state.screen_on_duration_ms + if state.is_screen_on { live } else { 0 };
+    let off_ms = state.screen_off_duration_ms + if !state.is_screen_on { live } else { 0 };
+
+    // Live battery consumed in current state (not yet committed on transition)
+    let on_used = state.screen_on_battery_used
+        + if state.is_screen_on && state.screen_on_start_battery > 0 {
+            state.screen_on_start_battery.saturating_sub(state.current_battery) as u32
+        } else {
+            0
+        };
+    let off_used = state.screen_off_battery_used
+        + if !state.is_screen_on && state.screen_off_start_battery > 0 {
+            state.screen_off_start_battery.saturating_sub(state.current_battery) as u32
+        } else {
+            0
+        };
+
     ScreenTimes {
-        screen_on_ms: SCREEN_ON_ACCUM_MS.load(Ordering::Relaxed),
-        screen_off_ms: SCREEN_OFF_ACCUM_MS.load(Ordering::Relaxed),
-        deep_sleep_ms: DEEP_SLEEP_ACCUM_MS.load(Ordering::Relaxed),
-        awake_ms: AWAKE_ACCUM_MS.load(Ordering::Relaxed),
-        total_ms: TOTAL_MS.load(Ordering::Relaxed),
+        screen_on_ms: on_ms,
+        screen_off_ms: off_ms,
+        screen_on_battery_used: on_used,
+        screen_off_battery_used: off_used,
+        deep_sleep_ms: state.deep_sleep_ms,
+        awake_ms: state.awake_ms,
     }
 }
 
-// ── Persistent session storage ──
-
-#[derive(Serialize, Deserialize, Default)]
-struct SessionData {
-    screen_on_ms: u64,
-    screen_off_ms: u64,
-    deep_sleep_ms: u64,
-    awake_ms: u64,
-    total_ms: u64,
-    active_drain: f64,
-    idle_drain: f64,
+pub struct DrainRates {
+    pub active_drain_pct_per_hr: f64,
+    pub idle_drain_pct_per_hr: f64,
 }
 
-pub fn save_session() {
+pub fn get_drain_rates() -> DrainRates {
     let times = get_screen_times();
-    let stats = get_stats();
-    let data = SessionData {
-        screen_on_ms: times.screen_on_ms,
-        screen_off_ms: times.screen_off_ms,
-        deep_sleep_ms: times.deep_sleep_ms,
-        awake_ms: times.awake_ms,
-        total_ms: times.total_ms,
-        active_drain: stats.screen_on_drain_pct_per_hr,
-        idle_drain: stats.idle_drain_pct_per_hr,
-    };
-    if let Ok(json) = serde_json::to_string(&data) {
-        let _ = std::fs::write(SESSION_PATH, json);
+    let on_h = times.screen_on_ms as f64 / 3_600_000.0;
+    let off_h = times.screen_off_ms as f64 / 3_600_000.0;
+
+    DrainRates {
+        active_drain_pct_per_hr: if on_h > 0.01 { times.screen_on_battery_used as f64 / on_h } else { 0.0 },
+        idle_drain_pct_per_hr: if off_h > 0.01 { times.screen_off_battery_used as f64 / off_h } else { 0.0 },
     }
 }
 
-fn restore_session() {
-    let Ok(content) = std::fs::read_to_string(SESSION_PATH) else {
-        return;
-    };
-    let Ok(data) = serde_json::from_str::<SessionData>(&content) else {
-        return;
-    };
-    SCREEN_ON_ACCUM_MS.store(data.screen_on_ms, Ordering::Relaxed);
-    SCREEN_OFF_ACCUM_MS.store(data.screen_off_ms, Ordering::Relaxed);
-    DEEP_SLEEP_ACCUM_MS.store(data.deep_sleep_ms, Ordering::Relaxed);
-    AWAKE_ACCUM_MS.store(data.awake_ms, Ordering::Relaxed);
-    TOTAL_MS.store(data.total_ms, Ordering::Relaxed);
-    crate::log!(
-        "[battery_monitor] restored session: on={}ms off={}ms",
-        data.screen_on_ms, data.screen_off_ms
-    );
+fn current_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
 }

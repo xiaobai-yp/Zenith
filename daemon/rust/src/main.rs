@@ -93,7 +93,7 @@ async fn handle_cmd(req: Request) -> Response {
                     "zones": thermal.zone_count,
                 },
                 "snapshot": snap,
-                "battery": battery_monitor::get_stats(),
+                "battery": battery_monitor::get_drain_rates(),
                 "fps": {
                     "short": short_fps,
                     "long": long_fps,
@@ -105,8 +105,8 @@ async fn handle_cmd(req: Request) -> Response {
         "battery_notif" => {
             let snap = get_snapshot();
             let bat = &snap.battery;
-            let stats = battery_monitor::get_stats();
             let times = battery_monitor::get_screen_times();
+            let drain = battery_monitor::get_drain_rates();
 
             // Read args from request
             let temp_unit = req.args.get("temp_unit")
@@ -117,7 +117,6 @@ async fn handle_cmd(req: Request) -> Response {
             let charging = bat.online;
 
             // Charging status label based on power wattage.
-            // Current is always shown inline (mA), power (W) only when charging.
             let power_w = bat.power_mw as f64 / 1000.0;
             let current_ma = bat.current_ua.abs() as f64 / 1000.0;
             let status = if charging {
@@ -140,38 +139,40 @@ async fn handle_cmd(req: Request) -> Response {
                 _ => (bat.temp_centi as f64 / 10.0, "°C"),
             };
 
-            let pct_of = |ms: u64| -> u64 {
-                if times.total_ms > 0 { ms * 100 / times.total_ms } else { 0 }
-            };
             let fmt_time = |ms: u64| -> String {
                 let s = ms / 1000;
                 let m = s / 60;
                 let h = m / 60;
-                if h > 0 { format!("{}h {}m", h, m % 60) }
+                if h > 0 { format!("{}h {}m {}s", h, m % 60, s % 60) }
                 else if m > 0 { format!("{}m {}s", m, s % 60) }
                 else { format!("{}s", s) }
             };
 
-            // Power string: charging shows both mA • W, discharging shows mA only
+            // Power string: only when charging
             let power_str = if charging && show_power && power_w > 0.05 {
                 format!(" • {:.1}W", power_w)
             } else {
                 String::new()
             };
 
-            // Current: always show mA inline
+            // Current: always show
             let current_str = format!(" {:.0} mA", current_ma);
 
-            // When charging: freeze drain rates and times to 0
+            // Deep sleep / awake % = time residency
+            let ds_total = times.deep_sleep_ms + times.awake_ms;
+            let ds_pct = if ds_total > 0 { times.deep_sleep_ms as f64 / ds_total as f64 * 100.0 } else { 0.0 };
+            let aw_pct = if ds_total > 0 { times.awake_ms as f64 / ds_total as f64 * 100.0 } else { 0.0 };
+
+            // When charging: freeze all to 0
             let (active_drain, idle_drain) = if charging {
                 (0.0, 0.0)
             } else {
-                (stats.screen_on_drain_pct_per_hr, stats.idle_drain_pct_per_hr)
+                (drain.active_drain_pct_per_hr, drain.idle_drain_pct_per_hr)
             };
-            let (s_on, s_off, ds, aw) = if charging {
-                (0u64, 0u64, 0u64, 0u64)
+            let (s_on, s_off, on_used, off_used, ds, aw) = if charging {
+                (0u64, 0u64, 0u32, 0u32, 0u64, 0u64)
             } else {
-                (times.screen_on_ms, times.screen_off_ms, times.deep_sleep_ms, times.awake_ms)
+                (times.screen_on_ms, times.screen_off_ms, times.screen_on_battery_used, times.screen_off_battery_used, times.deep_sleep_ms, times.awake_ms)
             };
 
             let body = format!(
@@ -179,21 +180,20 @@ async fn handle_cmd(req: Request) -> Response {
                  Active: {:.2}%/hr Idle: {:.2}%/hr\n\
                  Screen on: {} ({}%)\n\
                  Screen off: {} ({}%)\n\
-                 Deep sleep: {} ({}%)\n\
-                 Awake: {} ({}%)",
-                bat.capacity, temp_val, temp_suffix, status,
-                current_str, power_str,
+                 Deep sleep: {} ({:.0}%)\n\
+                 Awake: {} ({:.0}%)",
+                bat.capacity, temp_val, temp_suffix, status, current_str, power_str,
                 active_drain, idle_drain,
-                fmt_time(s_on), pct_of(s_on),
-                fmt_time(s_off), pct_of(s_off),
-                fmt_time(ds), pct_of(ds),
-                fmt_time(aw), pct_of(aw),
+                fmt_time(s_on), on_used,
+                fmt_time(s_off), off_used,
+                fmt_time(ds), if charging { 0.0 } else { ds_pct },
+                fmt_time(aw), if charging { 0.0 } else { aw_pct },
             );
-            Response::ok(json!({ "body": body, "stats": stats }))
+            Response::ok(json!({ "body": body, "drain": drain }))
         }
 
         "reset_battery" => {
-            battery_monitor::reset_times();
+            battery_monitor::reset();
             Response::ok(json!({ "reset": true }))
         }
 
@@ -325,7 +325,7 @@ async fn handle_cmd(req: Request) -> Response {
         }
 
         "battery_stats" => {
-            Response::ok(json!(battery_monitor::get_stats()))
+            Response::ok(json!(battery_monitor::get_drain_rates()))
         }
 
         _ => Response::err(&format!("unknown cmd: {}", req.cmd)),
@@ -380,28 +380,27 @@ async fn main() {
                 }
             }
 
+            let mut tick = 0u64;
             loop {
-                // sysfs snapshot (every 5s)
-                let snap = rt.block_on(sysfs_monitor::read());
-                battery_monitor::update(
-                    snap.battery.capacity,
-                    snap.battery.current_ua,
-                    snap.battery.voltage_uv,
-                    snap.battery.online,
-                    now_ms(),
-                    snap.screen_on,
-                );
-                battery_monitor::update_screen_times(now_ms(), snap.screen_on, snap.battery.current_ua);
-                update_snapshot(snap);
-
-                // Save session every 30s for persistence across restarts
-                if crate::now_ms() % 30_000 < 10_000 {
-                    battery_monitor::save_session();
+                // Battery state update every 1s (for real-time stats)
+                {
+                    let snap = get_snapshot();
+                    battery_monitor::update(
+                        snap.screen_on,
+                        snap.battery.capacity,
+                        snap.battery.current_ua,
+                    );
                 }
 
-                // fps + benchmark (5 iterations x 1s = 5s total)
-                for _ in 0..5 {
-                    std::thread::sleep(std::time::Duration::from_secs(1));
+                // Full sysfs snapshot every 5 ticks
+                tick += 1;
+                if tick % 5 == 0 {
+                    let snap = rt.block_on(sysfs_monitor::read());
+                    update_snapshot(snap);
+                }
+
+                // fps + benchmark (1s tick)
+                {
                     let (short, _long) = fps_monitor::read();
                     if benchmark::is_active() {
                         let snap = get_snapshot();
@@ -426,6 +425,8 @@ async fn main() {
                         let _ = rt.block_on(thermal_core::apply_profile(&last_prop));
                     }
                 }
+
+                std::thread::sleep(std::time::Duration::from_secs(1));
             }
         })
         .expect("spawn monitor thread");
