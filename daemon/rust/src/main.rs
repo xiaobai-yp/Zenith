@@ -173,6 +173,11 @@ async fn handle_cmd(req: Request) -> Response {
             }
         }
 
+        "reset_profiles" => {
+            profile_engine::reset_map();
+            Response::ok(json!({ "reset": true }))
+        }
+
         "bench_start" => {
             benchmark::start();
             Response::ok(json!({ "started": true }))
@@ -283,6 +288,12 @@ async fn main() {
         // because UnixListener::bind creates with 755).
         let _ = std::process::Command::new("/system/bin/chmod")
             .args(["660", socket_path])
+            .status();
+        // SELinux MCS: app's files carry c512,c768 categories (per-app
+        // isolation); a socket labeled without categories is blocked from
+        // app-domain connect. Match the app_data_file label+categories.
+        let _ = std::process::Command::new("/system/bin/chcon")
+            .args(["u:object_r:privapp_data_file:s0:c512,c768", socket_path])
             .status();
     }
     eprintln!("[zenithd] listening on {socket_path}");

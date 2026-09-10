@@ -229,6 +229,11 @@ object ZenithDaemonClient {
         return sendCommand("map_app", args) != null
     }
 
+    /** Reset all per-app profile mappings in the daemon. */
+    fun resetProfiles(): Boolean {
+        return sendCommand("reset_profiles") != null
+    }
+
     fun getForegroundApp(): String? {
         val data = sendCommand("detect_fg") ?: return null
         return data.optString("package", null).takeIf { it?.isNotEmpty() == true }

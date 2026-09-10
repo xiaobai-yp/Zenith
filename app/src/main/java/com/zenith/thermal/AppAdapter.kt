@@ -44,6 +44,10 @@ class AppAdapter(context: Context) : BaseAdapter() {
         if (item.profileId >= 0) {
             badge.text = Profile.name(item.profileId)
             badge.visibility = View.VISIBLE
+            badge.backgroundTintList = android.content.res.ColorStateList.valueOf(
+                if (item.profileId == 0) android.graphics.Color.rgb(58, 74, 90)
+                else android.graphics.Color.rgb(92, 167, 255)
+            )
         } else {
             badge.visibility = View.GONE
         }

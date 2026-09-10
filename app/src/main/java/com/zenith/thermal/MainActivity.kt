@@ -131,10 +131,14 @@ class MainActivity : android.app.Activity() {
     private fun load() {
         val pm = packageManager
         val map = try { ZenithDaemonClient.getAppsMap() } catch (_: Throwable) { emptyMap() }
+        val localCache = AppProfileCache.all(this)
         apps.clear()
         for (info in pm.getInstalledApplications(PackageManager.ApplicationInfoFlags.of(0))) {
             if (!showSystem && (info.flags and ApplicationInfo.FLAG_SYSTEM) != 0) continue
-            val pid = map[info.packageName] ?: -1
+            // Prefer daemon data; fall back to local cache when daemon is down
+            val pid = map[info.packageName]
+                ?: localCache[info.packageName]
+                ?: -1
             apps.add(AppItem(info, pm, pid))
         }
         apps.sortBy { it.name.lowercase() }
@@ -212,23 +216,34 @@ class MainActivity : android.app.Activity() {
         val heading = TextView(this).apply { text = title; setTextColor(TEXT); textSize = 20f; gravity = Gravity.CENTER; setTypeface(null, Typeface.BOLD); maxLines = 2; setPadding(dp(4), dp(4), dp(4), dp(8)) }
         root.addView(heading, LinearLayout.LayoutParams(-1, -2).apply { setMargins(0,0,0,dp(2)) })
         val group = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        // Current profile for this app/global — default 0
+        val currentId = if (pkg != null) {
+            AppProfileCache.get(this, pkg).takeIf { it >= 0 }
+                ?: runCatching { ZenithDaemonClient.getAppsMap() } .getOrNull()?.get(pkg)
+                ?: 0
+        } else {
+            // Global: no cache — always Default (0) at startup
+            0
+        }
+        val currentIdx = Profile.indexOf(currentId)
         for (i in 0 until Profile.count()) {
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; minimumHeight = dp(46); isClickable = true; isFocusable = true }
             val label = TextView(this).apply { text = Profile.MENU_NAMES[i]; setTextColor(TEXT); textSize = 16f; gravity = Gravity.CENTER_VERTICAL; maxLines = 2; setPadding(0,0,dp(8),0) }
             row.addView(label, LinearLayout.LayoutParams(0, dp(46), 1f))
-            val radio = ProfileRadio(this).apply { setChecked(i == 0) }
+            val radio = ProfileRadio(this).apply { setChecked(i == currentIdx) }
             row.addView(radio, LinearLayout.LayoutParams(dp(48), dp(46)))
             val click = View.OnClickListener {
                 val id = Profile.value(i)
                 val ok = if (pkg != null) {
+                    // Persist locally FIRST so the badge shows even if daemon is down
+                    AppProfileCache.set(this, pkg, id)
                     ZenithDaemonClient.setAppProfile(pkg, id)
                 } else {
                     ThermalController.apply(id)
                 }
-                adapter.notifyDataSetChanged()
+                load()
                 if (ok) showThemedToast("Profile applied: ${Profile.NAMES[i]}")
-                else showThemedToast("Daemon not available — profile not applied")
-                if (pkg != null) load()
+                else showThemedToast("Daemon not available — profile saved locally")
                 dialog.dismiss()
             }
             row.setOnClickListener(click); radio.setOnClickListener(click); group.addView(row, LinearLayout.LayoutParams(-1, dp(46)))
@@ -254,7 +269,14 @@ class MainActivity : android.app.Activity() {
         systemRow.addView(systemText, LinearLayout.LayoutParams(0, dp(44), 1f)); systemRow.addView(check, LinearLayout.LayoutParams(dp(42), dp(44)))
         systemRow.setOnClickListener { showSystem = !showSystem; dialog.dismiss(); load() }
         box.addView(systemRow)
-        val reset = menuText("Reset Per-App Profiles"); box.addView(reset, LinearLayout.LayoutParams(-1, dp(44))); reset.setOnClickListener { dialog.dismiss(); showThemedToast("Per-app profiles are managed by zenithd (config: /vendor/etc/profiles.json)") }
+        val reset = menuText("Reset Per-App Profiles"); box.addView(reset, LinearLayout.LayoutParams(-1, dp(44))); reset.setOnClickListener {
+            dialog.dismiss()
+            // Clear local cache + daemon package map
+            AppProfileCache.prefs(this).edit().clear().apply()
+            runCatching { ZenithDaemonClient.resetProfiles() }
+            load()
+            showThemedToast("All per-app profiles reset")
+        }
         val global = menuText("Global Profile"); box.addView(global, LinearLayout.LayoutParams(-1, dp(44))); global.setOnClickListener { dialog.dismiss(); global(); showDaemonStatus() }
         val benchmark = menuText("Benchmark"); box.addView(benchmark, LinearLayout.LayoutParams(-1, dp(44))); benchmark.setOnClickListener { dialog.dismiss(); showBenchmark() }
         val about = menuText("About"); box.addView(about, LinearLayout.LayoutParams(-1, dp(44))); about.setOnClickListener { dialog.dismiss(); showAboutDialog() }

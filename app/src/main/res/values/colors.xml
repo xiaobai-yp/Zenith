@@ -8,4 +8,5 @@
     <color name="muted">#B8C6CA</color>
     <color name="accent">#5EA7FF</color>
     <color name="accentSoft">#163B63</color>
+    <color name="radio">#5EA7FF</color>
 </resources>

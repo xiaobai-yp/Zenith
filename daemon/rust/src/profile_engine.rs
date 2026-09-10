@@ -89,6 +89,12 @@ pub fn map_app(package: &str, profile_id: i32) {
     eprintln!("[profile_engine] mapped {package} → profile {profile_id}");
 }
 
+/** Clear all per-app mappings (reset to daemon default = profile 0 lookup). */
+pub fn reset_map() {
+    state().write().unwrap().pkg_map.clear();
+    eprintln!("[profile_engine] package map cleared");
+}
+
 pub async fn reload() -> Result<(), String> {
     let path = state().read().unwrap().path.clone();
     init(&path).await

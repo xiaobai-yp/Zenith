@@ -45,11 +45,13 @@
     <TextView
         android:id="@+id/profile"
         android:layout_width="wrap_content"
-        android:layout_height="24dp"
-        android:minWidth="56dp"
+        android:layout_height="28dp"
+        android:minWidth="60dp"
         android:gravity="center"
-        android:paddingLeft="8dp"
-        android:paddingRight="8dp"
-        android:textColor="@color/text"
-        android:textSize="11sp" />
+        android:paddingLeft="10dp"
+        android:paddingRight="10dp"
+        android:background="@drawable/bg_profile_active"
+        android:textColor="@color/radio"
+        android:textSize="11sp"
+        android:textStyle="bold" />
 </LinearLayout>
