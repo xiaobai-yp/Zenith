@@ -35,6 +35,7 @@ fn read_trimmed(path: &str) -> Option<String> {
 
 /// Scan /proc for numeric dirs, find the process with lowest oom_score_adj
 /// in (0, 1000), return its package name from cmdline.
+/// OPTIMIZATION: read /proc directly, skip slow path::exists() calls.
 pub fn detect_fg() -> Option<ForegroundApp> {
     let proc_dir = std::fs::read_dir("/proc").ok()?;
     let mut best_pid: Option<(i32, i32)> = None; // (oom_score_adj, pid)
@@ -49,12 +50,6 @@ pub fn detect_fg() -> Option<ForegroundApp> {
 
         let base = format!("/proc/{pid}");
 
-        // Skip kernel threads (no exe link)
-        let exe_path = format!("{base}/exe");
-        if !std::path::Path::new(&exe_path).exists() {
-            continue;
-        }
-
         // Read oom_score_adj
         let oom = match read_trimmed(&format!("{base}/oom_score_adj")) {
             Some(s) => match s.parse::<i32>() {
@@ -67,6 +62,11 @@ pub fn detect_fg() -> Option<ForegroundApp> {
         if oom <= 0 || oom >= 1000 {
             continue;
         }
+
+        // Fast: skip kernel threads by checking cmdline (shorter than path::exists)
+        let cmdline_path = format!("{base}/cmdline");
+        let Ok(cmdline_bytes) = std::fs::read(&cmdline_path) else { continue };
+        if cmdline_bytes.is_empty() { continue; }
 
         match &best_pid {
             Some((best_oom, _)) if oom >= *best_oom => {}
