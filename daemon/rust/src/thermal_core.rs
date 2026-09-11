@@ -28,6 +28,7 @@ pub struct ThermalProfile {
 
 #[derive(Debug, Default, Clone)]
 struct CorePaths {
+    cluster: u8,
     governor: String,
     scaling_max: String,
     scaling_min: String,
@@ -92,10 +93,11 @@ pub async fn init() -> Result<(), String> {
         let gov = format!("{policy_dir}/scaling_governor");
         if tokio::fs::metadata(&gov).await.is_ok() {
             core_paths.push(CorePaths {
-                governor: gov,
-                scaling_max: format!("{policy_dir}/scaling_max_freq"),
-                scaling_min: format!("{policy_dir}/scaling_min_freq"),
-            });
+                    cluster,
+                    governor: gov,
+                    scaling_max: format!("{policy_dir}/scaling_max_freq"),
+                    scaling_min: format!("{policy_dir}/scaling_min_freq"),
+                });
         }
     }
 
@@ -238,7 +240,8 @@ pub async fn apply_profile(profile_id: &str) -> Result<(), String> {
     };
 
     for i in 0..core_paths.len() {
-        let cluster = cluster_for_core(i);
+        let core = &core_paths[i];
+        let cluster = core.cluster;
 
         // Pick governor for this cluster
         let gov = match cluster {
@@ -262,16 +265,14 @@ pub async fn apply_profile(profile_id: &str) -> Result<(), String> {
             _ => profile.min_freq7_khz.or(profile.min_freq_khz),
         };
 
-        if let Some(core) = core_paths.get(i) {
-            if let Some(g) = gov {
-                write_sysfs(&core.governor, g).await;
-            }
-            if let Some(f) = max_f {
-                write_sysfs_u32(&core.scaling_max, f).await;
-            }
-            if let Some(f) = min_f {
-                write_sysfs_u32(&core.scaling_min, f).await;
-            }
+        if let Some(g) = gov {
+            write_sysfs(&core.governor, g).await;
+        }
+        if let Some(f) = max_f {
+            write_sysfs_u32(&core.scaling_max, f).await;
+        }
+        if let Some(f) = min_f {
+            write_sysfs_u32(&core.scaling_min, f).await;
         }
     }
 
