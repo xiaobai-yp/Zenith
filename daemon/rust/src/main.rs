@@ -450,25 +450,31 @@ async fn main() {
                 }
 
                 // ── fg detection → setprop → init.rc triggers hardware ──
-                // 1-tick pending: fg yang sama pada 2 tick berturut-turut → apply.
-                // Swipe/back flicker (<1s) selesai sebelum tick berikutnya → skip.
-                // Recent → launcher → buka app lagi: fg stabil >1s → apply cepat.
+                // Mapped app → apply IMMEDIATELY (fast per-app switch).
+                // Unmapped (launcher/recents) → 1-tick pending first
+                // (prevents flicker when back-gesture flashes launcher).
                 let fg_pkg = app_monitor::detect_fg()
                     .map(|a| a.package);
-                let target = if fg_pkg == pending_fg {
-                    // Same fg two ticks in a row — stable, apply it
-                    if let Some(ref pkg) = fg_pkg {
-                        match profile_engine::lookup(pkg) {
-                            pid if pid != 0 => pid.to_string(),
-                            _ => global_prop.clone(),
+                let target = if let Some(ref pkg) = fg_pkg {
+                    match profile_engine::lookup(pkg) {
+                        pid if pid != 0 => pid.to_string(), // mapped → immediate
+                        _ => {
+                            // unmapped → need 2 consistent ticks (anti-flicker)
+                            if fg_pkg == pending_fg {
+                                global_prop.clone()
+                            } else {
+                                pending_fg = fg_pkg;
+                                active_prop.clone()
+                            }
                         }
-                    } else {
-                        global_prop.clone()
                     }
                 } else {
-                    // New fg — mark pending, keep current profile this tick
-                    pending_fg = fg_pkg;
-                    active_prop.clone()
+                    if fg_pkg == pending_fg {
+                        global_prop.clone()
+                    } else {
+                        pending_fg = fg_pkg;
+                        active_prop.clone()
+                    }
                 };
 
                 // Only setprop if target differs from what's active
