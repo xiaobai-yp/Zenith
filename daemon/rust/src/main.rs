@@ -402,17 +402,18 @@ async fn main() {
     // the tokio runtime drops, which happens when main returns).
     // ── Monitoring thread ──
     // Runs on a dedicated OS thread with std::thread::sleep.
-    // Uses Handle::block_on() to call async sysfs/fps functions.
-    // Never competes with tokio stdin I/O.
+    // Uses fresh tokio runtimes for each async call (avoids new_current_thread stalls).
     let monitor_handle = std::thread::Builder::new()
         .name("zenith-monitor".into())
         .spawn(move || {
-            // Create a dedicated single-threaded tokio runtime for this OS thread.
-            // Handle::current() would panic here since we're not in a tokio context.
-            let rt = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .expect("create monitor runtime");
+            /// Run an async future on a fresh single-threaded runtime.
+            fn run_async<F: std::future::Future>(f: F) -> F::Output {
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .expect("create monitor runtime");
+                rt.block_on(f)
+            }
 
             // Read initial property
             let mut last_prop = String::new();
@@ -420,7 +421,7 @@ async fn main() {
                 last_prop = v;
                 if !last_prop.is_empty() {
                     let _ = writeln!(std::io::stderr(), "[zenithd] startup property: {last_prop}");
-                    match rt.block_on(thermal_core::apply_profile(&last_prop)) {
+                    match run_async(thermal_core::apply_profile(&last_prop)) {
                         Ok(()) => { let _ = writeln!(std::io::stderr(), "[zenithd] startup apply OK: {last_prop}"); }
                         Err(e) => { let _ = writeln!(std::io::stderr(), "[zenithd] startup apply FAILED: {e}"); }
                     }
@@ -439,7 +440,7 @@ async fn main() {
                         let _ = writeln!(std::io::stderr(), "[zenithd] property change: '{last_prop}' -> '{v}'");
                         last_prop = v;
                         thermal_core::set_global_active(false);
-                        match rt.block_on(thermal_core::apply_profile(&last_prop)) {
+                        match run_async(thermal_core::apply_profile(&last_prop)) {
                             Ok(()) => { let _ = writeln!(std::io::stderr(), "[zenithd] prop apply OK: {last_prop}"); }
                             Err(e) => { let _ = writeln!(std::io::stderr(), "[zenithd] prop apply FAILED: {e}"); }
                         }
@@ -453,12 +454,12 @@ async fn main() {
                 };
 
                 // Battery state update every 1s (new API: async)
-                rt.block_on(battery_monitor::update(screen_on));
+                run_async(battery_monitor::update(screen_on));
 
                 // Full sysfs snapshot every 5 ticks
                 tick += 1;
                 if tick % 5 == 0 {
-                    let snap = rt.block_on(sysfs_monitor::read());
+                    let snap = run_async(sysfs_monitor::read());
                     update_snapshot(snap);
                 }
 
@@ -478,7 +479,7 @@ async fn main() {
                         let profile_id = profile_engine::lookup(&fg.package);
                         let active = thermal_core::get_active_profile().unwrap_or_default();
                         if profile_id != 0 && active != profile_id.to_string() {
-                            let _ = rt.block_on(thermal_core::apply_profile(&profile_id.to_string()));
+                            let _ = run_async(thermal_core::apply_profile(&profile_id.to_string()));
                         }
                     }
                 }
