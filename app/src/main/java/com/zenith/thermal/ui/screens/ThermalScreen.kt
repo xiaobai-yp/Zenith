@@ -56,7 +56,8 @@ fun ThermalScreen() {
         val map = try { ZenithDaemonClient.getAppsMap() } catch (_: Throwable) { emptyMap() }
         val localCache = AppProfileCache.all(ctx)
         val loaded = mutableListOf<AppItem>()
-        for (info in pm.getInstalledApplications(android.content.pm.ApplicationInfoFlags.of(0))) {
+        @Suppress("DEPRECATION")
+        for (info in pm.getInstalledApplications(0)) {
             if (!showSystem && (info.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0) continue
             val pid = map[info.packageName] ?: localCache[info.packageName] ?: 0
             loaded.add(AppItem(info, pm, pid))
