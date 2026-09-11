@@ -36,14 +36,18 @@ Per-app + global thermal profile manager for Android. Runs a Rust daemon via `su
 
 ## Profiles
 
-| ID | Mode | Governor | I/O | TCP |
-|----|------|----------|-----|-----|
-| 0 | Default | schedutil | bfq | westwood |
-| 2 | Powersave | powersave | - | - |
-| 8 | In-Call | schedutil | bfq | westwood |
-| 9 | Game | vorpal | ssg | bbrplus |
-| 10 | Dynamic | vorpal | ssg | bbrplus |
-| 11–16 | Custom | varies | varies | varies |
+| ID | Mode | Governor | I/O | sched_bore |
+|----|------|----------|-----|------------|
+| 0 | Default | schedutil | bfq | 0 |
+| 8 | In-Call | powersave | - | - |
+| 9 | Game | vorpal | none | 1 |
+| 10 | Dynamic | vorpal | none | 1 |
+| 11 | Class 0 | schedutil | bfq | 0 |
+| 12 | Camera | schedutil | bfq | 0 |
+| 13 | PUBG | vorpal | none | 1 |
+| 14 | YouTube | schedutil | bfq | 0 |
+| 15 | AR/VR | schedutil | bfq | 0 |
+| 16 | Game 2 | vorpal | none | 1 |
 
 ## Build
 
