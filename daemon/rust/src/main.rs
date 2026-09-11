@@ -431,17 +431,10 @@ async fn main() {
                 }
             }
 
-            crate::log!("[zenithd] entering monitor loop");
-            // Write a marker file so we can verify the loop starts
-            { use std::io::Write; let _ = std::fs::write("/data/local/tmp/zenithd_loop_started", "1"); }
             let mut tick = 0u64;
             loop {
-                // DEBUG: confirm loop runs
-                crate::log!("[zenithd] tick={tick}");
-
                 // ── property poll FIRST (fast, critical for thermal switching) ──
                 if let Ok(v) = read_prop_sync("persist.sys.zenith.thermal") {
-                    crate::log!("[zenithd] poll: prop='{v}' last='{last_prop}'");
                     if !v.is_empty() && v != last_prop {
                         crate::log!("[zenithd] property change: '{last_prop}' -> '{v}'");
                         last_prop = v;
