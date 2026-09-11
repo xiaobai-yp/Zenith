@@ -21,3 +21,12 @@ local.properties
 # selinux leftovers
 *.cil
 *.orig
+# temp/debug artifacts
+app_new.zip
+ci_logs.zip
+ci_logs/
+screen_battery.png
+graphify-out/
+ksu-module/
+zenithd.zip
+Thermal.md
