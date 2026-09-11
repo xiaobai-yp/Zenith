@@ -241,7 +241,11 @@ async fn handle_cmd(req: Request) -> Response {
                 return Response::err("missing profile id");
             }
             match thermal_core::apply_profile(id).await {
-                Ok(()) => Response::ok(json!({ "applied": id })),
+                Ok(()) => {
+                    // IPC = Global Profile UI — pin it so per-app does not override.
+                    thermal_core::set_global_active(true);
+                    Response::ok(json!({ "applied": id }))
+                }
                 Err(e) => Response::err(&e),
             }
         }
@@ -417,19 +421,24 @@ async fn main() {
                 }
 
                 // foreground app detection + perapp profile apply
-                if let Some(fg) = app_monitor::detect_fg() {
-                    let profile_id = profile_engine::lookup(&fg.package);
-                    let active = thermal_core::get_active_profile().unwrap_or_default();
-                    if profile_id != 0 && active != profile_id.to_string() {
-                        let _ = rt.block_on(thermal_core::apply_profile(&profile_id.to_string()));
+                // Skip when a global profile is pinned (IPC / property poll).
+                if !thermal_core::is_global_active() {
+                    if let Some(fg) = app_monitor::detect_fg() {
+                        let profile_id = profile_engine::lookup(&fg.package);
+                        let active = thermal_core::get_active_profile().unwrap_or_default();
+                        if profile_id != 0 && active != profile_id.to_string() {
+                            let _ = rt.block_on(thermal_core::apply_profile(&profile_id.to_string()));
+                        }
                     }
                 }
 
-                // property poll
+                // property poll — external set (init.rc / setprop)
                 if let Ok(v) = rt.block_on(read_prop("persist.sys.zenith.thermal")) {
                     if !v.is_empty() && v != last_prop {
                         let _ = writeln!(std::io::stderr(), "[zenithd] property change: {last_prop} -> {v}");
                         last_prop = v;
+                        // Property change = external — clears UI global pin so per-app can resume.
+                        thermal_core::set_global_active(false);
                         let _ = rt.block_on(thermal_core::apply_profile(&last_prop));
                     }
                 }

@@ -15,4 +15,26 @@ object ThermalController {
             false
         }
     }
+
+    /**
+     * Global profile: persist via system property (survives reboot, triggers
+     * init.rc) AND apply immediately via daemon IPC. Uses su to setprop.
+     */
+    fun applyGlobal(context: android.content.Context, thermalId: Int): Boolean {
+        val id = thermalId.coerceAtLeast(0)
+        // Persist property — init.rc trigger after reboot; daemon reads it too
+        try {
+            val proc = ProcessBuilder("su", "-c", "setprop persist.sys.zenith.thermal $id").start()
+            proc.waitFor()
+        } catch (e: Exception) {
+            android.util.Log.w("ThermalController", "setprop failed: ${e.message}")
+        }
+        // Apply immediately + pin global (daemon skips per-app while pinned)
+        return if (ZenithDaemonClient.isConnected) {
+            ZenithDaemonClient.setProfile(id)
+        } else {
+            android.util.Log.w("ThermalController", "Daemon not connected, profile $id not applied")
+            false
+        }
+    }
 }

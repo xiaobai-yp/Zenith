@@ -239,7 +239,7 @@ class MainActivity : android.app.Activity() {
                     AppProfileCache.set(this, pkg, id)
                     ZenithDaemonClient.setAppProfile(pkg, id)
                 } else {
-                    ThermalController.apply(id)
+                    ThermalController.applyGlobal(this, id)
                 }
                 load()
                 if (ok) showThemedToast("Profile applied: ${Profile.NAMES[i]}")

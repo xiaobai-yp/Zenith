@@ -47,6 +47,9 @@ struct ThermalState {
     active_profile: Option<String>,
     core_paths: Vec<CorePaths>,
     zone_mode_paths: Vec<String>,
+    /// True when the active profile was set via IPC (Global Profile UI).
+    /// When true, foreground-app detection must not override.
+    pub global_active: bool,
 }
 
 fn state() -> &'static RwLock<ThermalState> {
@@ -118,13 +121,78 @@ pub async fn init() -> Result<(), String> {
         active_profile: None,
         core_paths,
         zone_mode_paths,
+        global_active: false,
     }));
+
+    register_builtins();
 
     crate::log!("[thermal_core] init: {core_count} cores, {zone_count} writable zones");
     Ok(())
 }
 
 // ── profile management ──
+
+/// Built-in profiles — hardcoded so the daemon never depends on a
+/// profiles.json file being present on device. Values mirror
+/// init.zenith.rc + profiles.json (thermal IDs 0,2,8-16).
+pub fn builtin_profiles() -> HashMap<String, ThermalProfile> {
+    macro_rules! p {
+        ($id:expr, $gov0:expr, $gov4:expr, $gov7:expr,
+         $max0:expr, $max4:expr, $max7:expr,
+         $min0:expr, $min4:expr, $min7:expr) => {
+            ThermalProfile {
+                id: $id.to_string(),
+                governor: Some($gov0.to_string()),
+                governor4: Some($gov4.to_string()),
+                governor7: Some($gov7.to_string()),
+                max_freq_khz: $max0,
+                min_freq_khz: $min0,
+                max_freq4_khz: $max4,
+                min_freq4_khz: $min4,
+                max_freq7_khz: $max7,
+                min_freq7_khz: $min7,
+                thermal_limit_milli: vec![],
+            }
+        };
+    }
+    let mut m = HashMap::new();
+    for (id, gov0, gov4, gov7, max0, max4, max7, min0, min4, min7) in [
+        // Default — balanced, HAL-managed
+        ("0", "schedutil", "schedutil", "schedutil", Some(1804800), Some(2419200), Some(2841600), Some(300000), Some(633000), Some(787000)),
+        // Powersave (legacy)
+        ("2", "powersave", "powersave", "powersave", Some(1075200), Some(1344000), Some(1862400), Some(300000), Some(710000), Some(844000)),
+        // In-Calls
+        ("8", "schedutil", "schedutil", "schedutil", Some(1804800), Some(2419200), Some(2841600), Some(300000), Some(633000), Some(787000)),
+        // Game
+        ("9", "vorpal", "vorpal", "vorpal", Some(1804800), Some(2419200), Some(3187200), Some(300000), Some(633000), Some(787000)),
+        // Dynamic
+        ("10", "vorpal", "vorpal", "vorpal", Some(1804800), Some(2419200), Some(2841600), Some(300000), Some(633000), Some(787000)),
+        // Class 0
+        ("11", "schedutil", "schedutil", "schedutil", Some(1804800), Some(2419200), Some(2841600), Some(300000), Some(633000), Some(787000)),
+        // Camera
+        ("12", "schedutil", "schedutil", "schedutil", Some(1804800), Some(2419200), Some(2841600), Some(300000), Some(633000), Some(787000)),
+        // Pubg
+        ("13", "vorpal", "vorpal", "vorpal", Some(1804800), Some(2419200), Some(3187200), Some(300000), Some(633000), Some(787000)),
+        // YouTube
+        ("14", "schedutil", "schedutil", "schedutil", Some(1804800), Some(2419200), Some(2841600), Some(300000), Some(633000), Some(787000)),
+        // AR & VR
+        ("15", "schedutil", "schedutil", "schedutil", Some(1804800), Some(2419200), Some(2841600), Some(300000), Some(633000), Some(787000)),
+        // Game 2
+        ("16", "vorpal", "vorpal", "vorpal", Some(1804800), Some(2246400), Some(2745600), Some(300000), Some(633000), Some(787000)),
+    ] {
+        m.insert(id.to_string(), p!(id, gov0, gov4, gov7, max0, max4, max7, min0, min4, min7));
+    }
+    m
+}
+
+/// Register all built-in profiles.
+pub fn register_builtins() {
+    let profiles = builtin_profiles();
+    let mut s = state().write().unwrap();
+    for (id, p) in profiles {
+        s.profiles.insert(id, p);
+    }
+}
 
 pub fn register_profile(profile: ThermalProfile) {
     let id = profile.id.clone();
@@ -138,6 +206,15 @@ pub fn get_active_profile() -> Option<String> {
 
 pub fn list_profiles() -> Vec<String> {
     state().read().unwrap().profiles.keys().cloned().collect()
+}
+
+/// Mark global profile as active (set from IPC / Global Profile UI).
+pub fn set_global_active(active: bool) {
+    state().write().unwrap().global_active = active;
+}
+
+pub fn is_global_active() -> bool {
+    state().read().unwrap().global_active
 }
 
 // ── apply profile ──
