@@ -29,7 +29,11 @@ struct EngineState {
 static STATE: OnceLock<RwLock<EngineState>> = OnceLock::new();
 
 fn state() -> &'static RwLock<EngineState> {
-    STATE.get().expect("profile_engine not initialized")
+    STATE.get_or_init(|| RwLock::new(EngineState {
+        profiles: HashMap::new(),
+        pkg_map: HashMap::new(),
+        path: String::new(),
+    }))
 }
 
 fn parse_khz(s: &str) -> Option<u32> {
