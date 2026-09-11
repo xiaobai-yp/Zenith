@@ -429,6 +429,8 @@ async fn main() {
             }
 
             let _ = writeln!(std::io::stderr(), "[zenithd] entering monitor loop");
+            // Write a marker file so we can verify the loop starts
+            { use std::io::Write; let _ = std::fs::write("/data/local/tmp/zenithd_loop_started", "1"); }
             let mut tick = 0u64;
             loop {
                 // DEBUG: confirm loop runs
