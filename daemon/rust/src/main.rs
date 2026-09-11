@@ -418,31 +418,36 @@ async fn main() {
                 rt.block_on(f)
             }
 
-            // Read initial property
-            let mut last_prop = String::new();
-            if let Ok(v) = read_prop_sync("persist.sys.zenith.thermal") {
-                last_prop = v;
-                if !last_prop.is_empty() {
-                    crate::log!("[zenithd] startup property: {last_prop}");
-                    match run_async(thermal_core::apply_profile(&last_prop)) {
-                        Ok(()) => { crate::log!("[zenithd] startup apply OK: {last_prop}"); }
-                        Err(e) => { crate::log!("[zenithd] startup apply FAILED: {e}"); }
-                    }
-                }
+            // Read global baseline property
+            let mut global_prop = read_prop_sync("persist.sys.zenith.thermal")
+                .unwrap_or_default();
+            // Apply sconfig on startup
+            if !global_prop.is_empty() {
+                let _ = run_async(thermal_core::apply_profile(&global_prop));
             }
 
-            let mut tick = 0u64;
+            let mut active_prop = global_prop.clone();
             loop {
-                // ── property poll FIRST (fast, critical for thermal switching) ──
-                if let Ok(v) = read_prop_sync("persist.sys.zenith.thermal") {
-                    if !v.is_empty() && v != last_prop {
-                        crate::log!("[zenithd] property change: '{last_prop}' -> '{v}'");
-                        last_prop = v;
-                        match run_async(thermal_core::apply_profile(&last_prop)) {
-                            Ok(()) => { crate::log!("[zenithd] prop apply OK: {last_prop}"); }
-                            Err(e) => { crate::log!("[zenithd] prop apply FAILED: {e}"); }
-                        }
+                // Re-read global in case app set it externally
+                global_prop = read_prop_sync("persist.sys.zenith.thermal")
+                    .unwrap_or_default();
+
+                // ── fg detection → setprop → init.rc triggers hardware ──
+                let target = if let Some(fg) = app_monitor::detect_fg() {
+                    match profile_engine::lookup(&fg.package) {
+                        pid if pid != 0 => pid.to_string(),
+                        _ => global_prop.clone(),
                     }
+                } else {
+                    global_prop.clone()
+                };
+
+                // Only setprop if target differs from what's active
+                if !target.is_empty() && target != active_prop {
+                    let _ = write_prop_sync("persist.sys.zenith.thermal", &target);
+                    let _ = run_async(thermal_core::apply_profile(&target));
+                    crate::log!("[zenithd] thermal -> {} (was {})", target, active_prop);
+                    active_prop = target;
                 }
 
                 // Screen state from brightness
@@ -451,15 +456,15 @@ async fn main() {
                     snap.screen_on
                 };
 
-                // Battery state update every 1s (new API: async)
+                // Battery state update every 1s
                 run_async(battery_monitor::update(screen_on));
 
                 // Full sysfs snapshot every 5 ticks
-                tick += 1;
-                if tick % 5 == 0 {
+                static mut TICK: u64 = 0;
+                unsafe { TICK += 1; if TICK % 5 == 0 {
                     let snap = run_async(sysfs_monitor::read());
                     update_snapshot(snap);
-                }
+                }}
 
                 // fps + benchmark (1s tick)
                 {
@@ -467,25 +472,6 @@ async fn main() {
                     if benchmark::is_active() {
                         let snap = get_snapshot();
                         benchmark::record(&snap, short);
-                    }
-                }
-
-                // foreground app detection → per-app override; app tanpa
-                // config ikut global (last_prop). Selalu detect — global
-                // bukan pin, melainkan fallback.
-                if let Some(fg) = app_monitor::detect_fg() {
-                    let profile_id = profile_engine::lookup(&fg.package);
-                    let target = if profile_id != 0 {
-                        profile_id.to_string()
-                    } else if !last_prop.is_empty() {
-                        last_prop.clone()
-                    } else {
-                        "0".to_string()
-                    };
-                    let active = thermal_core::get_active_profile().unwrap_or_default();
-                    if active != target {
-                        crate::log!("[zenithd] fg={} → profile {}", fg.package, target);
-                        let _ = run_async(thermal_core::apply_profile(&target));
                     }
                 }
 
@@ -532,11 +518,20 @@ fn now_ms() -> u64 {
         .as_millis() as u64
 }
 
-/// Read a system property via `getprop` (synchronous — avoids tokio runtime issues).
+/// Read a system property via `getprop` (synchronous).
 fn read_prop_sync(name: &str) -> Result<String, String> {
     let out = std::process::Command::new("getprop")
         .arg(name)
         .output()
         .map_err(|e| format!("getprop: {e}"))?;
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+/// Write a system property via `setprop` (synchronous).
+fn write_prop_sync(name: &str, val: &str) -> Result<(), String> {
+    std::process::Command::new("setprop")
+        .arg(name).arg(val)
+        .output()
+        .map_err(|e| format!("setprop: {e}"))?;
+    Ok(())
 }
