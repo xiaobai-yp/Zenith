@@ -1,43 +1,60 @@
 package com.zenith.thermal.ui.screens
 
-import android.app.Dialog
-import android.graphics.drawable.Drawable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.core.graphics.drawable.toBitmap
 import com.zenith.thermal.AppItem
 import com.zenith.thermal.AppProfileCache
 import com.zenith.thermal.Profile
-import com.zenith.thermal.ThermalController
 import com.zenith.thermal.ZenithDaemonClient
+import com.zenith.thermal.ui.components.*
+import com.zenith.thermal.ui.theme.*
 import kotlinx.coroutines.delay
 
-private val SurfaceColor = Color(0xFF2A444D)
-private val TextColor = Color(0xFFF2F5F6)
-private val MutedColor = Color(0xFFB8C6CA)
-private val AccentColor = Color(0xFF5EA7FF)
-private val BgRow = Color(0xFF172D35)
-private val BadgeBgActive = Color(0xFF162A32)
-private val BadgeBgDefault = Color(0xFF1B3138)
-private val GradStart = Color(0xFF6C3CE0)
-private val GradEnd = Color(0xFFE04090)
+// ---- Profile color mapping for badges ----
+private data class ProfileBadge(val bg: Color, val fg: Color)
+private fun badgeFor(id: Int): ProfileBadge = when (id) {
+    9, 10, 11, 13, 14 -> ProfileBadge(ZenithPurple.copy(alpha = 0.12f), ZenithPurple)     // game
+    7, 12            -> ProfileBadge(ZenithPink.copy(alpha = 0.12f), ZenithPink)           // dynamic
+    1                -> ProfileBadge(ZenithGreen.copy(alpha = 0.12f), ZenithGreen)         // save
+    4, 15            -> ProfileBadge(ZenithAmber.copy(alpha = 0.12f), ZenithAmber)         // youtube/camera
+    8                -> ProfileBadge(ZenithRed.copy(alpha = 0.12f), ZenithRed)             // incall
+    else             -> ProfileBadge(Color(0x0DFFFFFF), Color(0x66FFFFFF))                  // muted (0)
+}
+
+private enum class Filter(val label: String) {
+    ALL("Semua"), DYNAMIC("Dynamic"), GAME("Game"), SAVE("Save"), YOUTUBE("YouTube")
+}
+private fun profileMatchesFilter(id: Int, f: Filter): Boolean = when (f) {
+    Filter.ALL -> true
+    Filter.DYNAMIC -> id in listOf(7, 12)
+    Filter.GAME -> id in listOf(9, 10, 11, 13, 14)
+    Filter.SAVE -> id == 1
+    Filter.YOUTUBE -> id in listOf(4, 15)
+}
 
 @Composable
 fun ThermalScreen() {
@@ -45,11 +62,10 @@ fun ThermalScreen() {
     var apps by remember { mutableStateOf<List<AppItem>>(emptyList()) }
     var showSystem by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
-    var selectedApp by remember { mutableStateOf<AppItem?>(null) }
+    var activeFilter by remember { mutableStateOf(Filter.ALL) }
     var showProfileDialog by remember { mutableStateOf<AppItem?>(null) }
     var showGlobalDialog by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
-    var status by remember { mutableStateOf<ZenithDaemonClient.StatusResponse?>(null) }
 
     fun loadApps() {
         val pm = ctx.packageManager
@@ -59,279 +75,314 @@ fun ThermalScreen() {
         @Suppress("DEPRECATION")
         for (info in pm.getInstalledApplications(0)) {
             if (!showSystem && (info.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0) continue
-            val pid = map[info.packageName] ?: localCache[info.packageName] ?: 0
-            loaded.add(AppItem(info, pm, pid))
+            loaded.add(AppItem(info, pm, map[info.packageName] ?: localCache[info.packageName] ?: 0))
         }
         loaded.sortBy { it.name.lowercase() }
         apps = loaded
     }
-
-    LaunchedEffect(Unit) {
-        loadApps()
-        status = ZenithDaemonClient.getStatus()
-        while (true) { delay(2000); status = ZenithDaemonClient.getStatus() }
-    }
+    LaunchedEffect(Unit) { loadApps() }
     LaunchedEffect(showSystem) { loadApps() }
 
-    val filtered = remember(apps, searchQuery) {
+    val filtered = remember(apps, searchQuery, activeFilter) {
         val q = searchQuery.trim().lowercase()
-        if (q.isEmpty()) apps
-        else apps.filter { it.name.lowercase().contains(q) || it.pkg.lowercase().contains(q) }
+        apps.filter {
+            (q.isEmpty() || it.name.lowercase().contains(q) || it.pkg.lowercase().contains(q))
+                && profileMatchesFilter(it.profileId, activeFilter)
+        }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        // Header
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                "Zenith Thermal", fontSize = 27.sp, color = TextColor,
-                modifier = Modifier.weight(1f)
-            )
-            Text(
-                "⋯", fontSize = 26.sp, color = TextColor,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable { showMenu = true }
-                    .padding(horizontal = 4.dp, vertical = 4.dp)
-            )
-        }
+    // ——— Root with dark bg ———
+    Box(Modifier.fillMaxSize().background(ZenithBg)) {
+        Column(Modifier.fillMaxSize()) {
+            // Status bar spacer
+            Spacer(Modifier.height(44.dp))
 
-        // Search bar
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .background(BgRow, RoundedCornerShape(12.dp))
-                .padding(horizontal = 13.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("🔍", color = MutedColor, fontSize = 16.sp)
-            Spacer(Modifier.width(8.dp))
-            androidx.compose.material3.TextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = { Text("Search", color = MutedColor, fontSize = 16.sp) },
-                modifier = Modifier.weight(1f),
-                colors = androidx.compose.material3.TextFieldDefaults.colors(
-                    focusedTextColor = TextColor,
-                    unfocusedTextColor = TextColor,
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    cursorColor = AccentColor
-                ),
-                singleLine = true
-            )
-        }
+            Column(
+                Modifier
+                    .weight(1f)
+                    .padding(horizontal = 14.dp)
+            ) {
+                // Header
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Zenith Thermal", color = ZenithText, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(7.dp).clip(CircleShape).background(ZenithGreen))
+                            Spacer(Modifier.width(5.dp))
+                            Text("Running", color = ZenithGreen, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                    // Menu dots
+                    Box(
+                        Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(ZenithBorder2)
+                            .clickable { showMenu = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("⋯", color = ZenithMuted, fontSize = 16.sp)
+                    }
+                }
 
-        Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(12.dp))
 
-        // App list
-        LazyColumn(
-            contentPadding = PaddingValues(bottom = 94.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp)
-        ) {
-            items(filtered, key = { it.pkg }) { item ->
-                AppRow(
-                    item = item,
-                    onClick = { showProfileDialog = item }
-                )
+                // Search bar
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0x0DFFFFFF))
+                        .then(Modifier.border(1.dp, ZenithBorder2, RoundedCornerShape(10.dp)))
+                        .padding(horizontal = 12.dp, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // search icon via text
+                    Text("\uD83D\uDD0D", fontSize = 13.sp, color = ZenithMuted2)
+                    Spacer(Modifier.width(8.dp))
+                    TextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("Cari aplikasi…", color = ZenithMuted2, fontSize = 12.sp) },
+                        modifier = Modifier.weight(1f),
+                        colors = TextFieldDefaults.colors(
+                            focusedTextColor = ZenithText,
+                            unfocusedTextColor = ZenithText,
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            cursorColor = ZenithPurple
+                        ),
+                        singleLine = true
+                    )
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                // Filter chips
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    Filter.entries.forEach { f ->
+                        SelectPill(
+                            text = f.label,
+                            selected = activeFilter == f,
+                            onClick = { activeFilter = f }
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                // Section label
+                SectionLabel("Per-App", count = "· ${filtered.size} apps")
+
+                Spacer(Modifier.height(4.dp))
+
+                // App cards
+                LazyColumn(
+                    contentPadding = PaddingValues(bottom = 100.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    items(filtered, key = { it.pkg }) { item ->
+                        AppCard(item = item) { showProfileDialog = item }
+                    }
+                }
             }
         }
-    }
 
-    // Profile dialog
-    showProfileDialog?.let { app ->
-        ProfileDialog(
-            title = "Set Profile: ${app.name}",
-            pkg = app.pkg,
-            onDismiss = { showProfileDialog = null },
-            onProfileApplied = { loadApps() }
-        )
-    }
+        // ——— Menu overlay ———
+        if (showMenu) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(Color(0x99000000))
+                    .blur(8.dp)
+                    .zIndex(10f)
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null,
+                        onClick = { showMenu = false }
+                    ),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                GradientBorderCard(
+                    modifier = Modifier.padding(14.dp).padding(bottom = 72.dp),
+                    radius = 16.dp,
+                    innerPadding = 6.dp,
+                    innerColor = Color(0xF70C0C18)
+                ) {
+                    OverlayMenuItem("\uD83D\uDC41\uFE0F", "Show System Apps") {
+                        showSystem = !showSystem; showMenu = false; loadApps()
+                    }
+                    OverlayMenuItem("\uD83D\uDD04", "Reset Per-App Profiles") {
+                        AppProfileCache.prefs(ctx).edit().clear().apply()
+                        runCatching { ZenithDaemonClient.resetProfiles() }
+                        showMenu = false; loadApps()
+                    }
+                    OverlayMenuItem("\uD83C\uDF10", "Global Profile") {
+                        showMenu = false; showGlobalDialog = true
+                    }
+                    OverlayMenuItem("ℹ️", "About") { showMenu = false }
+                }
+            }
+        }
 
-    // Menu dialog
-    if (showMenu) {
-        MenuDialog(
-            showSystem = showSystem,
-            onToggleSystem = { showSystem = it; showMenu = false; loadApps() },
-            onResetProfiles = {
-                showMenu = false
-                AppProfileCache.prefs(ctx).edit().clear().apply()
-                runCatching { ZenithDaemonClient.resetProfiles() }
-                loadApps()
-            },
-            onGlobalProfile = { showMenu = false; showGlobalDialog = true },
-            onBenchmark = { showMenu = false },
-            onDismiss = { showMenu = false }
-        )
-    }
-
-    // Global profile dialog
-    if (showGlobalDialog) {
-        ProfileDialog(
-            title = "Global Profile",
-            pkg = null,
-            onDismiss = { showGlobalDialog = false },
-            onProfileApplied = { showGlobalDialog = false }
-        )
+        // ——— Profile dialogs ———
+        showProfileDialog?.let { app ->
+            GradientProfileDialog(
+                title = "Set Profile: ${app.name}",
+                pkg = app.pkg,
+                onDismiss = { showProfileDialog = null },
+                onApplied = { loadApps() }
+            )
+        }
+        if (showGlobalDialog) {
+            GradientProfileDialog(
+                title = "Global Profile",
+                pkg = null,
+                onDismiss = { showGlobalDialog = false },
+                onApplied = { showGlobalDialog = false }
+            )
+        }
     }
 }
 
 @Composable
-private fun AppRow(item: AppItem, onClick: () -> Unit) {
-    val badgeActive = item.profileId != 0
+private fun AppCard(item: AppItem, onClick: () -> Unit) {
+    val badge = badgeFor(item.profileId)
+    GradientBorderCard(
+        modifier = Modifier.fillMaxWidth(),
+        radius = 12.dp,
+        innerPadding = 10.dp
+    ) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // App icon (real drawable)
+            val bitmap = remember(item.pkg) {
+                runCatching { item.icon.toBitmap(36, 36).asImageBitmap() }.getOrNull()
+            }
+            Box(
+                Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(ZenithPurple.copy(alpha = 0.08f)),
+                contentAlignment = Alignment.Center
+            ) {
+                bitmap?.let {
+                    Image(it, contentDescription = null, Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)))
+                } ?: Text(
+                    item.name.take(2).uppercase(),
+                    color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold
+                )
+            }
+            Spacer(Modifier.width(10.dp))
+
+            // Info
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                Text(
+                    item.name, color = ZenithText, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                    maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+                Text(
+                    item.pkg, color = ZenithMuted2, fontSize = 9.sp,
+                    maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+
+            // Badge
+            Badge(text = Profile.name(item.profileId).uppercase(), bg = badge.bg, fg = badge.fg)
+
+            Spacer(Modifier.width(6.dp))
+
+            // Chevron
+            Text("›", color = ZenithMuted3, fontSize = 14.sp)
+        }
+    }
+}
+
+@Composable
+private fun OverlayMenuItem(icon: String, text: String, onClick: () -> Unit) {
     Row(
-        modifier = Modifier
+        Modifier
             .fillMaxWidth()
-            .background(BgRow, RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
-            .padding(start = 12.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
+            .padding(horizontal = 16.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // App icon
-        val bitmap = remember(item.pkg) {
-            runCatching { item.icon.toBitmap(40, 40).asImageBitmap() }.getOrNull()
-        }
-        bitmap?.let {
-            Image(
-                bitmap = it,
-                contentDescription = item.name,
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(8.dp))
-            )
-        }
-        Spacer(Modifier.width(10.dp))
-
-        // Name + package
-        Column(modifier = Modifier.weight(1f)) {
-            Text(item.name, color = TextColor, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-            Spacer(Modifier.height(1.dp))
-            Text(item.pkg, color = MutedColor, fontSize = 11.sp, maxLines = 2, lineHeight = 14.sp)
-        }
-
-        // Profile badge
-        Box(
-            modifier = Modifier
-                .background(if (badgeActive) BadgeBgActive else BadgeBgDefault, RoundedCornerShape(6.dp))
-                .padding(horizontal = 10.dp, vertical = 4.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                Profile.name(item.profileId),
-                color = if (badgeActive) AccentColor else MutedColor,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
+        Text(icon, fontSize = 16.sp, modifier = Modifier.width(24.dp))
+        Text(text, color = ZenithText, fontSize = 14.sp, fontWeight = FontWeight.Medium)
     }
 }
 
 @Composable
-private fun ProfileDialog(
+private fun GradientProfileDialog(
     title: String,
     pkg: String?,
     onDismiss: () -> Unit,
-    onProfileApplied: () -> Unit
+    onApplied: () -> Unit
 ) {
     val ctx = LocalContext.current
     val currentId = if (pkg != null) {
         AppProfileCache.get(ctx, pkg).takeIf { it >= 0 }
             ?: runCatching { ZenithDaemonClient.getAppsMap() }.getOrNull()?.get(pkg) ?: 0
-    } else {
-        AppProfileCache.getGlobal(ctx)
-    }
+    } else AppProfileCache.getGlobal(ctx)
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF081C24),
-        title = {
-            Text(title, color = TextColor, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 2)
-        },
+        containerColor = Color(0xF00C0C18),
+        title = { Text(title, color = ZenithText, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 2) },
         text = {
-            Column {
+            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 for (i in 0 until Profile.count()) {
                     val profileId = Profile.value(i)
                     val selected = Profile.indexOf(currentId) == i
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .then(
-                                if (selected) Modifier.background(
-                                    androidx.compose.ui.graphics.Brush.linearGradient(
-                                        listOf(GradStart, GradEnd)
-                                    ), RoundedCornerShape(8.dp)
-                                ).padding(1.5.dp) else Modifier
-                            )
-                            .background(SurfaceColor, RoundedCornerShape(8.dp))
-                            .clickable {
-                                val ok = if (pkg != null) {
-                                    AppProfileCache.set(ctx, pkg, profileId)
-                                    ZenithDaemonClient.setAppProfile(pkg, profileId)
-                                } else {
-                                    ThermalController.applyGlobal(ctx, profileId)
-                                }
-                                onProfileApplied()
-                                onDismiss()
+                    val badge = badgeFor(profileId)
+
+                    GradientBorderCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        radius = 8.dp,
+                        borderPadding = if (selected) 1.5.dp else 0.dp,
+                        gradient = if (selected) Brush.linearGradient(listOf(ZenithPurple, ZenithPink)) else Brush.linearGradient(listOf(Color.Transparent, Color.Transparent)),
+                        innerPadding = 12.dp,
+                        onClick = {
+                            if (pkg != null) {
+                                AppProfileCache.set(ctx, pkg, profileId)
+                                ZenithDaemonClient.setAppProfile(pkg, profileId)
+                            } else {
+                                com.zenith.thermal.ThermalController.applyGlobal(ctx, profileId)
                             }
-                            .padding(horizontal = 14.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            onApplied(); onDismiss()
+                        }
                     ) {
-                        Text(
-                            Profile.MENU_NAMES[i], color = if (selected) Color.White else TextColor,
-                            fontSize = 16.sp, modifier = Modifier.weight(1f), maxLines = 2
-                        )
-                        Text(
-                            if (selected) "●" else "○",
-                            color = if (selected) AccentColor else MutedColor,
-                            fontSize = 18.sp
-                        )
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                Profile.MENU_NAMES[i],
+                                color = if (selected) Color.White else ZenithText,
+                                fontSize = 15.sp,
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                modifier = Modifier.weight(1f),
+                                maxLines = 2
+                            )
+                            if (selected) {
+                                Badge(text = "ACTIVE", bg = ZenithGreen.copy(alpha = 0.12f), fg = ZenithGreen)
+                            } else {
+                                ZenithRadio(checked = false, onClick = { })
+                            }
+                        }
                     }
-                    Spacer(Modifier.height(5.dp))
                 }
             }
         },
-        confirmButton = {},
-        dismissButton = {}
-    )
-}
-
-@Composable
-private fun MenuDialog(
-    showSystem: Boolean,
-    onToggleSystem: (Boolean) -> Unit,
-    onResetProfiles: () -> Unit,
-    onGlobalProfile: () -> Unit,
-    onBenchmark: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = SurfaceColor,
-        title = null,
-        text = {
-            Column {
-                MenuItem("Show System Apps") { onToggleSystem(!showSystem) }
-                MenuItem("Reset Per-App Profiles") { onResetProfiles() }
-                MenuItem("Global Profile") { onGlobalProfile() }
-                MenuItem("About") { onDismiss() }
-            }
-        },
         confirmButton = {}
-    )
-}
-
-@Composable
-private fun MenuItem(text: String, onClick: () -> Unit) {
-    Text(
-        text, color = TextColor, fontSize = 15.sp,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 12.dp, horizontal = 4.dp)
     )
 }
