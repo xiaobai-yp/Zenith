@@ -11,9 +11,9 @@ object ThermalController {
     /**
      * Apply global profile: set property (init.rc triggers hardware) + sconfig (thermal HAL).
      */
-    fun applyGlobal(ctx: android.content.Context, profileId: Int) {
+    fun applyGlobal(ctx: android.content.Context, profileId: Int): Boolean {
         setprop(PROP_THERMAL, profileId.toString())
-        ZenithDaemonClient.setGlobalProfile(profileId)
+        return ZenithDaemonClient.setGlobalProfile(profileId)
     }
 
     /**
