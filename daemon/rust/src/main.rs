@@ -428,6 +428,7 @@ async fn main() {
                 }
             }
 
+            let _ = writeln!(std::io::stderr(), "[zenithd] entering monitor loop");
             let mut tick = 0u64;
             loop {
                 // DEBUG: confirm loop runs
