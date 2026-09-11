@@ -32,12 +32,20 @@ pub struct CpuInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Default)]
+pub struct GpuInfo {
+    pub cur_freq: i64,
+    pub max_freq: i64,
+    pub busy_pct: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
 pub struct SysfsSnapshot {
     pub thermal_zones: Vec<ThermalZone>,
     pub battery: BatteryInfo,
     pub cpu_policy0: CpuInfo,
     pub cpu_policy4: Option<CpuInfo>,
     pub cpu_policy7: Option<CpuInfo>,
+    pub gpu: Option<GpuInfo>,
     pub screen_on: bool,
 }
 
@@ -176,12 +184,26 @@ pub async fn read() -> SysfsSnapshot {
             .map_or(true, |v| v > 0)
     };
 
+    // GPU (Qualcomm kgsl)
+    let gpu_base = zen_path!("/sys/class/kgsl/kgsl-3d0");
+    let gpu_cur = read_i64(&format!("{gpu_base}/gpuclk")).await
+        .or_else(|| read_i64(&format!("{gpu_base}/devfreq/cur_freq")).await);
+    let gpu = gpu_cur.map(|cur| {
+        let max = read_i64(&format!("{gpu_base}/max_gpuclk")).await.unwrap_or(0);
+        let busy_str = std::fs::read_to_string(format!("{gpu_base}/gpu_busy_percentage"))
+            .ok()
+            .and_then(|s| s.trim().trim_end_matches('%').parse::<i32>().ok())
+            .unwrap_or(0);
+        GpuInfo { cur_freq: cur, max_freq: max, busy_pct: busy_str }
+    });
+
     SysfsSnapshot {
         thermal_zones,
         battery,
         cpu_policy0,
         cpu_policy4,
         cpu_policy7,
+        gpu,
         screen_on,
     }
 }

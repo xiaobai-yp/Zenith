@@ -24,10 +24,11 @@ import android.view.WindowManager
 import java.util.Locale
 
 /**
- * Foreground overlay service that draws a compact HUD showing live FPS,
- * CPU temperature, battery %, current draw, and benchmark status.
+ * Foreground overlay service — compact game HUD.
+ * Shows FPS, frame time, CPU/GPU temp+freq, battery power W.
  *
- * Start with ACTION_START / ACTION_STOP intents. Tap toggles benchmark.
+ * Start with ACTION_START / ACTION_STOP intents.
+ * Tap cycles display mode (minimal ↔ full).
  * Drag moves the HUD. Long-press dismisses it.
  */
 class FloatingHudService : Service() {
@@ -61,7 +62,6 @@ class FloatingHudService : Service() {
     private var hudView: HudView? = null
     private val handler = Handler(Looper.getMainLooper())
     @Volatile private var destroyed = false
-    private var benchmarkRunning = false
 
     private val poll = object : Runnable {
         override fun run() {
@@ -77,7 +77,7 @@ class FloatingHudService : Service() {
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL, "Floating HUD", NotificationManager.IMPORTANCE_LOW).apply {
-                description = "FPS, temperature, battery overlay"
+                description = "Game performance overlay"
                 setShowBadge(false)
             }
         )
@@ -158,21 +158,24 @@ class FloatingHudService : Service() {
 
     private fun updateHud() {
         val v = hudView ?: return
-        // Poll on background thread to avoid blocking UI
         Thread {
             val status = ZenithDaemonClient.getStatus()
-            val fps = ZenithDaemonClient.getFps()
             val bench = ZenithDaemonClient.getBenchmarkData()
-            benchmarkRunning = bench?.running == true
+            val benchRunning = bench?.running == true
+            val powerW = status?.battery?.powerMw?.let { if (it > 0) it / 1000.0 else null }
             handler.post {
                 v.updateData(
+                    fpsShort = status?.fpsShort ?: 0,
+                    fpsLong = status?.fpsLong ?: 0,
+                    fpsAvg = status?.fpsAvg ?: 0,
                     cpuTemp = status?.thermalZones?.firstOrNull()?.tempC,
+                    gpu = status?.gpu,
+                    cpuPolicy0 = status?.cpuPolicy0,
+                    cpuPolicy7 = status?.cpuPolicy7,
                     batteryPct = status?.batteryCapacityPct,
-                    currentMa = status?.batteryCurrentMa,
-                    shortFps = fps?.shortFps?.toDouble(),
-                    longFps = fps?.longFps?.toDouble(),
-                    benchmarkRunning = benchmarkRunning,
-                    benchElapsed = bench?.elapsedMs
+                    powerW = powerW,
+                    maxFrameTimeMs = status?.maxFrameTimeMs ?: 0,
+                    benchRunning = benchRunning,
                 )
             }
         }.start()
@@ -190,40 +193,69 @@ class FloatingHudService : Service() {
     // ---- HUD View ----
 
     private inner class HudView(context: Context) : View(context) {
-
-        private var shortFps: Double = 0.0
-        private var longFps: Double = 0.0
+        // data
+        private var fpsShort = 0
+        private var fpsLong = 0
+        private var fpsAvg = 0
         private var cpuTemp: Double? = null
+        private var gpu: ZenithDaemonClient.GpuInfo? = null
+        private var cpuP0: ZenithDaemonClient.CpuInfo? = null
+        private var cpuP7: ZenithDaemonClient.CpuInfo? = null
         private var batteryPct: Double? = null
-        private var currentMa: Double? = null
+        private var powerW: Double? = null
+        private var maxFrameTimeMs = 0
         private var benchRunning = false
-        private var benchElapsed: Long? = null
 
+        // display mode: 0=compact  1=full
+        private var displayMode = 0
+
+        // paints
         private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(200, 24, 24, 32)
+            color = Color.argb(210, 16, 16, 24)
+            setShadowLayer(12f, 0f, 2f, Color.argb(100, 0, 0, 0))
         }
-        private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        private val headerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#4FC3F7")
+            textSize = 34f
+            typeface = android.graphics.Typeface.create("monospace", android.graphics.Typeface.BOLD)
+        }
+        private val fpsPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#69F0AE")
+            textSize = 52f
+            typeface = android.graphics.Typeface.create("monospace", android.graphics.Typeface.BOLD)
+        }
+        private val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
-            textSize = 32f
-            typeface = android.graphics.Typeface.MONOSPACE
+            textSize = 28f
+            typeface = android.graphics.Typeface.create("monospace", android.graphics.Typeface.NORMAL)
+        }
+        private val dimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#90A4AE")
+            textSize = 24f
+            typeface = android.graphics.Typeface.create("monospace", android.graphics.Typeface.NORMAL)
+        }
+        private val warnPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#FF5252")
+            textSize = 24f
+            typeface = android.graphics.Typeface.create("monospace", android.graphics.Typeface.BOLD)
         }
         private val accentPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#4FC3F7")
-            textSize = 32f
-            typeface = android.graphics.Typeface.MONOSPACE
+            color = Color.parseColor("#FFD740")
+            textSize = 24f
+            typeface = android.graphics.Typeface.create("monospace", android.graphics.Typeface.NORMAL)
         }
-        private val runningPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#FF9800") }
-        private val smallPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#B0BEC5")
-            textSize = 26f
-            typeface = android.graphics.Typeface.MONOSPACE
+        private val benchPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#FF9800")
+            textSize = 24f
+            typeface = android.graphics.Typeface.create("monospace", android.graphics.Typeface.NORMAL)
         }
-        private val cornerRadius = 20f
-        private val padH = 24f
-        private val padV = 16f
-        private val lineGap = 4f
 
-        private val lines = mutableListOf<String>()
+        private val cornerRadius = 16f
+        private val padH = 20f
+        private val padV = 14f
+        private val lineGap = 3f
+
+        private val lines = mutableListOf<Triple<String, Paint, Boolean>>() // text, paint, isMetric
         private var touchStartX = 0f
         private var touchStartY = 0f
         private var paramX = 0
@@ -232,61 +264,103 @@ class FloatingHudService : Service() {
         private var longPressRunnable: Runnable? = null
 
         fun updateData(
+            fpsShort: Int, fpsLong: Int, fpsAvg: Int,
             cpuTemp: Double?,
+            gpu: ZenithDaemonClient.GpuInfo?,
+            cpuPolicy0: ZenithDaemonClient.CpuInfo?,
+            cpuPolicy7: ZenithDaemonClient.CpuInfo?,
             batteryPct: Double?,
-            currentMa: Double?,
-            shortFps: Double?,
-            longFps: Double?,
-            benchmarkRunning: Boolean,
-            benchElapsed: Long?
+            powerW: Double?,
+            maxFrameTimeMs: Int,
+            benchRunning: Boolean,
         ) {
+            this.fpsShort = fpsShort
+            this.fpsLong = fpsLong
+            this.fpsAvg = fpsAvg
             this.cpuTemp = cpuTemp
+            this.gpu = gpu
+            this.cpuP0 = cpuPolicy0
+            this.cpuP7 = cpuPolicy7
             this.batteryPct = batteryPct
-            this.currentMa = currentMa
-            this.shortFps = shortFps ?: 0.0
-            this.longFps = longFps ?: 0.0
-            this.benchRunning = benchmarkRunning
-            this.benchElapsed = benchElapsed
+            this.powerW = powerW
+            this.maxFrameTimeMs = maxFrameTimeMs
+            this.benchRunning = benchRunning
             invalidate()
         }
 
         override fun onDraw(c: Canvas) {
             super.onDraw(c)
             lines.clear()
-            lines.add("FPS  %.0f / %.0f".format(Locale.US, shortFps, longFps))
-            cpuTemp?.let { lines.add("CPU  %.0f°C".format(Locale.US, it)) }
-            batteryPct?.let { b ->
-                val ma = currentMa?.let { "%.0f".format(Locale.US, it) } ?: "—"
-                lines.add("BAT  %d%%  %s mA".format(Locale.US, b.toInt(), ma))
+
+            // FPS big number
+            lines.add(Triple("FPS  %d / %d".format(Locale.US, fpsShort, fpsLong), fpsPaint, true))
+
+            // Frame time + session avg
+            if (maxFrameTimeMs > 100) {
+                lines.add(Triple("FRT  %dms ⚠".format(Locale.US, maxFrameTimeMs), warnPaint, true))
+            } else if (maxFrameTimeMs > 0) {
+                lines.add(Triple("FRT  %dms".format(Locale.US, maxFrameTimeMs), dimPaint, false))
             }
-            if (benchRunning) {
-                val ms = benchElapsed ?: 0L
-                lines.add("BENCH  running %ds".format(Locale.US, ms / 1000))
-            } else {
-                lines.add("BENCH  idle (tap)")
+            if (fpsAvg > 0) {
+                lines.add(Triple("AVG  %d".format(Locale.US, fpsAvg), dimPaint, false))
             }
 
-            val maxW = lines.maxOf { textPaint.measureText(it) }
-            val totalH = lines.size * (textPaint.textSize + lineGap)
+            if (displayMode == 1) {
+                // GPU
+                gpu?.let {
+                    lines.add(Triple("GPU  %d/%dMHz  %d%%".format(Locale.US, it.curFreqMhz, it.maxFreqMhz, it.busyPct), accentPaint, false))
+                }
+
+                // CPU freq
+                cpuP0?.let { p0 ->
+                    val p7 = cpuP7
+                    if (p7 != null) {
+                        lines.add(Triple("CPU  L%d/%dMHz  X%d/%dMHz".format(Locale.US, p0.curFreqMhz, p0.maxFreqMhz, p7.curFreqMhz, p7.maxFreqMhz), valuePaint, false))
+                    } else {
+                        lines.add(Triple("CPU  %d/%dMHz".format(Locale.US, p0.curFreqMhz, p0.maxFreqMhz), valuePaint, false))
+                    }
+                }
+
+                // Temp
+                cpuTemp?.let {
+                    val tempPaint = if (it > 75.0) warnPaint else valuePaint
+                    lines.add(Triple("TMP  %.0f°C".format(Locale.US, it), tempPaint, false))
+                }
+            }
+
+            // Battery + Power
+            batteryPct?.let { b ->
+                val pStr = powerW?.let { "%.1fW".format(Locale.US, it) } ?: "—"
+                lines.add(Triple("BAT  %d%%  %s".format(Locale.US, b.toInt(), pStr), valuePaint, false))
+            }
+
+            // Bench indicator
+            if (benchRunning) {
+                lines.add(Triple("● BENCH", benchPaint, false))
+            }
+
+            val maxW = lines.maxOf { it.second.measureText(it.first) }
+            val totalH = lines.size * (headerPaint.textSize + lineGap)
             val w = maxW + padH * 2
             val h = totalH + padV * 2
             setMeasuredDimension(w.toInt(), h.toInt())
 
+            // Background
             val rect = RectF(0f, 0f, w, h)
             c.drawRoundRect(rect, cornerRadius, cornerRadius, bgPaint)
 
-            var y = padV + textPaint.textSize
+            // Accent left bar
+            val barPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.parseColor("#4FC3F7")
+            }
+            c.drawRoundRect(RectF(0f, 0f, 4f, h), cornerRadius, cornerRadius, barPaint)
+
+            // Text
+            var y = padV + headerPaint.textSize
             for (i in lines.indices) {
-                val paint = when {
-                    i == 0 -> accentPaint
-                    lines[i].startsWith("BENCH  running") -> Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                        color = Color.parseColor("#FFB74D"); textSize = 26f
-                        typeface = android.graphics.Typeface.MONOSPACE
-                    }
-                    else -> smallPaint
-                }
-                c.drawText(lines[i], padH, y, paint)
-                y += textPaint.textSize + lineGap
+                val (text, paint, _) = lines[i]
+                c.drawText(text, padH, y, paint)
+                y += headerPaint.textSize + lineGap
             }
         }
 
@@ -332,11 +406,9 @@ class FloatingHudService : Service() {
                         FloatingHudService@this@FloatingHudService.handler.removeCallbacks(it)
                     }
                     if (!dragging) {
-                        // Tap → toggle benchmark
-                        Thread {
-                            if (benchRunning) ZenithDaemonClient.stopBenchmark()
-                            else ZenithDaemonClient.startBenchmark()
-                        }.start()
+                        // Tap → cycle display mode
+                        displayMode = (displayMode + 1) % 2
+                        invalidate()
                     }
                     return true
                 }

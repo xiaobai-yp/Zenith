@@ -17,6 +17,8 @@ pub struct FpsMonitor {
     session_count: i64,
     session_min: i32,
     session_max: i32,
+    // frame time (ms) — max observed this session
+    max_frame_time_ms: u64,
 }
 
 static STATE: OnceLock<RwLock<FpsMonitor>> = OnceLock::new();
@@ -55,6 +57,7 @@ pub fn init() {
         session_count: 0,
         session_min: i32::MAX,
         session_max: i32::MIN,
+        max_frame_time_ms: 0,
     }));
 }
 
@@ -62,10 +65,29 @@ pub fn read() -> (i32, i32) {
     let mut s = state().write().unwrap();
 
     let raw_fps: f64 = if let Some(ref path) = s.active_path {
-        std::fs::read_to_string(path)
-            .ok()
-            .and_then(|v| v.trim().parse().ok())
-            .unwrap_or(60.0)
+        let content = std::fs::read_to_string(path).ok().unwrap_or_default();
+        // Parse "fps: 37.9 duration:500000 frame_count:19"
+        let mut ft_ms = 0u64;
+        if let Some(dur_pos) = content.find("duration:") {
+            let rest = &content[dur_pos + 9..];
+            if let Some(end) = rest.find(|c: char| !c.is_ascii_digit()) {
+                if let Ok(nanos) = rest[..end].parse::<u64>() {
+                    ft_ms = nanos / 1_000_000;
+                    if ft_ms > s.max_frame_time_ms {
+                        s.max_frame_time_ms = ft_ms;
+                    }
+                }
+            }
+        }
+        // Parse fps from "fps: 37.9"
+        if let Some(fps_pos) = content.find("fps:") {
+            let rest = &content[fps_pos + 4..];
+            if let Ok(f) = rest.trim().split_whitespace().next().unwrap_or("").parse() {
+                f
+            } else { 60.0 }
+        } else {
+            content.trim().parse().unwrap_or(60.0)
+        }
     } else {
         60.0
     };
@@ -113,8 +135,14 @@ pub fn reset_session() {
     s.session_count = 0;
     s.session_min = i32::MAX;
     s.session_max = i32::MIN;
+    s.max_frame_time_ms = 0;
     // Reset EMA state (matches C fps_monitor_reset_session)
     s.ema_short = 60.0;
     s.ema_long = 60.0;
     s.initialized_ema = false;
+}
+
+/// Max single-frame render time observed this session (ms).
+pub fn max_frame_time_ms() -> u64 {
+    state().read().unwrap().max_frame_time_ms
 }

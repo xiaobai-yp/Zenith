@@ -163,10 +163,18 @@ object ZenithDaemonClient {
 
     data class BatteryInfo(
         val online: Boolean, val capacityPct: Double,
-        val currentUa: Int, val drainPctPerHr: Double
+        val currentUa: Int, val drainPctPerHr: Double,
+        val powerMw: Long = 0
     ) {
         val currentMa: Double get() = kotlin.math.abs(currentUa / 1000.0)
         val charging: Boolean get() = online && currentUa >= 0
+    }
+
+    data class GpuInfo(val curFreqMhz: Int, val maxFreqMhz: Int, val busyPct: Int)
+
+    data class CpuInfo(val governor: String, val curFreqKhz: Int, val maxFreqKhz: Int) {
+        val curFreqMhz: Int get() = curFreqKhz / 1000
+        val maxFreqMhz: Int get() = maxFreqKhz / 1000
     }
 
     data class StatusResponse(
@@ -174,7 +182,10 @@ object ZenithDaemonClient {
         val thermalZones: List<ThermalZone>,
         val battery: BatteryInfo,
         val fpsShort: Int, val fpsLong: Int,
-        val fpsAvg: Int, val fpsMin: Int, val fpsMax: Int
+        val fpsAvg: Int, val fpsMin: Int, val fpsMax: Int,
+        val maxFrameTimeMs: Int,
+        val gpu: GpuInfo?,
+        val cpuPolicy0: CpuInfo?, val cpuPolicy4: CpuInfo?, val cpuPolicy7: CpuInfo?
     ) {
         val batteryCapacityPct: Double get() = battery.capacityPct
         val batteryCurrentUa: Int get() = battery.currentUa
@@ -193,23 +204,43 @@ object ZenithDaemonClient {
             val bat = data.optJSONObject("battery")
             val fps = data.optJSONObject("fps")
             val session = fps?.optJSONObject("session")
+            val snap = data.optJSONObject("snapshot")
+            val gpuJson = snap?.optJSONObject("gpu")
 
             StatusResponse(
                 activeProfile = t?.optString("active_profile", "0") ?: "0",
-                thermalZones = parseThermalZones(data.optJSONObject("snapshot")),
+                thermalZones = parseThermalZones(snap),
                 battery = BatteryInfo(
                     online = bat?.optBoolean("online", false) ?: false,
                     capacityPct = bat?.optDouble("capacity_pct", 0.0) ?: 0.0,
                     currentUa = bat?.optInt("current_ua", 0) ?: 0,
-                    drainPctPerHr = bat?.optDouble("active_drain_pct_per_hr", 0.0) ?: 0.0
+                    drainPctPerHr = bat?.optDouble("active_drain_pct_per_hr", 0.0) ?: 0.0,
+                    powerMw = bat?.optLong("power_mw", 0) ?: 0
                 ),
                 fpsShort = fps?.optInt("short", 0) ?: 0,
                 fpsLong = fps?.optInt("long", 0) ?: 0,
                 fpsAvg = session?.optInt("avg", 0) ?: 0,
                 fpsMin = session?.optInt("min", 0) ?: 0,
-                fpsMax = session?.optInt("max", 0) ?: 0
+                fpsMax = session?.optInt("max", 0) ?: 0,
+                maxFrameTimeMs = fps?.optInt("max_frame_time_ms", 0) ?: 0,
+                gpu = gpuJson?.let { GpuInfo(
+                    curFreqMhz = (it.optLong("cur_freq", 0) / 1_000_000).toInt(),
+                    maxFreqMhz = (it.optLong("max_freq", 0) / 1_000_000).toInt(),
+                    busyPct = it.optInt("busy_pct", 0)
+                ) },
+                cpuPolicy0 = parseCpuPolicy(snap, "cpu_policy0"),
+                cpuPolicy4 = parseCpuPolicy(snap, "cpu_policy4"),
+                cpuPolicy7 = parseCpuPolicy(snap, "cpu_policy7"),
             )
         } catch (e: Exception) { Log.w(TAG, "Parse status: ${e.message}"); null }
+    }
+
+    private fun parseCpuPolicy(snap: JSONObject?, key: String): CpuInfo? {
+        val json = snap?.optJSONObject(key) ?: return null
+        val gov = json.optString("governor", "")
+        val cur = json.optInt("cur_freq", 0)
+        val max = json.optInt("max_freq", 0)
+        return if (gov.isNotEmpty() || cur > 0) CpuInfo(gov, cur, max) else null
     }
 
     /** Global profile: apply + pin (foreground detection won't override). */

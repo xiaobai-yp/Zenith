@@ -89,6 +89,7 @@ async fn handle_cmd(req: Request) -> Response {
             let snap = get_snapshot();
             let thermal = thermal_core::status();
             let (short_fps, long_fps) = fps_monitor::read();
+            let frame_time = fps_monitor::max_frame_time_ms();
             Response::ok(json!({
                 "thermal": {
                     "active_profile": thermal.active_profile,
@@ -101,6 +102,7 @@ async fn handle_cmd(req: Request) -> Response {
                     "short": short_fps,
                     "long": long_fps,
                     "session": fps_monitor::get_avg(),
+                    "max_frame_time_ms": frame_time,
                 },
             }))
         }

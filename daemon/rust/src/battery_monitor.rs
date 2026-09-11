@@ -57,6 +57,7 @@ pub struct ScreenTimes {
 pub struct DrainRates {
     pub active_drain_pct_per_hr: f64,
     pub idle_drain_pct_per_hr: f64,
+    pub power_mw: i64,
 }
 
 // ── internal state ──
@@ -510,6 +511,7 @@ pub fn get_drain_rates() -> DrainRates {
     let cap_mah = { lock().readings.capacity_mah } as f64;
     let on_h = t.screen_on_ms as f64 / 3_600_000.0;
     let off_h = t.screen_off_ms as f64 / 3_600_000.0;
+    let power_mw = { lock().readings.power_mw };
     DrainRates {
         active_drain_pct_per_hr: if on_h > 0.01 {
             t.active_mah / cap_mah.max(1.0) * 100.0 / on_h
@@ -521,6 +523,7 @@ pub fn get_drain_rates() -> DrainRates {
         } else {
             0.0
         },
+        power_mw,
     }
 }
 
