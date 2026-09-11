@@ -188,10 +188,12 @@ pub fn builtin_profiles() -> HashMap<String, ThermalProfile> {
 /// Register all built-in profiles.
 pub fn register_builtins() {
     let profiles = builtin_profiles();
+    let count = profiles.len();
     let mut s = state().write().unwrap();
     for (id, p) in profiles {
         s.profiles.insert(id, p);
     }
+    let _ = writeln!(std::io::stderr(), "[thermal_core] register_builtins: {count} profiles loaded");
 }
 
 pub fn register_profile(profile: ThermalProfile) {
@@ -222,6 +224,8 @@ pub fn is_global_active() -> bool {
 pub async fn apply_profile(profile_id: &str) -> Result<(), String> {
     let profile = {
         let s = state().read().unwrap();
+        let n = s.profiles.len();
+        let _ = writeln!(std::io::stderr(), "[thermal_core] apply_profile({profile_id}): {n} profiles registered");
         s.profiles.get(profile_id)
             .cloned()
             .ok_or_else(|| format!("profile not found: {profile_id}"))?
