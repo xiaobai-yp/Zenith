@@ -260,6 +260,9 @@ async fn handle_cmd(req: Request) -> Response {
             if id.is_empty() {
                 return Response::err("missing profile id");
             }
+            // Set property → init.rc triggers hardware (governor, freq, etc.)
+            let _ = write_prop_sync("persist.sys.zenith.thermal", id);
+            // Write sconfig for Oplus thermal HAL
             match thermal_core::apply_profile(id).await {
                 Ok(()) => Response::ok(json!({ "applied": id })),
                 Err(e) => Response::err(&e),
@@ -277,6 +280,9 @@ async fn handle_cmd(req: Request) -> Response {
             if id.is_empty() {
                 return Response::err("missing profile id");
             }
+            // Set property → init.rc triggers hardware (governor, freq, etc.)
+            let _ = write_prop_sync("persist.sys.zenith.thermal", id);
+            // Write sconfig for Oplus thermal HAL
             match thermal_core::apply_global_profile(id).await {
                 Ok(()) => Response::ok(json!({ "applied": id })),
                 Err(e) => Response::err(&e),
