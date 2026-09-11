@@ -1,8 +1,7 @@
 package com.zenith.thermal.ui.screens
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,6 +16,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.zenith.thermal.Profile
+import com.zenith.thermal.ThermalController
 import com.zenith.thermal.ZenithDaemonClient
 import kotlinx.coroutines.delay
 
@@ -30,6 +31,7 @@ private val GradEnd = Color(0xFFE04090)
 @Composable
 fun ThermalScreen() {
     var status by remember { mutableStateOf<ZenithDaemonClient.StatusResponse?>(null) }
+    val ctx = LocalContext.current
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -79,8 +81,6 @@ fun ThermalScreen() {
                 name = name,
                 selected = selected,
                 onClick = {
-                    // Context needed for ThermalController
-                    val ctx = androidx.compose.ui.platform.LocalContext.current
                     ThermalController.applyGlobal(ctx, profileId)
                     status = ZenithDaemonClient.getStatus()
                 }

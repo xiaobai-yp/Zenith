@@ -1,14 +1,15 @@
 package com.zenith.thermal
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -21,12 +22,12 @@ import com.zenith.thermal.ui.navigation.Screen
 import com.zenith.thermal.ui.screens.BenchmarkScreen
 import com.zenith.thermal.ui.screens.BatteryScreen
 import com.zenith.thermal.ui.screens.ThermalScreen
-import com.zenith.thermal.ui.theme.*
+import com.zenith.thermal.ui.theme.ZenithBg
+import com.zenith.thermal.ui.theme.ZenithAccent
+import com.zenith.thermal.ui.theme.ZenithTheme
 
-private val BottomBarBg = Color(0xFF102830)
-private val AccentBlue = Color(0xFF5EA7FF)
+private val AccentBlue = ZenithAccent
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ZenithApp(onOpenBenchmark: () -> Unit = {}) {
     val navController = rememberNavController()
@@ -34,10 +35,10 @@ fun ZenithApp(onOpenBenchmark: () -> Unit = {}) {
     val currentRoute = navBackStackEntry?.destination?.route
 
     Scaffold(
-        containerColor = ZenithTheme.colorScheme.background,
+        containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             NavigationBar(
-                containerColor = BottomBarBg,
+                containerColor = ZenithBg,
                 contentColor = AccentBlue,
                 tonalElevation = 0.dp
             ) {
@@ -58,6 +59,15 @@ fun ZenithApp(onOpenBenchmark: () -> Unit = {}) {
                                     restoreState = true
                                 }
                             }
+                        },
+                        icon = {
+                            Text(
+                                when (screen) {
+                                    Screen.Thermal -> "🔥"
+                                    Screen.Battery -> "🔋"
+                                    Screen.Benchmark -> "📊"
+                                }
+                            )
                         },
                         label = {
                             Text(
