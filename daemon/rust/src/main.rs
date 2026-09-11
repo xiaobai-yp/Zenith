@@ -416,7 +416,7 @@ async fn main() {
 
             // Read initial property
             let mut last_prop = String::new();
-            if let Ok(v) = rt.block_on(read_prop("persist.sys.zenith.thermal")) {
+            if let Ok(v) = read_prop_sync("persist.sys.zenith.thermal") {
                 last_prop = v;
                 if !last_prop.is_empty() {
                     let _ = writeln!(std::io::stderr(), "[zenithd] startup property: {last_prop}");
@@ -430,7 +430,7 @@ async fn main() {
             let mut tick = 0u64;
             loop {
                 // ── property poll FIRST (fast, critical for thermal switching) ──
-                if let Ok(v) = rt.block_on(read_prop("persist.sys.zenith.thermal")) {
+                if let Ok(v) = read_prop_sync("persist.sys.zenith.thermal") {
                     let _ = writeln!(std::io::stderr(), "[zenithd] poll: prop='{v}' last='{last_prop}'");
                     if !v.is_empty() && v != last_prop {
                         let _ = writeln!(std::io::stderr(), "[zenithd] property change: '{last_prop}' -> '{v}'");
@@ -523,12 +523,11 @@ fn now_ms() -> u64 {
         .as_millis() as u64
 }
 
-/// Read a system property via `getprop`.
-async fn read_prop(name: &str) -> Result<String, String> {
-    let out = tokio::process::Command::new("getprop")
+/// Read a system property via `getprop` (synchronous — avoids tokio runtime issues).
+fn read_prop_sync(name: &str) -> Result<String, String> {
+    let out = std::process::Command::new("getprop")
         .arg(name)
         .output()
-        .await
         .map_err(|e| format!("getprop: {e}"))?;
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
