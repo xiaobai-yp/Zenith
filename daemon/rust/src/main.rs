@@ -450,16 +450,27 @@ async fn main() {
                 }
 
                 // ── fg detection → setprop → init.rc triggers hardware ──
-                // Mapped app → apply IMMEDIATELY (fast per-app switch).
-                // Unmapped (launcher/recents) → 1-tick pending first
-                // (prevents flicker when back-gesture flashes launcher).
+                // Launcher/Recents = transient — skip, don't switch thermal.
+                // Only act when a real app appears. Mapped app = immediate.
+                // Unmapped app = switch to global after 1 tick (anti-flicker).
                 let fg_pkg = app_monitor::detect_fg()
                     .map(|a| a.package);
-                let target = if let Some(ref pkg) = fg_pkg {
+
+                // Skip transient states: launcher, recents, no app
+                let is_transient = fg_pkg.as_deref().map_or(false, |p| {
+                    let low = p.to_lowercase();
+                    low.contains("launcher")
+                        || low.contains("recents")
+                        || low.contains("home")
+                });
+
+                let target = if is_transient {
+                    active_prop.clone() // keep current, don't switch
+                } else if let Some(ref pkg) = fg_pkg {
                     match profile_engine::lookup(pkg) {
                         pid if pid != 0 => pid.to_string(), // mapped → immediate
                         _ => {
-                            // unmapped → need 2 consistent ticks (anti-flicker)
+                            // unmapped app → 1-tick pending
                             if fg_pkg == pending_fg {
                                 global_prop.clone()
                             } else {
@@ -469,12 +480,7 @@ async fn main() {
                         }
                     }
                 } else {
-                    if fg_pkg == pending_fg {
-                        global_prop.clone()
-                    } else {
-                        pending_fg = fg_pkg;
-                        active_prop.clone()
-                    }
+                    active_prop.clone()
                 };
 
                 // Only setprop if target differs from what's active
