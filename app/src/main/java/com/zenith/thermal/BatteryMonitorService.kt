@@ -116,11 +116,9 @@ class BatteryMonitorService : Service() {
     private fun updateNotification() {
         val prefs = getSharedPreferences("zenith_battery", MODE_PRIVATE)
         val tempUnit = prefs.getString("temperature_unit", "C") ?: "C"
-        val showPower = prefs.getBoolean("show_power", true)
-
         val args = JSONObject()
             .put("temp_unit", tempUnit)
-            .put("show_power", showPower)
+            .put("show_power", true)
 
         val response = ZenithDaemonClient.sendCommand("battery_notif", args)
         if (response == null) {

@@ -21,8 +21,8 @@ use tokio::process::Command;
 
 use crate::zen_path;
 
-const STATE_DIR: &str = "/data/local/tmp/zenith";
-const STATE_FILE: &str = "/data/local/tmp/zenith/battery_stats.json";
+const STATE_DIR: &str = "/data/zenith";
+const STATE_FILE: &str = "/data/zenith/battery_stats.json";
 const BATTERYSTATS_TTL_MS: u64 = 30_000;
 const PERSIST_EVERY_MS: u64 = 10_000;
 const CAPACITY_FALLBACK_MAH: i64 = 5_000;
@@ -394,8 +394,17 @@ pub async fn update(screen_on: bool) {
 
     // state transition: charging ↔ discharging
     if charging && !st.acc.charging_paused {
-        st.acc.charging_paused = true; // freeze accounting
-        let _ = writeln!(std::io::stderr(), "[battery_monitor] charging started — accounting paused");
+        st.acc.charging_paused = true; // freeze all accounting
+        // Reset ALL stats on charge start (screen on/off + deep/awake + mAh)
+        st.acc.screen_on_ms = 0;
+        st.acc.screen_off_ms = 0;
+        st.acc.deep_ms = 0;
+        st.acc.awake_ms = 0;
+        st.acc.active_mah = 0.0;
+        st.acc.idle_mah = 0.0;
+        st.screen_on_start_pct = st.readings.capacity;
+        st.screen_off_start_pct = st.readings.capacity;
+        let _ = writeln!(std::io::stderr(), "[battery_monitor] charging started — all stats reset");
         let _ = persist_maybe(&mut st);
     } else if !charging && st.acc.charging_paused {
         st.acc.charging_paused = false;
@@ -405,10 +414,7 @@ pub async fn update(screen_on: bool) {
         let _ = persist_maybe(&mut st);
     }
 
-    // mAh attribution — % step is PRIMARY (monotonic, always available).
-    // batterystats deltas were unreliable on this device: the stats reset
-    // on every unplug, so accumulated deltas stall at 0. We keep the
-    // batterystats read for baseline only — no accumulation from it.
+    // mAh + time attribution — all paused while charging
     if !st.acc.charging_paused {
         // %-step attribution — always on
         {

@@ -393,7 +393,6 @@ class MainActivity : android.app.Activity() {
         val resetPlugged = batteryPrefs.getBoolean("reset_on_plugged", false)
         val resetTarget = batteryPrefs.getBoolean("reset_on_target", true)
         val resetRestart = batteryPrefs.getBoolean("reset_on_restart", false)
-        val showPower = batteryPrefs.getBoolean("show_power", true)
         val idleWarning = batteryPrefs.getBoolean("idle_warning_enabled", false)
         val idleWarningTarget = batteryPrefs.getInt("idle_warning_target", 5).coerceIn(1, 100)
         val target = batteryPrefs.getInt("reset_target", 100).coerceIn(1, 100)
@@ -428,13 +427,6 @@ class MainActivity : android.app.Activity() {
             isChecked = resetRestart
             setOnCheckedChangeListener { _, checked ->
                 batteryPrefs.edit().putBoolean("reset_on_restart", checked).apply()
-            }
-        }
-
-        findViewById<Switch>(R.id.showPowerSwitch).apply {
-            isChecked = showPower
-            setOnCheckedChangeListener { _, checked ->
-                batteryPrefs.edit().putBoolean("show_power", checked).apply()
             }
         }
 
