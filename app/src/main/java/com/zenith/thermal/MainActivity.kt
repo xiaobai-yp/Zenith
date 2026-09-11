@@ -51,7 +51,7 @@ class MainActivity : android.app.Activity() {
 
     // Benchmark page state
     private val benchHandler = Handler(Looper.getMainLooper())
-    private val benchFpsHistory = ArrayList<FpsSample>()
+    private val benchFpsHistory = ArrayList<FpsChartView.Sample>()
     private var benchRunning = false
     private var benchStatusText: TextView? = null
     private var benchDurationText: TextView? = null
@@ -678,7 +678,7 @@ class MainActivity : android.app.Activity() {
                 val tsSec = elapsedMs / 1000
                 val exists = benchFpsHistory.any { it.tsSec == tsSec }
                 if (!exists) {
-                    benchFpsHistory.add(FpsSample(tsSec, fps.avgFps.toDouble()))
+                    benchFpsHistory.add(FpsChartView.Sample(tsSec, fps.avgFps.toDouble()))
                     while (benchFpsHistory.size > 300) benchFpsHistory.removeAt(0)
                     benchChartView?.setData(benchFpsHistory)
                 }
@@ -757,7 +757,7 @@ class MainActivity : android.app.Activity() {
         for (s in benchFpsHistory) {
             val p = JSONObject()
             p.put("timeMs", s.tsSec * 1000)
-            p.put("fps", Math.round(s.fps * 10.0) / 10.0)
+            p.put("fps", (s.fps * 10.0).toInt() / 10.0)
             pts.put(p)
         }
         obj.put("fpsHistory", pts)

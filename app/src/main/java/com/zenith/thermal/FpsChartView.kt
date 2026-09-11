@@ -57,7 +57,7 @@ class FpsChartView @JvmOverloads constructor(
         for (i in 1..4) {
             val y = padT + h * (1f - i / 4f)
             c.drawLine(padL, y, padL + w, y, gridPaint)
-            c.drawText("${Math.round(maxFps * i / 4)}", padL - 4 * d, y + 4 * d, gridTextPaint)
+            c.drawText("${(maxFps * i / 4).toInt()}", padL - 4 * d, y + 4 * d, gridTextPaint)
         }
 
         val n = data.size
@@ -85,7 +85,7 @@ class FpsChartView @JvmOverloads constructor(
         val lx = padL + w; val ly = padT + h * (1 - data.last().fps / maxFps).toFloat()
         c.drawCircle(lx, ly, 4 * d, dotPaint)
         textPaint.textAlign = Paint.Align.RIGHT
-        c.drawText(String.format(Locale.US, "%.1f", data.last().fps), lx - 6 * d, ly - 6 * d, textPaint)
+        c.drawText(data.last().fps.let { "%.1f".format(it) }, lx - 6 * d, ly - 6 * d, textPaint)
 
         // Point count
         textPaint.textAlign = Paint.Align.LEFT
