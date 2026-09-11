@@ -284,6 +284,11 @@ pub async fn apply_profile(profile_id: &str) -> Result<(), String> {
         }
     }
 
+    // Write Oplus sconfig — tells the thermal HAL which profile is active.
+    // Without this, thermalengine overwrites governor back to schedutil.
+    let sconfig_path = zen_path!("/sys/class/thermal/thermal_message/sconfig");
+    write_sysfs(&sconfig_path, profile_id).await;
+
     // Mark active
     {
         let mut s = state().write().unwrap();
