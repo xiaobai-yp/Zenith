@@ -429,6 +429,9 @@ async fn main() {
 
             let mut tick = 0u64;
             loop {
+                // DEBUG: confirm loop runs
+                { use std::io::Write; let _ = writeln!(std::io::stderr(), "[zenithd] tick={tick}"); }
+
                 // ── property poll FIRST (fast, critical for thermal switching) ──
                 if let Ok(v) = read_prop_sync("persist.sys.zenith.thermal") {
                     let _ = writeln!(std::io::stderr(), "[zenithd] poll: prop='{v}' last='{last_prop}'");
