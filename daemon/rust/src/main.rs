@@ -438,8 +438,6 @@ async fn main() {
                     if !v.is_empty() && v != last_prop {
                         crate::log!("[zenithd] property change: '{last_prop}' -> '{v}'");
                         last_prop = v;
-                        // Property change = user set via applyGlobal → pin global
-                        thermal_core::set_global_active(true);
                         match run_async(thermal_core::apply_profile(&last_prop)) {
                             Ok(()) => { crate::log!("[zenithd] prop apply OK: {last_prop}"); }
                             Err(e) => { crate::log!("[zenithd] prop apply FAILED: {e}"); }
@@ -472,15 +470,22 @@ async fn main() {
                     }
                 }
 
-                // foreground app detection + perapp profile apply
-                // Skip when a global profile is pinned (IPC / property poll).
-                if !thermal_core::is_global_active() {
-                    if let Some(fg) = app_monitor::detect_fg() {
-                        let profile_id = profile_engine::lookup(&fg.package);
-                        let active = thermal_core::get_active_profile().unwrap_or_default();
-                        if profile_id != 0 && active != profile_id.to_string() {
-                            let _ = run_async(thermal_core::apply_profile(&profile_id.to_string()));
-                        }
+                // foreground app detection → per-app override; app tanpa
+                // config ikut global (last_prop). Selalu detect — global
+                // bukan pin, melainkan fallback.
+                if let Some(fg) = app_monitor::detect_fg() {
+                    let profile_id = profile_engine::lookup(&fg.package);
+                    let target = if profile_id != 0 {
+                        profile_id.to_string()
+                    } else if !last_prop.is_empty() {
+                        last_prop.clone()
+                    } else {
+                        "0".to_string()
+                    };
+                    let active = thermal_core::get_active_profile().unwrap_or_default();
+                    if active != target {
+                        crate::log!("[zenithd] fg={} → profile {}", fg.package, target);
+                        let _ = run_async(thermal_core::apply_profile(&target));
                     }
                 }
 
