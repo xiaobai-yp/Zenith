@@ -435,8 +435,7 @@ async fn main() {
 
             let mut active_prop = global_prop.clone();
             let mut tick = 0u64;
-            let mut last_fg_package: Option<String> = None;
-            let mut stable_fg_count = 0u32;
+            let mut pending_fg: Option<String> = None;
             loop {
                 // Detect EXTERNAL prop change (app set global profile via setprop).
                 // Daemon's own writes are tracked via active_prop, so they're
@@ -451,17 +450,13 @@ async fn main() {
                 }
 
                 // ── fg detection → setprop → init.rc triggers hardware ──
-                // Debounce: require same fg package 2 consecutive ticks before applying.
-                // Prevents thermal flicker during swipe/back gestures.
+                // 1-tick pending: fg yang sama pada 2 tick berturut-turut → apply.
+                // Swipe/back flicker (<1s) selesai sebelum tick berikutnya → skip.
+                // Recent → launcher → buka app lagi: fg stabil >1s → apply cepat.
                 let fg_pkg = app_monitor::detect_fg()
                     .map(|a| a.package);
-                if fg_pkg == last_fg_package {
-                    stable_fg_count = (stable_fg_count + 1).min(3);
-                } else {
-                    last_fg_package = fg_pkg.clone();
-                    stable_fg_count = 0;
-                }
-                let target = if stable_fg_count >= 2 {
+                let target = if fg_pkg == pending_fg {
+                    // Same fg two ticks in a row — stable, apply it
                     if let Some(ref pkg) = fg_pkg {
                         match profile_engine::lookup(pkg) {
                             pid if pid != 0 => pid.to_string(),
@@ -471,7 +466,8 @@ async fn main() {
                         global_prop.clone()
                     }
                 } else {
-                    // Not yet stable — keep current target
+                    // New fg — mark pending, keep current profile this tick
+                    pending_fg = fg_pkg;
                     active_prop.clone()
                 };
 
