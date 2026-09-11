@@ -170,7 +170,11 @@ object ZenithDaemonClient {
         val charging: Boolean get() = online && currentUa >= 0
     }
 
-    data class GpuInfo(val curFreqMhz: Int, val maxFreqMhz: Int, val busyPct: Int)
+    data class GpuInfo(
+        val curFreqMhz: Int, val maxFreqMhz: Int, val busyPct: Int,
+        val vendor: String = "",
+        val tempC: Double? = null
+    )
 
     data class CpuInfo(val governor: String, val curFreqKhz: Int, val maxFreqKhz: Int) {
         val curFreqMhz: Int get() = curFreqKhz / 1000
@@ -184,6 +188,7 @@ object ZenithDaemonClient {
         val fpsShort: Int, val fpsLong: Int,
         val fpsAvg: Int, val fpsMin: Int, val fpsMax: Int,
         val maxFrameTimeMs: Int,
+        val cpuLoadPct: Float,
         val gpu: GpuInfo?,
         val cpuPolicy0: CpuInfo?, val cpuPolicy4: CpuInfo?, val cpuPolicy7: CpuInfo?
     ) {
@@ -223,10 +228,13 @@ object ZenithDaemonClient {
                 fpsMin = session?.optInt("min", 0) ?: 0,
                 fpsMax = session?.optInt("max", 0) ?: 0,
                 maxFrameTimeMs = fps?.optInt("max_frame_time_ms", 0) ?: 0,
+                cpuLoadPct = snap?.optDouble("cpu_load_pct", 0.0)?.toFloat() ?: 0f,
                 gpu = gpuJson?.let { GpuInfo(
                     curFreqMhz = (it.optLong("cur_freq", 0) / 1_000_000).toInt(),
                     maxFreqMhz = (it.optLong("max_freq", 0) / 1_000_000).toInt(),
-                    busyPct = it.optInt("busy_pct", 0)
+                    busyPct = it.optInt("busy_pct", 0),
+                    vendor = it.optString("vendor", ""),
+                    tempC = if (it.has("temp_c")) it.optDouble("temp_c") else null
                 ) },
                 cpuPolicy0 = parseCpuPolicy(snap, "cpu_policy0"),
                 cpuPolicy4 = parseCpuPolicy(snap, "cpu_policy4"),

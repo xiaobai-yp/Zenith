@@ -169,6 +169,8 @@ class FloatingHudService : Service() {
                     fpsLong = status?.fpsLong ?: 0,
                     fpsAvg = status?.fpsAvg ?: 0,
                     cpuTemp = status?.thermalZones?.firstOrNull()?.tempC,
+                    gpuTemp = status?.gpu?.tempC,
+                    cpuLoadPct = status?.cpuLoadPct ?: 0f,
                     gpu = status?.gpu,
                     cpuPolicy0 = status?.cpuPolicy0,
                     cpuPolicy7 = status?.cpuPolicy7,
@@ -198,6 +200,8 @@ class FloatingHudService : Service() {
         private var fpsLong = 0
         private var fpsAvg = 0
         private var cpuTemp: Double? = null
+        private var gpuTemp: Double? = null
+        private var cpuLoadPct = 0f
         private var gpu: ZenithDaemonClient.GpuInfo? = null
         private var cpuP0: ZenithDaemonClient.CpuInfo? = null
         private var cpuP7: ZenithDaemonClient.CpuInfo? = null
@@ -266,6 +270,8 @@ class FloatingHudService : Service() {
         fun updateData(
             fpsShort: Int, fpsLong: Int, fpsAvg: Int,
             cpuTemp: Double?,
+            gpuTemp: Double?,
+            cpuLoadPct: Float,
             gpu: ZenithDaemonClient.GpuInfo?,
             cpuPolicy0: ZenithDaemonClient.CpuInfo?,
             cpuPolicy7: ZenithDaemonClient.CpuInfo?,
@@ -278,6 +284,8 @@ class FloatingHudService : Service() {
             this.fpsLong = fpsLong
             this.fpsAvg = fpsAvg
             this.cpuTemp = cpuTemp
+            this.gpuTemp = gpuTemp
+            this.cpuLoadPct = cpuLoadPct
             this.gpu = gpu
             this.cpuP0 = cpuPolicy0
             this.cpuP7 = cpuPolicy7
@@ -306,9 +314,24 @@ class FloatingHudService : Service() {
             }
 
             if (displayMode == 1) {
+                // CPU load
+                if (cpuLoadPct > 0f) {
+                    val loadPaint = when {
+                        cpuLoadPct > 80f -> warnPaint
+                        cpuLoadPct > 60f -> accentPaint
+                        else -> valuePaint
+                    }
+                    lines.add(Triple("LOAD  %.0f%%".format(Locale.US, cpuLoadPct), loadPaint, false))
+                }
+
                 // GPU
                 gpu?.let {
-                    lines.add(Triple("GPU  %d/%dMHz  %d%%".format(Locale.US, it.curFreqMhz, it.maxFreqMhz, it.busyPct), accentPaint, false))
+                    val vendorTag = if (it.vendor.isNotEmpty()) it.vendor.uppercase() + " " else ""
+                    lines.add(Triple("GPU  %s%d/%dMHz  %d%%".format(Locale.US, vendorTag, it.curFreqMhz, it.maxFreqMhz, it.busyPct), accentPaint, false))
+                }
+                gpuTemp?.let {
+                    val t = if (it > 80.0) warnPaint else valuePaint
+                    lines.add(Triple("GPUT  %.0f°C".format(Locale.US, it), t, false))
                 }
 
                 // CPU freq
@@ -360,7 +383,7 @@ class FloatingHudService : Service() {
             for (i in lines.indices) {
                 val (text, paint, _) = lines[i]
                 c.drawText(text, padH, y, paint)
-                y += headerPaint.textSize + lineGap
+                y += paint.textSize.coerceAtLeast(headerPaint.textSize) + lineGap
             }
         }
 

@@ -1,4 +1,4 @@
-// sysfs_monitor.rs — Read all sysfs state: thermal zones, battery, CPU.
+// sysfs_monitor.rs — Read all sysfs state: thermal zones, battery, CPU, GPU.
 use std::io::Write;
 
 use crate::zen_path;
@@ -33,9 +33,11 @@ pub struct CpuInfo {
 
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct GpuInfo {
+    pub vendor: String,
     pub cur_freq: i64,
     pub max_freq: i64,
     pub busy_pct: i32,
+    pub gpu_temp_c: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Default)]
@@ -45,6 +47,7 @@ pub struct SysfsSnapshot {
     pub cpu_policy0: CpuInfo,
     pub cpu_policy4: Option<CpuInfo>,
     pub cpu_policy7: Option<CpuInfo>,
+    pub cpu_load_pct: f64,
     pub gpu: Option<GpuInfo>,
     pub screen_on: bool,
 }
@@ -54,6 +57,19 @@ struct MonitorState {
 }
 
 static STATE: OnceLock<RwLock<MonitorState>> = OnceLock::new();
+
+// --- CPU load delta tracking ---
+#[derive(Debug, Clone, Copy, Default)]
+struct CpuStat {
+    total: u64,
+    idle: u64,
+}
+
+static PREV_CPU_STAT: OnceLock<RwLock<CpuStat>> = OnceLock::new();
+
+fn prev_stat() -> &'static RwLock<CpuStat> {
+    PREV_CPU_STAT.get_or_init(|| RwLock::new(CpuStat::default()))
+}
 
 fn state() -> &'static RwLock<MonitorState> {
     STATE.get().expect("sysfs_monitor not initialized")
@@ -88,6 +104,162 @@ async fn read_cpu_policy(prefix: &str) -> CpuInfo {
     }
 }
 
+/// Read /proc/stat first line, return (total_ticks, idle_ticks).
+async fn read_proc_stat() -> Option<CpuStat> {
+    let content = fs::read_to_string("/proc/stat").await.ok()?;
+    let first = content.lines().next()?;
+    // Format: cpu <user> <nice> <system> <idle> <iowait> <irq> <softirq> <steal> ...
+    let parts: Vec<&str> = first.split_whitespace().collect();
+    if parts.len() < 5 { return None; }
+    let total: u64 = parts[1..].iter().filter_map(|s| s.parse::<u64>().ok()).sum();
+    let idle: u64 = parts[4].parse().ok()?;
+    Some(CpuStat { total, idle })
+}
+
+/// Compute CPU load% from delta of /proc/stat.
+async fn cpu_load_pct() -> f64 {
+    let curr = match read_proc_stat().await {
+        Some(s) => s,
+        None => return 0.0,
+    };
+    let mut prev = prev_stat().write().unwrap();
+    let total_delta = curr.total.saturating_sub(prev.total);
+    let idle_delta = curr.idle.saturating_sub(prev.idle);
+    *prev = curr;
+    if total_delta == 0 { return 0.0; }
+    ((total_delta - idle_delta) as f64 / total_delta as f64) * 100.0
+}
+
+/// Find GPU temp from thermal zones (gpu/kgsl/mali/adreno).
+fn gpu_temp_from_zones(zones: &[ThermalZone]) -> Option<f64> {
+    for z in zones {
+        let name = z.name.to_lowercase();
+        if name.contains("gpu") || name.contains("kgsl")
+            || name.contains("mali") || name.contains("adreno")
+        {
+            return Some(z.temp_milli as f64 / 1000.0);
+        }
+    }
+    None
+}
+
+/// Read devfreq load file (returns busy% or 0).
+async fn read_devfreq_load(path: &str) -> i32 {
+    // Some devfreq nodes have a "load" file with avg freq info;
+    // others have gpu_busy_percentage-style. Try common patterns.
+    if let Some(val) = read_i64(&format!("{path}/load")).await {
+        return val as i32;
+    }
+    // Some expose "trans_stat" — just report 0 if no direct load
+    0
+}
+
+/// Multi-vendor GPU detection: kgsl → devfreq (*gpu*) → mali → MTK.
+async fn detect_gpu() -> Option<GpuInfo> {
+    // 1. Qualcomm kgsl
+    let kgsl = zen_path!("/sys/class/kgsl/kgsl-3d0");
+    if let Some(cur) = read_i64(&format!("{kgsl}/gpuclk")).await {
+        let max = read_i64(&format!("{kgsl}/max_gpuclk")).await.unwrap_or(0);
+        let busy = fs::read_to_string(format!("{kgsl}/gpu_busy_percentage"))
+            .await
+            .ok()
+            .and_then(|s| {
+                let s = s.trim().trim_end_matches('%').trim();
+                s.parse::<i32>().ok()
+            })
+            .unwrap_or(0);
+        return Some(GpuInfo {
+            vendor: "kgsl".into(),
+            cur_freq: cur,
+            max_freq: max,
+            busy_pct: busy,
+            gpu_temp_c: None,
+        });
+    }
+    // kgsl fallback: devfreq under kgsl
+    if let Some(cur) = read_i64(&format!("{kgsl}/devfreq/cur_freq")).await {
+        let max = read_i64(&format!("{kgsl}/devfreq/max_freq")).await.unwrap_or(0);
+        return Some(GpuInfo {
+            vendor: "kgsl".into(),
+            cur_freq: cur,
+            max_freq: max,
+            busy_pct: 0,
+            gpu_temp_c: None,
+        });
+    }
+
+    // 2. devfreq platform entries matching *gpu*
+    let platform_dir = zen_path!("/sys/devices/platform");
+    if let Ok(mut entries) = fs::read_dir(platform_dir).await {
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            let name = entry.file_name().to_string_lossy().to_lowercase();
+            if !name.contains("gpu") { continue; }
+            let df = entry.path().join("devfreq");
+            if let Ok(mut df_entries) = fs::read_dir(&df).await {
+                while let Ok(Some(df_entry)) = df_entries.next_entry().await {
+                    let dfb = df_entry.path();
+                    let dfbs = dfb.to_string_lossy();
+                    if let Some(cur) = read_i64(&format!("{dfbs}/cur_freq")).await {
+                        let max = read_i64(&format!("{dfbs}/max_freq")).await.unwrap_or(0);
+                        let busy = read_devfreq_load(&dfbs).await;
+                        return Some(GpuInfo {
+                            vendor: "devfreq-gpu".into(),
+                            cur_freq: cur,
+                            max_freq: max,
+                            busy_pct: busy,
+                            gpu_temp_c: None,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. Mali via /sys/class/devfreq
+    let df_class = zen_path!("/sys/class/devfreq");
+    if let Ok(mut entries) = fs::read_dir(df_class).await {
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            let name = entry.file_name().to_string_lossy().to_lowercase();
+            if name.contains("mali") {
+                let base = entry.path().to_string_lossy().to_string();
+                if let Some(cur) = read_i64(&format!("{base}/cur_freq")).await {
+                    let max = read_i64(&format!("{base}/max_freq")).await.unwrap_or(0);
+                    let busy = read_devfreq_load(&base).await;
+                    return Some(GpuInfo {
+                        vendor: "mali".into(),
+                        cur_freq: cur,
+                        max_freq: max,
+                        busy_pct: busy,
+                        gpu_temp_c: None,
+                    });
+                }
+            }
+        }
+    }
+
+    // 4. MediaTek via /sys/class/devfreq (mtk-*)
+    if let Ok(mut entries) = fs::read_dir(df_class).await {
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            let name = entry.file_name().to_string_lossy().to_lowercase();
+            if name.starts_with("mtk") || (name.contains("disp") && name.contains("gpu")) {
+                let base = entry.path().to_string_lossy().to_string();
+                if let Some(cur) = read_i64(&format!("{base}/cur_freq")).await {
+                    let max = read_i64(&format!("{base}/max_freq")).await.unwrap_or(0);
+                    return Some(GpuInfo {
+                        vendor: "mtk".into(),
+                        cur_freq: cur,
+                        max_freq: max,
+                        busy_pct: 0,
+                        gpu_temp_c: None,
+                    });
+                }
+            }
+        }
+    }
+
+    None
+}
+
 pub async fn init() {
     let thermal_base = zen_path!("/sys/class/thermal");
     let mut zone_paths = Vec::new();
@@ -112,6 +284,11 @@ pub async fn init() {
 
     crate::log!("[sysfs_monitor] init: {} thermal zones", zone_paths.len());
     let _ = STATE.set(RwLock::new(MonitorState { zone_paths }));
+    // Seed prev_cpu_stat so first delta isn't 100%
+    let _ = PREV_CPU_STAT.set(RwLock::new(CpuStat::default()));
+    if let Some(seed) = read_proc_stat().await {
+        *prev_stat().write().unwrap() = seed;
+    }
 }
 
 pub async fn read() -> SysfsSnapshot {
@@ -171,6 +348,9 @@ pub async fn read() -> SysfsSnapshot {
         None
     };
 
+    // CPU load% from /proc/stat delta
+    let load = cpu_load_pct().await;
+
     // Screen state: brightness > 0 means screen on
     let screen_brightness = read_i64("/sys/class/leds/lcd-backlight/brightness")
         .await
@@ -184,18 +364,12 @@ pub async fn read() -> SysfsSnapshot {
             .map_or(true, |v| v > 0)
     };
 
-    // GPU (Qualcomm kgsl)
-    let gpu_base = zen_path!("/sys/class/kgsl/kgsl-3d0");
-    let gpu_cur = read_i64(&format!("{gpu_base}/gpuclk")).await
-        .or_else(|| read_i64(&format!("{gpu_base}/devfreq/cur_freq")).await);
-    let gpu = gpu_cur.map(|cur| {
-        let max = read_i64(&format!("{gpu_base}/max_gpuclk")).await.unwrap_or(0);
-        let busy_str = std::fs::read_to_string(format!("{gpu_base}/gpu_busy_percentage"))
-            .ok()
-            .and_then(|s| s.trim().trim_end_matches('%').parse::<i32>().ok())
-            .unwrap_or(0);
-        GpuInfo { cur_freq: cur, max_freq: max, busy_pct: busy_str }
-    });
+    // GPU — multi-vendor fallback detection
+    let mut gpu = detect_gpu().await;
+    // Attach GPU temp from thermal zones
+    if let Some(ref mut g) = gpu {
+        g.gpu_temp_c = gpu_temp_from_zones(&thermal_zones);
+    }
 
     SysfsSnapshot {
         thermal_zones,
@@ -203,6 +377,7 @@ pub async fn read() -> SysfsSnapshot {
         cpu_policy0,
         cpu_policy4,
         cpu_policy7,
+        cpu_load_pct: load,
         gpu,
         screen_on,
     }
