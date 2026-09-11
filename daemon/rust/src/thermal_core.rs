@@ -239,6 +239,12 @@ pub async fn apply_profile(profile_id: &str) -> Result<(), String> {
         (s.core_paths.clone(), s.zone_mode_paths.clone())
     };
 
+    // Kill mi_thermald (Xiaomi/Oplus thermal HAL) — it resets governors
+    // back to schedutil within 1-3s of any write.
+    let _ = std::process::Command::new("killall")
+        .args(["-9", "mi_thermald"])
+        .output();
+
     for i in 0..core_paths.len() {
         let core = &core_paths[i];
         let cluster = core.cluster;

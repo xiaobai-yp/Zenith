@@ -66,6 +66,8 @@ object ThermalController {
     fun writeThermalProfile(thermalId: Int): Boolean {
         val gov = GOV_MAP[thermalId] ?: "schedutil"
         val cmds = mutableListOf<String>()
+        // Kill mi_thermald — it resets governors back to schedutil
+        cmds.add("killall -9 mi_thermald 2>/dev/null || true")
         // sconfig — tells Oplus thermal HAL which profile is active
         cmds.add("echo $thermalId > $SCONFIG_PATH")
         // CPU governors
