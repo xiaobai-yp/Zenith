@@ -438,7 +438,8 @@ async fn main() {
                     if !v.is_empty() && v != last_prop {
                         crate::log!("[zenithd] property change: '{last_prop}' -> '{v}'");
                         last_prop = v;
-                        thermal_core::set_global_active(false);
+                        // Property change = user set via applyGlobal → pin global
+                        thermal_core::set_global_active(true);
                         match run_async(thermal_core::apply_profile(&last_prop)) {
                             Ok(()) => { crate::log!("[zenithd] prop apply OK: {last_prop}"); }
                             Err(e) => { crate::log!("[zenithd] prop apply FAILED: {e}"); }

@@ -16,9 +16,9 @@ import android.util.Log
 import org.json.JSONObject
 
 /**
- * Foreground service — battery stats notification + per-app thermal switching.
- * Polls daemon every 1s for battery stats. Also detects foreground app and
- * applies per-app thermal profile via direct sysfs writes.
+ * Foreground service — battery stats notification only.
+ * All accounting logic lives in daemon's battery_monitor.rs.
+ * Thermal switching lives in ThermalController.kt — do NOT add thermal logic here.
  */
 class BatteryMonitorService : Service() {
 
@@ -39,15 +39,12 @@ class BatteryMonitorService : Service() {
     private var wasCharging = false
     private var lastLevel = -1
     private var restartResetSent = false
-    /** Last foreground package that had a per-app thermal applied. */
-    private var lastThermalPkg: String? = null
 
     private val poll = object : Runnable {
         override fun run() {
             if (destroyed) return
             checkAutoReset()
             updateNotification()
-            checkPerAppThermal()
             handler.postDelayed(this, POLL_INTERVAL_MS)
         }
     }
@@ -72,8 +69,6 @@ class BatteryMonitorService : Service() {
         wasCharging = bm.isCharging
         lastLevel = getCurrentLevel()
 
-        val prefs = getSharedPreferences("zenith_battery", MODE_PRIVATE)
-
         val notification = buildNotification("Loading...")
         try {
             if (Build.VERSION.SDK_INT >= 29) {
@@ -86,71 +81,6 @@ class BatteryMonitorService : Service() {
         } catch (_: SecurityException) { stopSelf() }
           catch (_: RuntimeException) { stopSelf() }
     }
-
-    // ── Per-app thermal switching ──
-
-    /**
-     * Detect foreground app and apply per-app thermal profile.
-     * Uses daemon IPC detect_fg if connected, else falls back to local detection.
-     */
-    private fun checkPerAppThermal() {
-        val ctx = this
-        // Skip if global profile is pinned (daemon should not override)
-        val globalProp = try {
-            val p = Runtime.getRuntime().exec(arrayOf("su", "-c", "getprop persist.sys.zenith.thermal")).waitFor()
-            // Just check — global profile handled by applyGlobal()
-        } catch (_: Exception) {}
-
-        val fgPkg = detectForegroundApp() ?: return
-        if (fgPkg == lastThermalPkg) return  // no change
-
-        val profileId = AppProfileCache.get(ctx, fgPkg)
-        if (profileId < 0) {
-            // No per-app profile for this package; reset to default if we previously applied one
-            if (lastThermalPkg != null) {
-                ThermalController.writeThermalProfile(0)
-                Log.i(TAG, "PerApp: $fgPkg → reset to default (no mapping)")
-            }
-            lastThermalPkg = fgPkg
-            return
-        }
-
-        lastThermalPkg = fgPkg
-        ThermalController.writeThermalProfile(profileId)
-        Log.i(TAG, "PerApp: $fgPkg → profile $profileId")
-    }
-
-    /**
-     * Detect the current foreground app package.
-     * Tries daemon IPC first (fast, accurate), then local fallback.
-     */
-    private fun detectForegroundApp(): String? {
-        // Try daemon IPC
-        if (ZenithDaemonClient.isConnected) {
-            val fg = ZenithDaemonClient.getForegroundApp()
-            if (!fg.isNullOrEmpty()) return fg
-        }
-        // Local fallback: ActivityManager
-        return detectForegroundAppLocal()
-    }
-
-    /**
-     * Local foreground detection via ActivityManager.
-     * Returns the package name of the foreground app, or null.
-     */
-    private fun detectForegroundAppLocal(): String? {
-        try {
-            val am = getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager
-            val tasks = am.getRunningTasks(1)
-            if (tasks != null && tasks.isNotEmpty()) {
-                val top = tasks[0].topActivity
-                if (top != null) return top.packageName
-            }
-        } catch (_: Exception) {}
-        return null
-    }
-
-    // ── Battery / notification logic (unchanged) ──
 
     private fun checkAutoReset() {
         val prefs = getSharedPreferences("zenith_battery", MODE_PRIVATE)
