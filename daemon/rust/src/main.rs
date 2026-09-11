@@ -468,6 +468,7 @@ async fn main() {
 
                 // property poll — external set (init.rc / setprop)
                 if let Ok(v) = rt.block_on(read_prop("persist.sys.zenith.thermal")) {
+                    let _ = writeln!(std::io::stderr(), "[zenithd] poll: prop='{v}' last='{last_prop}'");
                     if !v.is_empty() && v != last_prop {
                         let _ = writeln!(std::io::stderr(), "[zenithd] property change: '{last_prop}' -> '{v}'");
                         last_prop = v;
