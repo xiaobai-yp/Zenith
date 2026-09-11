@@ -435,6 +435,8 @@ async fn main() {
 
             let mut active_prop = global_prop.clone();
             let mut tick = 0u64;
+            let mut last_fg_package: Option<String> = None;
+            let mut stable_fg_count = 0u32;
             loop {
                 // Detect EXTERNAL prop change (app set global profile via setprop).
                 // Daemon's own writes are tracked via active_prop, so they're
@@ -449,13 +451,28 @@ async fn main() {
                 }
 
                 // ── fg detection → setprop → init.rc triggers hardware ──
-                let target = if let Some(fg) = app_monitor::detect_fg() {
-                    match profile_engine::lookup(&fg.package) {
-                        pid if pid != 0 => pid.to_string(),
-                        _ => global_prop.clone(),
+                // Debounce: require same fg package 2 consecutive ticks before applying.
+                // Prevents thermal flicker during swipe/back gestures.
+                let fg_pkg = app_monitor::detect_fg()
+                    .map(|a| a.package);
+                if fg_pkg == last_fg_package {
+                    stable_fg_count = (stable_fg_count + 1).min(3);
+                } else {
+                    last_fg_package = fg_pkg.clone();
+                    stable_fg_count = 0;
+                }
+                let target = if stable_fg_count >= 2 {
+                    if let Some(ref pkg) = fg_pkg {
+                        match profile_engine::lookup(pkg) {
+                            pid if pid != 0 => pid.to_string(),
+                            _ => global_prop.clone(),
+                        }
+                    } else {
+                        global_prop.clone()
                     }
                 } else {
-                    global_prop.clone()
+                    // Not yet stable — keep current target
+                    active_prop.clone()
                 };
 
                 // Only setprop if target differs from what's active
