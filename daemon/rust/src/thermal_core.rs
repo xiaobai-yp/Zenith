@@ -224,77 +224,13 @@ pub fn is_global_active() -> bool {
 // ── apply profile ──
 
 pub async fn apply_profile(profile_id: &str) -> Result<(), String> {
-    let profile = {
-        let s = state().read().unwrap();
-        let n = s.profiles.len();
-        let _ = writeln!(std::io::stderr(), "[thermal_core] apply_profile({profile_id}): {n} profiles registered");
-        let p = s.profiles.get(profile_id)
-            .cloned()
-            .ok_or_else(|| format!("profile not found: {profile_id}"))?;
-        p
-    };
-
-    let (core_paths, zone_mode_paths) = {
-        let s = state().read().unwrap();
-        (s.core_paths.clone(), s.zone_mode_paths.clone())
-    };
-
-    // Kill mi_thermald (Xiaomi/Oplus thermal HAL) — it resets governors
-    // back to schedutil within 1-3s of any write.
-    let _ = std::process::Command::new("killall")
-        .args(["-9", "mi_thermald"])
-        .output();
-
-    for i in 0..core_paths.len() {
-        let core = &core_paths[i];
-        let cluster = core.cluster;
-
-        // Pick governor for this cluster
-        let gov = match cluster {
-            0 => profile.governor.as_deref(),
-            4 => profile.governor4.as_deref()
-                .or(profile.governor.as_deref()),
-            _ => profile.governor7.as_deref()
-                .or(profile.governor.as_deref()),
-        };
-
-        // Pick freq limits for this cluster
-        let max_f = match cluster {
-            0 => profile.max_freq_khz,
-            4 => profile.max_freq4_khz.or(profile.max_freq_khz),
-            _ => profile.max_freq7_khz.or(profile.max_freq_khz),
-        };
-
-        let min_f = match cluster {
-            0 => profile.min_freq_khz,
-            4 => profile.min_freq4_khz.or(profile.min_freq_khz),
-            _ => profile.min_freq7_khz.or(profile.min_freq_khz),
-        };
-
-        if let Some(g) = gov {
-            write_sysfs(&core.governor, g).await;
-        }
-        if let Some(f) = max_f {
-            write_sysfs_u32(&core.scaling_max, f).await;
-        }
-        if let Some(f) = min_f {
-            write_sysfs_u32(&core.scaling_min, f).await;
-        }
-    }
-
-    // Apply thermal zone limits
-    for (i, limit) in profile.thermal_limit_milli.iter().enumerate() {
-        if *limit > 0 {
-            if let Some(path) = zone_mode_paths.get(i) {
-                write_sysfs(path, &limit.to_string()).await;
-            }
-        }
-    }
-
-    // Write Oplus sconfig — tells the thermal HAL which profile is active.
-    // Without this, thermalengine overwrites governor back to schedutil.
+    // Daemon hanya menulis sconfig — semua konfigurasi hardware
+    // (governor, freq, GPU, I/O, TCP, scheduler) ditangani init.rc
+    // via property trigger. Daemon tidak menulis sysfs lain.
     let sconfig_path = zen_path!("/sys/class/thermal/thermal_message/sconfig");
-    write_sysfs(&sconfig_path, profile_id).await;
+    if !write_sysfs(&sconfig_path, profile_id).await {
+        return Err(format!("write sconfig: {profile_id}"));
+    }
 
     // Mark active
     {
@@ -302,7 +238,7 @@ pub async fn apply_profile(profile_id: &str) -> Result<(), String> {
         s.active_profile = Some(profile_id.to_string());
     }
 
-    crate::log!("[thermal_core] applied profile: {profile_id}");
+    crate::log!("[thermal_core] applied profile: {profile_id} (sconfig only)");
     Ok(())
 }
 
