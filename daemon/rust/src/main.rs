@@ -241,11 +241,41 @@ async fn handle_cmd(req: Request) -> Response {
                 return Response::err("missing profile id");
             }
             match thermal_core::apply_profile(id).await {
-                Ok(()) => {
-                    // IPC = Global Profile UI — pin it so per-app does not override.
-                    thermal_core::set_global_active(true);
-                    Response::ok(json!({ "applied": id }))
-                }
+                Ok(()) => Response::ok(json!({ "applied": id })),
+                Err(e) => Response::err(&e),
+            }
+        }
+
+        // Per-app profile: apply without pinning (foreground detection can override).
+        "setappprofile" => {
+            let id = req
+                .args
+                .as_str()
+                .or_else(|| {
+                    req.args.get("id").and_then(|v| v.as_str())
+                }).unwrap_or("");
+            if id.is_empty() {
+                return Response::err("missing profile id");
+            }
+            match thermal_core::apply_profile(id).await {
+                Ok(()) => Response::ok(json!({ "applied": id })),
+                Err(e) => Response::err(&e),
+            }
+        }
+
+        // Global profile: apply and pin (prevents foreground detection from overriding).
+        "setglobalprofile" => {
+            let id = req
+                .args
+                .as_str()
+                .or_else(|| {
+                    req.args.get("id").and_then(|v| v.as_str())
+                }).unwrap_or("");
+            if id.is_empty() {
+                return Response::err("missing profile id");
+            }
+            match thermal_core::apply_global_profile(id).await {
+                Ok(()) => Response::ok(json!({ "applied": id })),
                 Err(e) => Response::err(&e),
             }
         }

@@ -293,6 +293,12 @@ pub async fn apply_profile(profile_id: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Apply a global profile and pin it (prevents foreground detection from overriding).
+pub async fn apply_global_profile(profile_id: &str) -> Result<(), String> {
+    set_global_active(true);
+    apply_profile(profile_id).await
+}
+
 // ── direct setters ──
 
 pub async fn set_governor(core_id: Option<i32>, governor: &str) -> Result<(), String> {

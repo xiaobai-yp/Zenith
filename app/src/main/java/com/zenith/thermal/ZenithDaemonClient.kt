@@ -211,9 +211,16 @@ object ZenithDaemonClient {
         } catch (e: Exception) { Log.w(TAG, "Parse status: ${e.message}"); null }
     }
 
-    fun setProfile(profileId: Int): Boolean {
+    /** Global profile: apply + pin (foreground detection won't override). */
+    fun setGlobalProfile(profileId: Int): Boolean {
         val args = JSONObject().put("id", profileId.toString())
-        return sendCommand("apply_profile", args) != null
+        return sendCommand("setglobalprofile", args) != null
+    }
+
+    /** Per-app profile: apply without pinning. */
+    fun setAppProfile(profileId: Int): Boolean {
+        val args = JSONObject().put("id", profileId.toString())
+        return sendCommand("setappprofile", args) != null
     }
 
     fun setAppProfile(pkg: String, profileId: Int): Boolean {

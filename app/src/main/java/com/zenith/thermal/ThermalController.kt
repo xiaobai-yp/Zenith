@@ -6,10 +6,11 @@ package com.zenith.thermal
  */
 object ThermalController {
 
+    /** Per-app profile: apply without pinning. */
     fun apply(thermalId: Int): Boolean {
         val id = thermalId.coerceAtLeast(0)
         return if (ZenithDaemonClient.isConnected) {
-            ZenithDaemonClient.setProfile(id)
+            ZenithDaemonClient.setAppProfile(id)
         } else {
             android.util.Log.w("ThermalController", "Daemon not connected, profile $id not applied")
             false
@@ -18,7 +19,7 @@ object ThermalController {
 
     /**
      * Global profile: persist via system property (survives reboot, triggers
-     * init.rc) AND apply immediately via daemon IPC. Uses su to setprop.
+     * init.rc) AND apply + pin immediately via daemon IPC.
      */
     fun applyGlobal(context: android.content.Context, thermalId: Int): Boolean {
         val id = thermalId.coerceAtLeast(0)
@@ -31,7 +32,7 @@ object ThermalController {
         }
         // Apply immediately + pin global (daemon skips per-app while pinned)
         return if (ZenithDaemonClient.isConnected) {
-            ZenithDaemonClient.setProfile(id)
+            ZenithDaemonClient.setGlobalProfile(id)
         } else {
             android.util.Log.w("ThermalController", "Daemon not connected, profile $id not applied")
             false

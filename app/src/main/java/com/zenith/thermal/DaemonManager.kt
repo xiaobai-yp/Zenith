@@ -79,9 +79,9 @@ object DaemonManager {
         val binFile = File("/data/local/tmp/zenithd")
         val assetBytes = context.assets.open(ASSET_NAME).use { it.readBytes() }
 
-        val needsExtract = !binFile.exists() ||
-            binFile.lastModified() < context.packageManager
-                .getPackageInfo(context.packageName, 0).lastUpdateTime
+        // Always extract — compare asset size with on-disk size to detect updates.
+        // mtime-based detection is unreliable when CI copies the asset with same timestamp.
+        val needsExtract = !binFile.exists() || binFile.length() != assetBytes.size.toLong()
         if (needsExtract) {
             Log.i(TAG, "Extracting $ASSET_NAME (${assetBytes.size} bytes)")
             val su = Runtime.getRuntime().exec(arrayOf("su", "-c", "cat > /data/local/tmp/zenithd"))
