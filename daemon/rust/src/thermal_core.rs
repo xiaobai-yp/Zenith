@@ -226,9 +226,12 @@ pub async fn apply_profile(profile_id: &str) -> Result<(), String> {
         let s = state().read().unwrap();
         let n = s.profiles.len();
         let _ = writeln!(std::io::stderr(), "[thermal_core] apply_profile({profile_id}): {n} profiles registered");
-        s.profiles.get(profile_id)
+        let _ = writeln!(std::io::stderr(), "[thermal_core] all keys: {:?}", s.profiles.keys().collect::<Vec<_>>());
+        let p = s.profiles.get(profile_id)
             .cloned()
-            .ok_or_else(|| format!("profile not found: {profile_id}"))?
+            .ok_or_else(|| format!("profile not found: {profile_id}"))?;
+        let _ = writeln!(std::io::stderr(), "[thermal_core] found: id={}, gov={:?} gov4={:?} gov7={:?}", p.id, p.governor, p.governor4, p.governor7);
+        p
     };
 
     let (core_paths, zone_mode_paths) = {
