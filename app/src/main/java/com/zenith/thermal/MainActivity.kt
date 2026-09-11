@@ -222,11 +222,8 @@ class MainActivity : android.app.Activity() {
                 ?: runCatching { ZenithDaemonClient.getAppsMap() } .getOrNull()?.get(pkg)
                 ?: 0
         } else {
-            // Global: read persisted property (set by applyGlobal on selection)
-            runCatching {
-                val proc = ProcessBuilder("su", "-c", "getprop persist.sys.zenith.thermal").start()
-                proc.inputStream.bufferedReader().readText().trim().toIntOrNull() ?: 0
-            }.getOrNull() ?: 0
+            // Global: read persisted from SharedPreferences
+            AppProfileCache.getGlobal(this@MainActivity)
         }
         val currentIdx = Profile.indexOf(currentId)
         for (i in 0 until Profile.count()) {

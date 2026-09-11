@@ -4,15 +4,15 @@ package com.zenith.thermal
  * Sends thermal profile commands to zenithd via stdin/stdout IPC.
  * Thermal hardware switching is handled by init.rc via property triggers.
  * Daemon only writes sconfig for the Oplus thermal HAL.
+ * Property name is kept ONLY in daemon binary — not in APK.
  */
 object ThermalController {
-    private const val PROP_THERMAL = "persist.sys.zenith.thermal"
 
     /**
-     * Apply global profile: set property (init.rc triggers hardware) + sconfig (thermal HAL).
+     * Apply global profile: IPC to daemon (daemon handles setprop + sconfig).
      */
     fun applyGlobal(ctx: android.content.Context, profileId: Int): Boolean {
-        setprop(PROP_THERMAL, profileId.toString())
+        AppProfileCache.setGlobal(ctx, profileId)
         return ZenithDaemonClient.setGlobalProfile(profileId)
     }
 
@@ -21,9 +21,5 @@ object ThermalController {
      */
     fun apply(profileId: Int) {
         ZenithDaemonClient.setAppProfile(profileId)
-    }
-
-    private fun setprop(name: String, value: String) {
-        Runtime.getRuntime().exec(arrayOf("su", "-c", "setprop $name $value"))
     }
 }

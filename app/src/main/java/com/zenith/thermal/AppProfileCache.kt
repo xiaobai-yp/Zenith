@@ -24,11 +24,19 @@ import org.json.JSONObject
 /** Local cache of per-app profile assignments (survives daemon disconnect). */
 object AppProfileCache {
     private const val PREFS = "zenith_app_profiles"
+    private const val KEY_GLOBAL = "__global__"
 
     fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     fun get(ctx: Context, pkg: String): Int =
         prefs(ctx).getInt(pkg, -1)
+
+    fun getGlobal(ctx: Context): Int =
+        prefs(ctx).getInt(KEY_GLOBAL, 0)
+
+    fun setGlobal(ctx: Context, profileId: Int) {
+        prefs(ctx).edit().putInt(KEY_GLOBAL, profileId).apply()
+    }
 
     fun set(ctx: Context, pkg: String, profileId: Int) {
         prefs(ctx).edit().putInt(pkg, profileId).apply()
