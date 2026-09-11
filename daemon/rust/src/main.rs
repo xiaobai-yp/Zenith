@@ -15,7 +15,10 @@ mod thermal_core;
 /// Safe stderr logging — never panics even on broken pipe.
 #[macro_export]
 macro_rules! log {
-    ($($arg:tt)*) => { let _ = writeln!(std::io::stderr(), $($arg)*); };
+    ($($arg:tt)*) => {
+        let _ = writeln!(std::io::stderr(), $($arg)*);
+        let _ = std::io::stderr().flush();
+    };
 }
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -420,32 +423,32 @@ async fn main() {
             if let Ok(v) = read_prop_sync("persist.sys.zenith.thermal") {
                 last_prop = v;
                 if !last_prop.is_empty() {
-                    let _ = writeln!(std::io::stderr(), "[zenithd] startup property: {last_prop}");
+                    crate::log!("[zenithd] startup property: {last_prop}");
                     match run_async(thermal_core::apply_profile(&last_prop)) {
-                        Ok(()) => { let _ = writeln!(std::io::stderr(), "[zenithd] startup apply OK: {last_prop}"); }
-                        Err(e) => { let _ = writeln!(std::io::stderr(), "[zenithd] startup apply FAILED: {e}"); }
+                        Ok(()) => { crate::log!("[zenithd] startup apply OK: {last_prop}"); }
+                        Err(e) => { crate::log!("[zenithd] startup apply FAILED: {e}"); }
                     }
                 }
             }
 
-            let _ = writeln!(std::io::stderr(), "[zenithd] entering monitor loop");
+            crate::log!("[zenithd] entering monitor loop");
             // Write a marker file so we can verify the loop starts
             { use std::io::Write; let _ = std::fs::write("/data/local/tmp/zenithd_loop_started", "1"); }
             let mut tick = 0u64;
             loop {
                 // DEBUG: confirm loop runs
-                { use std::io::Write; let _ = writeln!(std::io::stderr(), "[zenithd] tick={tick}"); }
+                crate::log!("[zenithd] tick={tick}");
 
                 // ── property poll FIRST (fast, critical for thermal switching) ──
                 if let Ok(v) = read_prop_sync("persist.sys.zenith.thermal") {
-                    let _ = writeln!(std::io::stderr(), "[zenithd] poll: prop='{v}' last='{last_prop}'");
+                    crate::log!("[zenithd] poll: prop='{v}' last='{last_prop}'");
                     if !v.is_empty() && v != last_prop {
-                        let _ = writeln!(std::io::stderr(), "[zenithd] property change: '{last_prop}' -> '{v}'");
+                        crate::log!("[zenithd] property change: '{last_prop}' -> '{v}'");
                         last_prop = v;
                         thermal_core::set_global_active(false);
                         match run_async(thermal_core::apply_profile(&last_prop)) {
-                            Ok(()) => { let _ = writeln!(std::io::stderr(), "[zenithd] prop apply OK: {last_prop}"); }
-                            Err(e) => { let _ = writeln!(std::io::stderr(), "[zenithd] prop apply FAILED: {e}"); }
+                            Ok(()) => { crate::log!("[zenithd] prop apply OK: {last_prop}"); }
+                            Err(e) => { crate::log!("[zenithd] prop apply FAILED: {e}"); }
                         }
                     }
                 }
