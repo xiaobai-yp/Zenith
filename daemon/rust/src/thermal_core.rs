@@ -78,17 +78,20 @@ pub async fn init() -> Result<(), String> {
     let cpu_base = zen_path!("/sys/devices/system/cpu");
     let thermal_base = zen_path!("/sys/class/thermal");
 
-    // Discover writable CPU scaling paths per core
+    // Discover writable CPU scaling paths per policy (not per core —
+    // writing to per-core node doesn't propagate on this kernel).
     let mut core_paths = Vec::new();
+    let mut seen_policies: std::collections::HashSet<u8> = std::collections::HashSet::new();
     for i in 0..MAX_CORES {
-        let gov = format!("{cpu_base}/cpu{i}/cpufreq/scaling_governor");
-        // Check existence + write permission (access W_OK) — don't
-        // write garbage to sysfs as a writability test.
+        let cluster = cluster_for_core(i);
+        if !seen_policies.insert(cluster) { continue; } // one path per policy
+        let policy_dir = format!("{cpu_base}/cpufreq/policy{cluster}");
+        let gov = format!("{policy_dir}/scaling_governor");
         if tokio::fs::metadata(&gov).await.is_ok() {
             core_paths.push(CorePaths {
                 governor: gov,
-                scaling_max: format!("{cpu_base}/cpu{i}/cpufreq/scaling_max_freq"),
-                scaling_min: format!("{cpu_base}/cpu{i}/cpufreq/scaling_min_freq"),
+                scaling_max: format!("{policy_dir}/scaling_max_freq"),
+                scaling_min: format!("{policy_dir}/scaling_min_freq"),
             });
         }
     }
