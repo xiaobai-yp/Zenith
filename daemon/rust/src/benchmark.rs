@@ -12,6 +12,8 @@ const MAX_POINTS: usize = 300;
 pub struct BenchPoint {
     pub timestamp_ms: u64,
     pub fps: i32,
+    pub fps_short: i32,
+    pub fps_avg: i32,
     pub temp_milli: i64,
     pub batt_pct: i32,
     pub current_ma: i64,
@@ -20,6 +22,8 @@ pub struct BenchPoint {
 struct BenchState {
     points: VecDeque<BenchPoint>,
     recording: bool,
+    start_time_ms: u64,
+    frame_count: u64,
 }
 
 static STATE: OnceLock<RwLock<BenchState>> = OnceLock::new();
@@ -32,6 +36,8 @@ pub fn init() {
     let _ = STATE.set(RwLock::new(BenchState {
         points: VecDeque::with_capacity(MAX_POINTS),
         recording: false,
+        start_time_ms: 0,
+        frame_count: 0,
     }));
 }
 
@@ -39,6 +45,8 @@ pub fn start() {
     let mut s = state().write().unwrap();
     s.points.clear();
     s.recording = true;
+    s.start_time_ms = now_ms();
+    s.frame_count = 0;
     crate::log!("[benchmark] recording started");
 }
 
@@ -54,11 +62,21 @@ pub fn is_active() -> bool {
     state().read().unwrap().recording
 }
 
-pub fn record(snapshot: &SysfsSnapshot, fps: i32) {
+pub fn elapsed_ms() -> u64 {
+    let s = state().read().unwrap();
+    if s.start_time_ms == 0 { 0 } else { now_ms().saturating_sub(s.start_time_ms) }
+}
+
+pub fn frame_count() -> u64 {
+    state().read().unwrap().frame_count
+}
+
+pub fn record(snapshot: &SysfsSnapshot, fps: i32, fps_short: i32, fps_avg: i32) {
     let mut s = state().write().unwrap();
     if !s.recording {
         return;
     }
+    s.frame_count += 1;
 
     let temp = snapshot
         .thermal_zones
@@ -69,6 +87,8 @@ pub fn record(snapshot: &SysfsSnapshot, fps: i32) {
     let point = BenchPoint {
         timestamp_ms: now_ms(),
         fps,
+        fps_short,
+        fps_avg,
         temp_milli: temp,
         batt_pct: snapshot.battery.capacity,
         current_ma: snapshot.battery.current_ua / 1000,

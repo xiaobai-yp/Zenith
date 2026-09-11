@@ -334,13 +334,13 @@ async fn handle_cmd(req: Request) -> Response {
 
         "bench_data" => {
             let n = req.args.get("n").and_then(|v| v.as_u64()).unwrap_or(300) as usize;
-            if req.args.get("full").and_then(|v| v.as_bool()).unwrap_or(false)
-            {
-                Response::ok(json!({ "data": benchmark::export_json() }))
-            } else {
-                let pts = benchmark::get_last_points(n);
-                Response::ok(json!({ "data": pts }))
-            }
+            let pts = benchmark::get_last_points(n);
+            Response::ok(json!({
+                "data": pts,
+                "running": benchmark::is_active(),
+                "elapsed_ms": benchmark::elapsed_ms(),
+                "frames": benchmark::frame_count(),
+            }))
         }
 
         "read_sysfs" => {
@@ -514,7 +514,8 @@ async fn main() {
                     let (short, _long) = fps_monitor::read();
                     if benchmark::is_active() {
                         let snap = get_snapshot();
-                        benchmark::record(&snap, short);
+                        let (avg, _min, _max) = fps_monitor::get_avg();
+                        benchmark::record(&snap, short, short, avg);
                     }
                 }
 

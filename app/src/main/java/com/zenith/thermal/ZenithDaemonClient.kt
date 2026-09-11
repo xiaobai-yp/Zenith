@@ -328,20 +328,21 @@ object ZenithDaemonClient {
     fun getBenchmarkData(): BenchmarkData? {
         val data = sendCommand("bench_data") ?: return null
         return try {
+            val running = data.optBoolean("running", false)
+            val elapsedMs = data.optLong("elapsed_ms", 0)
+            val frames = data.optLong("frames", 0)
             val arr = data.optJSONArray("data")
             if (arr != null && arr.length() > 0) {
                 val last = arr.getJSONObject(arr.length() - 1)
-                val fpsArr = last.optJSONArray("fps")
-                val fps = if (fpsArr != null && fpsArr.length() >= 3) {
-                    FpsResponse(0, 0, fpsArr.getInt(0), fpsArr.getInt(1), fpsArr.getInt(2))
-                } else null
-                BenchmarkData(
-                    running = last.optBoolean("running", false),
-                    elapsedMs = last.optLong("elapsed_ms", 0),
-                    frames = last.optLong("frames", 0),
-                    fps = fps
+                val fps = FpsResponse(
+                    0,
+                    last.optInt("fps_short", 0),
+                    last.optInt("fps_avg", 0),
+                    last.optInt("fps", 0),
+                    last.optInt("fps", 0)
                 )
-            } else BenchmarkData(false, 0, 0, null)
+                BenchmarkData(running, elapsedMs, frames, fps)
+            } else BenchmarkData(running, elapsedMs, frames, null)
         } catch (e: Exception) { Log.w(TAG, "Parse bench_data: ${e.message}"); null }
     }
 
