@@ -68,14 +68,19 @@ pub fn detect_fg() -> Option<ForegroundApp> {
         let Ok(cmdline_bytes) = std::fs::read(&cmdline_path) else { continue };
         if cmdline_bytes.is_empty() { continue; }
 
-        // Only Android app processes: cmdline is a dotted package name.
-        // Native daemons (single tokens or /system paths) are never foreground apps.
+        // Only Android app processes: cmdline must be a package-like name.
+        // Android package names: no spaces, no slashes, no parens, ≥2 dots.
         let first_arg = cmdline_bytes
             .split(|&b| b == 0)
             .next()
             .unwrap_or_default();
         let first = String::from_utf8_lossy(first_arg);
-        if !first.contains('.') || first.contains('/') {
+        if first.contains(' ') || first.contains('/') || first.contains('(') {
+            continue;
+        }
+        // Must have at least 2 dots (e.g. com.whatsapp) to be a package name
+        let dot_count = first.bytes().filter(|b| *b == b'.').count();
+        if dot_count < 2 {
             continue;
         }
 
