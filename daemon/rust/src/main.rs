@@ -389,7 +389,11 @@ async fn main() {
             if let Ok(v) = rt.block_on(read_prop("persist.sys.zenith.thermal")) {
                 last_prop = v;
                 if !last_prop.is_empty() {
-                    let _ = rt.block_on(thermal_core::apply_profile(&last_prop));
+                    let _ = writeln!(std::io::stderr(), "[zenithd] startup property: {last_prop}");
+                    match rt.block_on(thermal_core::apply_profile(&last_prop)) {
+                        Ok(()) => { let _ = writeln!(std::io::stderr(), "[zenithd] startup apply OK: {last_prop}"); }
+                        Err(e) => { let _ = writeln!(std::io::stderr(), "[zenithd] startup apply FAILED: {e}"); }
+                    }
                 }
             }
 
@@ -435,11 +439,14 @@ async fn main() {
                 // property poll — external set (init.rc / setprop)
                 if let Ok(v) = rt.block_on(read_prop("persist.sys.zenith.thermal")) {
                     if !v.is_empty() && v != last_prop {
-                        let _ = writeln!(std::io::stderr(), "[zenithd] property change: {last_prop} -> {v}");
+                        let _ = writeln!(std::io::stderr(), "[zenithd] property change: '{last_prop}' -> '{v}'");
                         last_prop = v;
                         // Property change = external — clears UI global pin so per-app can resume.
                         thermal_core::set_global_active(false);
-                        let _ = rt.block_on(thermal_core::apply_profile(&last_prop));
+                        match rt.block_on(thermal_core::apply_profile(&last_prop)) {
+                            Ok(()) => { let _ = writeln!(std::io::stderr(), "[zenithd] prop apply OK: {last_prop}"); }
+                            Err(e) => { let _ = writeln!(std::io::stderr(), "[zenithd] prop apply FAILED: {e}"); }
+                        }
                     }
                 }
 
