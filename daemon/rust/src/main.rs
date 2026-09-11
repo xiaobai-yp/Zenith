@@ -281,7 +281,8 @@ async fn handle_cmd(req: Request) -> Response {
                 return Response::err("missing profile id");
             }
             // Set property → init.rc triggers hardware (governor, freq, etc.)
-            let _ = write_prop_sync("persist.sys.zenith.thermal", id);
+            let prop_result = write_prop_sync("persist.sys.zenith.thermal", id);
+            crate::log!("[zenithd] setglobalprofile {} prop_result={:?}", id, prop_result);
             // Write sconfig for Oplus thermal HAL
             match thermal_core::apply_global_profile(id).await {
                 Ok(()) => Response::ok(json!({ "applied": id })),
@@ -535,18 +536,25 @@ fn now_ms() -> u64 {
 
 /// Read a system property via `getprop` (synchronous).
 fn read_prop_sync(name: &str) -> Result<String, String> {
-    let out = std::process::Command::new("getprop")
-        .arg(name)
+    let out = std::process::Command::new("sh")
+        .args(["-c", &format!("getprop {name}")])
         .output()
         .map_err(|e| format!("getprop: {e}"))?;
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
 /// Write a system property via `setprop` (synchronous).
+/// On Android, `setprop`/`getprop` are shell builtins — not standalone binaries.
 fn write_prop_sync(name: &str, val: &str) -> Result<(), String> {
-    std::process::Command::new("setprop")
-        .arg(name).arg(val)
+    let out = std::process::Command::new("sh")
+        .args(["-c", &format!("setprop {name} {val}")])
         .output()
         .map_err(|e| format!("setprop: {e}"))?;
+    if !out.status.success() {
+        return Err(format!(
+            "setprop failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
     Ok(())
 }
