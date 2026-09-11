@@ -427,10 +427,19 @@ async fn main() {
             }
 
             let mut active_prop = global_prop.clone();
+            let mut tick = 0u64;
             loop {
-                // Re-read global in case app set it externally
-                global_prop = read_prop_sync("persist.sys.zenith.thermal")
+                // Detect EXTERNAL prop change (app set global profile via setprop).
+                // Daemon's own writes are tracked via active_prop, so they're
+                // skipped here — this prevents per-app setprop from clobbering
+                // the stored global baseline.
+                let cur_prop = read_prop_sync("persist.sys.zenith.thermal")
                     .unwrap_or_default();
+                if !cur_prop.is_empty() && cur_prop != active_prop {
+                    global_prop = cur_prop.clone();
+                    active_prop = cur_prop;
+                    crate::log!("[zenithd] external prop change -> {}", global_prop);
+                }
 
                 // ── fg detection → setprop → init.rc triggers hardware ──
                 let target = if let Some(fg) = app_monitor::detect_fg() {
@@ -460,11 +469,11 @@ async fn main() {
                 run_async(battery_monitor::update(screen_on));
 
                 // Full sysfs snapshot every 5 ticks
-                static mut TICK: u64 = 0;
-                unsafe { TICK += 1; if TICK % 5 == 0 {
+                tick += 1;
+                if tick % 5 == 0 {
                     let snap = run_async(sysfs_monitor::read());
                     update_snapshot(snap);
-                }}
+                }
 
                 // fps + benchmark (1s tick)
                 {

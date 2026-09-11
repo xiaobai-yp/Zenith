@@ -124,6 +124,11 @@ object DaemonManager {
 
             // Attach the process stdin/stdout to the IPC client
             ZenithDaemonClient.attachProcess(p.inputStream, p.outputStream)
+            // Sync local per-app mappings to daemon (daemon's pkg_map is in-memory)
+            Thread({
+                Thread.sleep(500) // wait for daemon init
+                ZenithDaemonClient.syncMappings(context)
+            }, "zenithd-sync").start()
             restartCount = 0
             Log.i(TAG, "Daemon launched and attached")
             return true

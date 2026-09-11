@@ -228,6 +228,22 @@ object ZenithDaemonClient {
         return sendCommand("map_app", args) != null
     }
 
+    /** Sync all local per-app mappings (SharedPreferences) to the daemon. */
+    fun syncMappings(context: Context) {
+        val map = AppProfileCache.all(context)
+        if (map.isEmpty()) return
+        for ((pkg, id) in map) {
+            if (id > 0) {
+                try {
+                    setAppProfile(pkg, id)
+                    Log.i(TAG, "Synced mapping: $pkg → $id")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Sync failed for $pkg: ${e.message}")
+                }
+            }
+        }
+    }
+
     fun resetProfiles(): Boolean {
         return sendCommand("reset_profiles") != null
     }

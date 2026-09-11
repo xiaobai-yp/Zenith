@@ -59,7 +59,7 @@ pub fn detect_fg() -> Option<ForegroundApp> {
             None => continue,
         };
 
-        if oom <= 0 || oom >= 1000 {
+        if oom < 0 || oom >= 1000 {
             continue;
         }
 
@@ -68,8 +68,23 @@ pub fn detect_fg() -> Option<ForegroundApp> {
         let Ok(cmdline_bytes) = std::fs::read(&cmdline_path) else { continue };
         if cmdline_bytes.is_empty() { continue; }
 
+        // Only Android app processes: cmdline is a dotted package name.
+        // Native daemons (single tokens or /system paths) are never foreground apps.
+        let first_arg = cmdline_bytes
+            .split(|&b| b == 0)
+            .next()
+            .unwrap_or_default();
+        let first = String::from_utf8_lossy(first_arg);
+        if !first.contains('.') || first.contains('/') {
+            continue;
+        }
+
+        // Android top app = FOREGROUND_APP_ADJ (0); visible=100, perceptible=200.
+        // Pick the process with the LOWEST adj; tie-break by highest PID (most
+        // recently forked = most likely the actual foreground app).
         match &best_pid {
-            Some((best_oom, _)) if oom >= *best_oom => {}
+            Some((best_oom, best_pid)) if oom > *best_oom => {}
+            Some((best_oom, best_pid)) if oom == *best_oom && pid < *best_pid => {}
             _ => best_pid = Some((oom, pid)),
         }
     }
