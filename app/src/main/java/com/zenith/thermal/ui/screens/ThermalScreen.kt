@@ -31,7 +31,10 @@ import com.zenith.thermal.Profile
 import com.zenith.thermal.ZenithDaemonClient
 import com.zenith.thermal.ui.components.*
 import com.zenith.thermal.ui.theme.*
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import java.util.concurrent.ConcurrentHashMap
 
 // ---- Profile color mapping for badges ----
 private data class ProfileBadge(val bg: Color, val fg: Color)
@@ -65,6 +68,10 @@ fun ThermalScreen() {
     var showGlobalDialog by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
 
+    // Centralized icon cache — decode ALL icons once on IO thread
+    val iconCache = remember { ConcurrentHashMap<String, androidx.compose.ui.graphics.painter.Painter?>() }
+    var iconsLoaded by remember { mutableStateOf(false) }
+
     fun loadApps() {
         val pm = ctx.packageManager
         val map = try { ZenithDaemonClient.getAppsMap() } catch (_: Throwable) { emptyMap() }
@@ -78,8 +85,32 @@ fun ThermalScreen() {
         loaded.sortBy { it.name.lowercase() }
         apps = loaded
     }
-    LaunchedEffect(Unit) { loadApps() }
-    LaunchedEffect(showSystem) { loadApps() }
+    LaunchedEffect(Unit) {
+        loadApps()
+        // Preload all icons on IO thread after apps load
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
+            for (item in apps) {
+                if (iconCache.containsKey(item.pkg)) continue
+                try {
+                    val bmp = item.icon.toBitmap(24, 24).asImageBitmap()
+                    iconCache[item.pkg] = BitmapPainter(bmp)
+                } catch (_: Exception) {}
+            }
+            withContext(Dispatchers.Main) { iconsLoaded = true }
+        }
+    }
+    LaunchedEffect(showSystem) {
+        loadApps()
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
+            for (item in apps) {
+                if (iconCache.containsKey(item.pkg)) continue
+                try {
+                    val bmp = item.icon.toBitmap(24, 24).asImageBitmap()
+                    iconCache[item.pkg] = BitmapPainter(bmp)
+                } catch (_: Exception) {}
+            }
+        }
+    }
 
     val filtered by remember(apps, searchQuery) {
         derivedStateOf {
@@ -171,7 +202,7 @@ fun ThermalScreen() {
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     items(filtered, key = { it.pkg }) { item ->
-                        AppCard(item = item) { showProfileDialog = item }
+                        AppCard(item = item, iconCache = iconCache) { showProfileDialog = item }
                     }
                 }
             }
@@ -236,7 +267,7 @@ fun ThermalScreen() {
 }
 
 @Composable
-private fun AppCard(item: AppItem, onClick: () -> Unit) {
+private fun AppCard(item: AppItem, iconCache: java.util.concurrent.ConcurrentHashMap<String, androidx.compose.ui.graphics.painter.Painter?>, onClick: () -> Unit) {
     val badge = badgeFor(item.profileId)
     GradientBorderCard(
         modifier = Modifier.fillMaxWidth(),
@@ -249,16 +280,7 @@ private fun AppCard(item: AppItem, onClick: () -> Unit) {
             Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // App icon (decode bitmap lazily on IO thread, cache per pkg)
-            val painter = remember(item.pkg) { mutableStateOf<androidx.compose.ui.graphics.painter.Painter?>(null) }
-            LaunchedEffect(item.pkg) {
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    try {
-                        val bmp = item.icon.toBitmap(24, 24).asImageBitmap()
-                        painter.value = BitmapPainter(bmp)
-                    } catch (_: Exception) {}
-                }
-            }
+            val painter = iconCache[item.pkg]
             Box(
                 Modifier
                     .size(36.dp)
@@ -266,7 +288,7 @@ private fun AppCard(item: AppItem, onClick: () -> Unit) {
                     .background(ZenithPurple.copy(alpha = 0.08f)),
                 contentAlignment = Alignment.Center
             ) {
-                painter.value?.let {
+                painter?.let {
                     Image(it, contentDescription = null, Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)))
                 }
             }
