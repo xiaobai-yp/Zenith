@@ -31,9 +31,7 @@ import com.zenith.thermal.Profile
 import com.zenith.thermal.ZenithDaemonClient
 import com.zenith.thermal.ui.components.*
 import com.zenith.thermal.ui.theme.*
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
 
 // ---- Profile color mapping for badges ----
@@ -86,30 +84,27 @@ fun ThermalScreen() {
         apps = loaded
     }
     LaunchedEffect(Unit) {
-        kotlinx.coroutines.withContext(Dispatchers.IO) { loadApps() }
-        // Preload icons in background — don't block render
-        kotlinx.coroutines.withContext(Dispatchers.IO) {
-            for (item in apps) {
-                if (iconCache.containsKey(item.pkg)) continue
-                try {
-                    val bmp = item.icon.toBitmap(24, 24).asImageBitmap()
-                    iconCache[item.pkg] = BitmapPainter(bmp)
-                } catch (_: Exception) {}
-            }
-            withContext(Dispatchers.Main) { iconVersion++ }
+        loadApps()
+        // Icons on Main — AdaptiveIconDrawable.toBitmap() needs main-thread Canvas
+        for (item in apps) {
+            if (iconCache.containsKey(item.pkg)) continue
+            try {
+                val bmp = item.icon.toBitmap(24, 24).asImageBitmap()
+                iconCache[item.pkg] = BitmapPainter(bmp)
+            } catch (_: Exception) {}
         }
+        iconVersion++
     }
     LaunchedEffect(showSystem) {
-        kotlinx.coroutines.withContext(Dispatchers.IO) { loadApps() }
-        kotlinx.coroutines.withContext(Dispatchers.IO) {
-            for (item in apps) {
-                if (iconCache.containsKey(item.pkg)) continue
-                try {
-                    val bmp = item.icon.toBitmap(24, 24).asImageBitmap()
-                    iconCache[item.pkg] = BitmapPainter(bmp)
-                } catch (_: Exception) {}
-            }
+        loadApps()
+        for (item in apps) {
+            if (iconCache.containsKey(item.pkg)) continue
+            try {
+                val bmp = item.icon.toBitmap(24, 24).asImageBitmap()
+                iconCache[item.pkg] = BitmapPainter(bmp)
+            } catch (_: Exception) {}
         }
+        iconVersion++
     }
 
     val filtered by remember(apps, searchQuery) {
