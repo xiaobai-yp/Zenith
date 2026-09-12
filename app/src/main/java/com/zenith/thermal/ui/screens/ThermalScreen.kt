@@ -146,7 +146,7 @@ fun ThermalScreen() {
                         modifier = Modifier.weight(1f),
                         textStyle = androidx.compose.ui.text.TextStyle(color = ZenithText, fontSize = 12.sp),
                         singleLine = true,
-                        cursorBrush = Brush.solid(ZenithPurple),
+                        cursorBrush = Brush.linearGradient(listOf(ZenithPurple)),
                         decorationBox = { inner ->
                             Box {
                                 if (searchQuery.isEmpty()) {
