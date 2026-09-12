@@ -29,6 +29,7 @@ import com.zenith.thermal.AppItem
 import com.zenith.thermal.AppProfileCache
 import com.zenith.thermal.Profile
 import com.zenith.thermal.ZenithDaemonClient
+import androidx.compose.ui.geometry.Offset
 import com.zenith.thermal.ui.components.*
 import com.zenith.thermal.ui.theme.*
 import kotlinx.coroutines.delay

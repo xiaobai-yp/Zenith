@@ -77,30 +77,8 @@ fun BatteryScreen() {
 
     val powerW = remember(batCurrentMa) { batCurrentMa * 3.8f / 1000f }
 
-    // Gradient bg per HTML preview
-    Box(Modifier.fillMaxSize()) {
-        // Background gradient
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(Color(0xFF08080F))
-        )
-        // Radial glow top
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.radialGradient(
-                        listOf(
-                            ZenithPurple.copy(alpha = 0.10f),
-                            ZenithPink.copy(alpha = 0.05f),
-                            Color.Transparent
-                        ),
-                        center = Offset(0.5f, 0.1f),
-                        radius = 800f
-                    )
-                )
-        )
+    // Solid bg — konsisten dengan screen lain
+    Box(Modifier.fillMaxSize().background(ZenithBg)) {
         // Content
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.height(28.dp))
