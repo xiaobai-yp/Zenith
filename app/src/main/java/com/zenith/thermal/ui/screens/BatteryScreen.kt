@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -28,105 +31,109 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.zenith.thermal.BatteryMonitorService
-import com.zenith.thermal.ZenithDaemonClient
 import com.zenith.thermal.ui.components.*
 import com.zenith.thermal.ui.theme.*
-import kotlinx.coroutines.delay
 
 private const val PREFS = "zenith_battery"
-private const val K_PLUGGED = "reset_on_plugged"
-private const val K_TARGET = "reset_on_target"
-private const val K_RESTART = "reset_on_restart"
-private const val K_IDLE_ON = "idle_warning_enabled"
-private const val K_IDLE_PCT = "idle_warning_target"
-private const val K_TGT_PCT = "reset_target"
-private const val K_UNIT = "temperature_unit"
-
-/** Read battery info from Android BatteryManager — no daemon dependency. */
-private fun readBattery(ctx: Context): Triple<Int, Float, Float>? {
-    return runCatching {
-        val bm = ctx.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
-        val pct = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
-        val currentUa = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
-        val tempC = bm.getIntProperty(0) // need to get from intent
-        // For temp, read from registerReceiver intent
-        val intent = ctx.registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
-        val tempDeci = intent?.getIntExtra("temperature", 0) ?: 0
-        Triple(pct, currentUa.toFloat() / 1000f, tempDeci / 10f)
-    }.getOrNull()
-}
 
 @Composable
 fun BatteryScreen() {
     val ctx = LocalContext.current
     val prefs = remember(ctx) { ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
 
-    var monitorOn by remember { mutableStateOf(false) }
-    var resetPlugged by remember { mutableStateOf(prefs.getBoolean(K_PLUGGED, false)) }
-    var resetTargetOn by remember { mutableStateOf(prefs.getBoolean(K_TARGET, true)) }
-    var resetRestart by remember { mutableStateOf(prefs.getBoolean(K_RESTART, false)) }
-    var idleWarn by remember { mutableStateOf(prefs.getBoolean(K_IDLE_ON, false)) }
-    var idlePct by remember { mutableStateOf(prefs.getInt(K_IDLE_PCT, 5).coerceIn(1, 100)) }
-    var tgtPct by remember { mutableStateOf(prefs.getInt(K_TGT_PCT, 100).coerceIn(1, 100)) }
-    var tempUnit by remember { mutableStateOf(prefs.getString(K_UNIT, "C") ?: "C") }
+    var monitorOn by remember { mutableStateOf(prefs.getBoolean("monitor_running", false)) }
+    var resetPlugged by remember { mutableStateOf(prefs.getBoolean("reset_on_plugged", false)) }
+    var resetTargetOn by remember { mutableStateOf(prefs.getBoolean("reset_on_target", true)) }
+    var resetRestart by remember { mutableStateOf(prefs.getBoolean("reset_on_restart", false)) }
+    var idleWarn by remember { mutableStateOf(prefs.getBoolean("idle_warning_enabled", false)) }
+    var idlePct by remember { mutableStateOf(prefs.getInt("idle_warning_target", 5).coerceIn(1, 30).toFloat()) }
+    var tgtPct by remember { mutableStateOf(prefs.getInt("reset_target", 100).coerceIn(1, 100).toFloat()) }
+    var tempUnit by remember { mutableStateOf(prefs.getString("temperature_unit", "C") ?: "C") }
+    var showPower by remember { mutableStateOf(true) }
 
-    // Battery data — poll via BatteryManager
-    var batPct by remember { mutableStateOf(0) }
-    var batCurrentMa by remember { mutableStateOf(0f) }
-    var batTempC by remember { mutableStateOf(0f) }
+    // Battery data
+    var batPct by remember { mutableIntStateOf(0) }
+    var batCurrentMa by remember { mutableFloatStateOf(0f) }
+    var batTempC by remember { mutableFloatStateOf(0f) }
+    var isCharging by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         while (true) {
-            monitorOn = batteryMonitorServiceRunning(ctx)
-            readBattery(ctx)?.let { (pct, currentMa, tempC) ->
-                batPct = pct; batCurrentMa = currentMa; batTempC = tempC
+            monitorOn = prefs.getBoolean("monitor_running", false)
+            runCatching {
+                val bm = ctx.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+                batPct = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+                batCurrentMa = kotlin.math.abs(bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)) / 1000f
+                isCharging = bm.isCharging
+            }
+            runCatching {
+                val intent = ctx.registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
+                batTempC = (intent?.getIntExtra("temperature", 0) ?: 0) / 10f
             }
             delay(2000)
         }
     }
 
-    // Power estimate from current × 3.8V typical
-    val powerW = remember(batCurrentMa) { kotlin.math.abs(batCurrentMa) * 3.8f / 1000f }
+    val powerW = remember(batCurrentMa) { batCurrentMa * 3.8f / 1000f }
 
-    Box(Modifier.fillMaxSize().background(ZenithBg)) {
+    // Gradient bg per HTML preview
+    Box(Modifier.fillMaxSize()) {
+        // Background gradient
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color(0xFF08080F))
+        )
+        // Radial glow top
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.radialGradient(
+                        listOf(
+                            ZenithPurple.copy(alpha = 0.10f),
+                            ZenithPink.copy(alpha = 0.05f),
+                            Color.Transparent
+                        ),
+                        center = Offset(0.5f, 0.1f),
+                        radius = 800f
+                    )
+                )
+        )
+        // Content
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.height(44.dp))
             Column(
                 Modifier
                     .weight(1f)
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 14.dp)
+                    .padding(horizontal = Space.lg)
                     .padding(bottom = 100.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(Space.sm)
             ) {
                 // Header
-                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                    Text("Zenith Thermal", color = ZenithText, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                }
+                Text("Zenith Thermal", color = ZenithText, fontSize = TextHeading, fontWeight = FontWeight.Bold)
 
-                // Status Monitor
-                GradientBorderCard(modifier = Modifier.fillMaxWidth(), innerPadding = 12.dp) {
-                    Text("Status Monitor", color = ZenithText, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "Real-time battery statistics (Temp, Current mA, Deep Sleep) in notification.",
-                        color = ZenithMuted2, fontSize = 10.sp
-                    )
-                    Spacer(Modifier.height(10.dp))
+                // Status Monitor card
+                GradientBorderCard(modifier = Modifier.fillMaxWidth(), innerPadding = Space.lg) {
+                    Text("Status Monitor", color = ZenithText, fontSize = TextBodySm, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(Space.xs))
+                    Text("Real-time battery statistics in notification.", color = ZenithMuted2, fontSize = TextMicro)
+                    Spacer(Modifier.height(Space.sm))
                     Box(
                         Modifier.fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(Radius.sm))
                             .background(if (monitorOn) ZenithRed.copy(0.2f) else ZenithPurple.copy(0.2f))
                             .clickable {
                                 if (monitorOn) {
-                                    val stop = Intent(ctx, BatteryMonitorService::class.java).apply {
-                                        action = BatteryMonitorService.ACTION_STOP
-                                    }
-                                    ctx.startService(stop)
+                                    ctx.startService(
+                                        Intent(ctx, BatteryMonitorService::class.java).apply {
+                                            action = BatteryMonitorService.ACTION_STOP
+                                        }
+                                    )
                                     monitorOn = false
                                     prefs.edit().putBoolean("monitor_running", false).apply()
                                 } else {
-                                    // Request notification permission (Android 13+)
                                     if (Build.VERSION.SDK_INT >= 33 &&
                                         ctx.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
                                         android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -137,157 +144,135 @@ fun BatteryScreen() {
                                         )
                                     } else {
                                         val start = Intent(ctx, BatteryMonitorService::class.java)
-                                        if (Build.VERSION.SDK_INT >= 26) {
-                                            ctx.startForegroundService(start)
-                                        } else {
-                                            ctx.startService(start)
-                                        }
+                                        if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(start) else ctx.startService(start)
                                         monitorOn = true
                                         prefs.edit().putBoolean("monitor_running", true).apply()
                                     }
                                 }
                             }
-                            .padding(vertical = 10.dp),
+                            .padding(vertical = Space.sm),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             if (monitorOn) "TURN OFF MONITOR" else "TURN ON MONITOR",
-                            color = ZenithText, fontSize = 11.sp, fontWeight = FontWeight.Bold
+                            color = ZenithText, fontSize = TextMicro, fontWeight = FontWeight.Bold
                         )
                     }
                 }
 
-                // Battery ring hero
-                val charging = runCatching {
-                    val bm = ctx.getSystemService(Context.BATTERY_SERVICE) as android.os.BatteryManager
-                    bm.isCharging
-                }.getOrDefault(false)
-                GradientBorderCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    radius = 14.dp,
-                    gradient = androidx.compose.ui.graphics.Brush.linearGradient(
-                        listOf(ZenithPurple.copy(0.4f), ZenithPink.copy(0.3f), ZenithPurple.copy(0.2f))
-                    )
-                ) {
-                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        BatteryRing(pct = batPct, size = 72.dp)
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        if (monitorOn) "Charging · $batPct%" else "Discharging · $batPct%",
-                        color = ZenithText, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.align(Alignment.CenterHorizontally)
-                    )
-                }
-
-                // Stats row
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    StatPill("Power", "%.1fW".format(powerW), ZenithGreen, Modifier.weight(1f))
+                // Stats row — current/power/temp
+                Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                    StatPill("Power", "%.2fW".format(powerW), ZenithGreen, Modifier.weight(1f))
                     StatPill("Battery", "%.0f°C".format(batTempC), ZenithText, Modifier.weight(1f))
-                    StatPill("Current", "%.0f mA".format(kotlin.math.abs(batCurrentMa)), ZenithText, Modifier.weight(1f))
+                    StatPill("Current", "%.0fmA".format(batCurrentMa), ZenithText, Modifier.weight(1f))
                 }
 
-                // Temperature unit
+                // Temp unit
                 SectionLabel("Battery Temperature Unit")
-                GradientBorderCard(modifier = Modifier.fillMaxWidth(), innerPadding = 4.dp) {
-                    UnitRow("Celsius (°C)", "C", tempUnit) { tempUnit = it; prefs.edit().putString(K_UNIT, it).apply() }
-                    Div()
-                    UnitRow("Fahrenheit (°F)", "F", tempUnit) { tempUnit = it; prefs.edit().putString(K_UNIT, it).apply() }
-                    Div()
-                    UnitRow("Kelvin (K)", "K", tempUnit) { tempUnit = it; prefs.edit().putString(K_UNIT, it).apply() }
+                GradientBorderCard(modifier = Modifier.fillMaxWidth(), innerPadding = Space.xs) {
+                    listOf("C" to "Celsius (°C)", "F" to "Fahrenheit (°F)", "K" to "Kelvin (K)").forEach { (code, label) ->
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .clickable { tempUnit = code; prefs.edit().putString("temperature_unit", code).apply() }
+                                .padding(horizontal = Space.lg, vertical = Space.md),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(label, color = ZenithText, fontSize = TextBodySm, modifier = Modifier.weight(1f))
+                            ZenithRadio(checked = code == tempUnit, onClick = {
+                                tempUnit = code; prefs.edit().putString("temperature_unit", code).apply()
+                            })
+                        }
+                    }
                 }
 
-                // Display
+                // Display — show current/power toggle
                 SectionLabel("Display")
-                GradientBorderCard(modifier = Modifier.fillMaxWidth(), innerPadding = 4.dp) {
-                    SwitchRow("Show Current and Power (Watt)", true) { }
+                GradientBorderCard(modifier = Modifier.fillMaxWidth(), innerPadding = Space.xs) {
+                    SwitchRow("Show Current and Power (Watt)", showPower) {
+                        showPower = it; prefs.edit().putBoolean("show_power", it).apply()
+                    }
                 }
 
                 // Reset stats
                 SectionLabel("Reset Stats")
-                GradientBorderCard(modifier = Modifier.fillMaxWidth(), innerPadding = 4.dp) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 11.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            "Reset stats when battery ≤",
-                            color = ZenithText, fontSize = 12.sp, fontWeight = FontWeight.Medium,
-                            modifier = Modifier.weight(1f)
+                GradientBorderCard(modifier = Modifier.fillMaxWidth(), innerPadding = Space.xs) {
+                    // Target threshold with slider
+                    Column(Modifier.padding(horizontal = Space.lg, vertical = Space.md)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Reset stats when battery ≤", color = ZenithText, fontSize = TextBodySm, modifier = Modifier.weight(1f))
+                            Text("${tgtPct.toInt()}%", color = ZenithPurple, fontSize = TextBodySm, fontWeight = FontWeight.Bold)
+                        }
+                        Slider(
+                            value = tgtPct,
+                            onValueChange = { tgtPct = it },
+                            onValueChangeFinished = { prefs.edit().putInt("reset_target", tgtPct.toInt()).apply() },
+                            valueRange = 5f..100f,
+                            steps = 18,
+                            colors = SliderDefaults.colors(
+                                thumbColor = ZenithPurple,
+                                activeTrackColor = ZenithPurple,
+                                inactiveTrackColor = ZenithMuted3
+                            )
                         )
-                        SelectPill(text = "$tgtPct%", selected = resetTargetOn, onClick = { })
                     }
-                    Div()
                     SwitchRow("Reset stats when plugged in", resetPlugged) {
-                        resetPlugged = it; prefs.edit().putBoolean(K_PLUGGED, it).apply()
+                        resetPlugged = it; prefs.edit().putBoolean("reset_on_plugged", it).apply()
                     }
-                    Div()
                     SwitchRow("Reset stats on reboot", resetRestart) {
-                        resetRestart = it; prefs.edit().putBoolean(K_RESTART, it).apply()
+                        resetRestart = it; prefs.edit().putBoolean("reset_on_restart", it).apply()
                     }
                 }
 
                 // Idle drain warning
                 SectionLabel("Idle Drain Warning")
-                GradientBorderCard(modifier = Modifier.fillMaxWidth(), innerPadding = 4.dp) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 11.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            if (idleWarn) "Notify if idle drain > " else "Notify if idle drain > OFF",
-                            color = ZenithText, fontSize = 12.sp, fontWeight = FontWeight.Medium,
-                            modifier = Modifier.weight(1f)
+                GradientBorderCard(modifier = Modifier.fillMaxWidth(), innerPadding = Space.xs) {
+                    SwitchRow("Notify if idle drain is higher than threshold", idleWarn) {
+                        idleWarn = it; prefs.edit().putBoolean("idle_warning_enabled", it).apply()
+                    }
+                    Column(Modifier.padding(horizontal = Space.lg, vertical = Space.md)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Threshold", color = ZenithText, fontSize = TextBodySm, modifier = Modifier.weight(1f))
+                            Text("${idlePct.toInt()}%", color = ZenithPurple, fontSize = TextBodySm, fontWeight = FontWeight.Bold)
+                        }
+                        Slider(
+                            value = idlePct,
+                            onValueChange = { idlePct = it },
+                            onValueChangeFinished = { prefs.edit().putInt("idle_warning_target", idlePct.toInt()).apply() },
+                            valueRange = 1f..30f,
+                            steps = 28,
+                            colors = SliderDefaults.colors(
+                                thumbColor = ZenithPurple,
+                                activeTrackColor = ZenithPurple,
+                                inactiveTrackColor = ZenithMuted3
+                            )
                         )
-                        SelectPill(text = "$idlePct%", selected = idleWarn, onClick = { })
                     }
                 }
 
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(Space.sm))
 
-                // Reset button
+                // Reset button — danger
                 Box(
-                    Modifier
-                        .fillMaxWidth()
+                    Modifier.fillMaxWidth()
                         .clip(RoundedCornerShape(Radius.lg))
                         .background(ZenithRed.copy(0.1f))
                         .border(1.dp, ZenithRed.copy(0.15f), RoundedCornerShape(Radius.lg))
                         .clickable {
-                            val intent = Intent(ctx, BatteryMonitorService::class.java).apply {
-                                action = BatteryMonitorService.ACTION_RESET
-                            }
-                            if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(intent) else ctx.startService(intent)
+                            ctx.startService(
+                                Intent(ctx, BatteryMonitorService::class.java).apply {
+                                    action = BatteryMonitorService.ACTION_RESET
+                                }
+                            )
                         }
-                        .padding(vertical = 12.dp),
+                        .padding(vertical = Space.md),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("RESET STATS", color = ZenithRed, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
+                    Text("RESET STATS", color = ZenithRed, fontSize = TextMicro, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
                 }
-                Spacer(Modifier.height(8.dp))
+
+                Spacer(Modifier.height(Space.sm))
             }
         }
-    }
-}
-
-@Composable
-private fun BatteryRing(pct: Int, size: Dp) {
-    val sweep = pct.coerceIn(0, 100) * 3.6f
-    Box(contentAlignment = Alignment.Center) {
-        Canvas(Modifier.size(size)) {
-            drawArc(
-                color = Color(0x0FFFFFFF),
-                startAngle = -90f, sweepAngle = 360f, useCenter = false,
-                style = Stroke(width = 8.dp.toPx(), cap = StrokeCap.Butt),
-                topLeft = Offset.Zero, size = Size(size.toPx(), size.toPx())
-            )
-            drawArc(
-                color = ZenithGreen,
-                startAngle = -90f, sweepAngle = sweep, useCenter = false,
-                style = Stroke(width = 8.dp.toPx(), cap = StrokeCap.Butt),
-                topLeft = Offset.Zero, size = Size(size.toPx(), size.toPx())
-            )
-        }
-        Text("$pct%", color = ZenithText, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
     }
 }
 
@@ -301,20 +286,9 @@ private fun StatPill(label: String, value: String, color: Color, modifier: Modif
             .padding(vertical = Space.sm),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(value, color = color, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(2.dp))
-        Text(label.uppercase(), color = ZenithMuted2, fontSize = 7.sp, letterSpacing = 0.6.sp)
-    }
-}
-
-@Composable
-private fun UnitRow(label: String, code: String, current: String, onSelect: (String) -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().clickable { onSelect(code) }.padding(horizontal = Space.lg, vertical = Space.md),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(label, color = ZenithText, fontSize = 12.sp, modifier = Modifier.weight(1f))
-        ZenithRadio(checked = code == current, onClick = { onSelect(code) })
+        Text(value, color = color, fontSize = TextCaption, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(Space.xs))
+        Text(label.uppercase(), color = ZenithMuted2, fontSize = TextMicro, letterSpacing = 0.6.sp)
     }
 }
 
@@ -324,15 +298,7 @@ private fun SwitchRow(text: String, checked: Boolean, onChange: (Boolean) -> Uni
         Modifier.fillMaxWidth().padding(horizontal = Space.lg, vertical = Space.md),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(text, color = ZenithText, fontSize = 12.sp, modifier = Modifier.weight(1f))
+        Text(text, color = ZenithText, fontSize = TextBodySm, modifier = Modifier.weight(1f))
         ZenithSwitch(checked = checked, onChange = onChange)
     }
 }
-
-@Composable
-private fun Div() {
-    Box(Modifier.fillMaxWidth().padding(start = 14.dp).height(0.5.dp).background(Color(0x08FFFFFF)))
-}
-
-private fun batteryMonitorServiceRunning(ctx: Context): Boolean =
-    ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean("monitor_running", false)
