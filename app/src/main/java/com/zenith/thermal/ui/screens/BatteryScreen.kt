@@ -118,12 +118,34 @@ fun BatteryScreen() {
                             .clip(RoundedCornerShape(10.dp))
                             .background(if (monitorOn) ZenithRed.copy(0.2f) else ZenithPurple.copy(0.2f))
                             .clickable {
-                                val intent = Intent(ctx, BatteryMonitorService::class.java)
                                 if (monitorOn) {
-                                    intent.action = BatteryMonitorService.ACTION_STOP
+                                    val stop = Intent(ctx, BatteryMonitorService::class.java).apply {
+                                        action = BatteryMonitorService.ACTION_STOP
+                                    }
+                                    ctx.startService(stop)
+                                    monitorOn = false
+                                    prefs.edit().putBoolean("monitor_running", false).apply()
+                                } else {
+                                    // Request notification permission (Android 13+)
+                                    if (Build.VERSION.SDK_INT >= 33 &&
+                                        ctx.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
+                                        android.content.pm.PackageManager.PERMISSION_GRANTED
+                                    ) {
+                                        ctx.startActivity(
+                                            Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                                .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, ctx.packageName)
+                                        )
+                                    } else {
+                                        val start = Intent(ctx, BatteryMonitorService::class.java)
+                                        if (Build.VERSION.SDK_INT >= 26) {
+                                            ctx.startForegroundService(start)
+                                        } else {
+                                            ctx.startService(start)
+                                        }
+                                        monitorOn = true
+                                        prefs.edit().putBoolean("monitor_running", true).apply()
+                                    }
                                 }
-                                if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(intent) else ctx.startService(intent)
-                                monitorOn = !monitorOn
                             }
                             .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center
@@ -313,7 +335,4 @@ private fun Div() {
 }
 
 private fun batteryMonitorServiceRunning(ctx: Context): Boolean =
-    runCatching {
-        val am = ctx.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
-        am.getRunningServices(100).any { it.service.className == BatteryMonitorService::class.java.name }
-    }.getOrDefault(false)
+    ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean("monitor_running", false)

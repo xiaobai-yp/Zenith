@@ -146,7 +146,7 @@ fun ThermalScreen() {
                         modifier = Modifier.weight(1f),
                         textStyle = androidx.compose.ui.text.TextStyle(color = ZenithText, fontSize = 12.sp),
                         singleLine = true,
-                        cursorBrush = Brush.linearGradient(listOf(ZenithPurple)),
+                        cursorBrush = Brush.linearGradient(listOf(ZenithPurple, ZenithPurple)),
                         decorationBox = { inner ->
                             Box {
                                 if (searchQuery.isEmpty()) {
@@ -254,8 +254,8 @@ private fun AppCard(item: AppItem, onClick: () -> Unit) {
     val badge = badgeFor(item.profileId)
     GradientBorderCard(
         modifier = Modifier.fillMaxWidth(),
-        radius = 12.dp,
-        innerPadding = 10.dp,
+        radius = Radius.xl,
+        innerPadding = Space.sm,
         onClick = onClick
     ) {
         Row(
@@ -375,7 +375,15 @@ private fun GradientProfileDialog(
                             if (selected) {
                                 Badge(text = "ACTIVE", bg = ZenithGreen.copy(alpha = 0.12f), fg = ZenithGreen)
                             } else {
-                                ZenithRadio(checked = false, onClick = { })
+                                ZenithRadio(checked = false, onClick = {
+                                    if (pkg != null) {
+                                        AppProfileCache.set(ctx, pkg, profileId)
+                                        ZenithDaemonClient.setAppProfile(pkg, profileId)
+                                    } else {
+                                        com.zenith.thermal.ThermalController.applyGlobal(ctx, profileId)
+                                    }
+                                    onApplied(); onDismiss()
+                                })
                             }
                         }
                     }
