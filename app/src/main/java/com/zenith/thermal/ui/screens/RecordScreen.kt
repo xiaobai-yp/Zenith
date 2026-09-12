@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.zenith.thermal.ZenithDaemonClient
+import com.zenith.thermal.ui.components.SectionLabel
 import com.zenith.thermal.ui.theme.*
 import kotlinx.coroutines.delay
 
@@ -34,6 +35,7 @@ fun RecordScreen() {
     var powerW by remember { mutableFloatStateOf(0f) }
     var batPct by remember { mutableIntStateOf(0) }
     var recordSec by remember { mutableLongStateOf(0L) }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -45,7 +47,7 @@ fun RecordScreen() {
                     gpuTemp = status.gpu?.tempC?.toFloat() ?: 0f
                     powerW = status.battery.powerMw / 1000f
                 }
-                val bm = androidx.compose.ui.platform.LocalContext.current.getSystemService(android.content.Context.BATTERY_SERVICE) as android.os.BatteryManager
+                val bm = ctx.getSystemService(android.content.Context.BATTERY_SERVICE) as android.os.BatteryManager
                 batPct = bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
             }
             if (isRecording) {
