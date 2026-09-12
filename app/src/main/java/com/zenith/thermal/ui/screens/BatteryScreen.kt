@@ -103,7 +103,7 @@ fun BatteryScreen() {
         )
         // Content
         Column(Modifier.fillMaxSize()) {
-            Spacer(Modifier.height(44.dp))
+            Spacer(Modifier.height(28.dp))
             Column(
                 Modifier
                     .weight(1f)
@@ -113,13 +113,13 @@ fun BatteryScreen() {
                 verticalArrangement = Arrangement.spacedBy(Space.sm)
             ) {
                 // Header
-                Text("Zenith Thermal", color = ZenithText, fontSize = TextHeading, fontWeight = FontWeight.Bold)
+                Text("Battery", color = ZenithText, fontSize = 22.sp, fontWeight = FontWeight.Bold)
 
                 // Status Monitor card
                 GradientBorderCard(modifier = Modifier.fillMaxWidth(), innerPadding = Space.lg) {
-                    Text("Status Monitor", color = ZenithText, fontSize = TextBodySm, fontWeight = FontWeight.Bold)
+                    Text("Status Monitor", color = ZenithText, fontSize = TextBody, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(Space.xs))
-                    Text("Real-time battery statistics in notification.", color = ZenithMuted2, fontSize = TextMicro)
+                    Text("Real-time battery statistics in notification.", color = ZenithMuted2, fontSize = TextCaption)
                     Spacer(Modifier.height(Space.sm))
                     ZenithButton(
                         text = if (monitorOn) "TURN OFF MONITOR" else "TURN ON MONITOR",
