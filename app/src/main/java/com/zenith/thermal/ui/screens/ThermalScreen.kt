@@ -201,7 +201,7 @@ fun ThermalScreen() {
                     contentPadding = PaddingValues(bottom = 100.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    items(filtered, key = { it.pkg }) { item ->
+                    items(filtered, key = { it.pkg }, contentType = { "app" }) { item ->
                         AppCard(item = item, iconCache = iconCache) { showProfileDialog = item }
                     }
                 }
