@@ -2,11 +2,11 @@ package com.zenith.thermal
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Whatshot
 import androidx.compose.material.icons.outlined.BatteryFull
 import androidx.compose.material.icons.outlined.Leaderboard
+import androidx.compose.material.icons.outlined.Speed
+import androidx.compose.material.icons.outlined.Whatshot
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -24,23 +24,25 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.zenith.thermal.ui.navigation.Screen
-import com.zenith.thermal.ui.screens.BenchmarkScreen
 import com.zenith.thermal.ui.screens.BatteryScreen
+import com.zenith.thermal.ui.screens.DashboardScreen
+import com.zenith.thermal.ui.screens.RecordScreen
 import com.zenith.thermal.ui.screens.ThermalScreen
-import com.zenith.thermal.ui.theme.ZenithBg
 import com.zenith.thermal.ui.theme.ZenithAccent
+import com.zenith.thermal.ui.theme.ZenithBg
 import com.zenith.thermal.ui.theme.ZenithTheme
 
 private val AccentBlue = ZenithAccent
+private val UnselectedNav = Color(0xFF8A8FA3)
 
 @Composable
-fun ZenithApp(onOpenBenchmark: () -> Unit = {}) {
+fun ZenithApp() {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = ZenithBg,
         bottomBar = {
             NavigationBar(
                 containerColor = ZenithBg,
@@ -48,9 +50,10 @@ fun ZenithApp(onOpenBenchmark: () -> Unit = {}) {
                 tonalElevation = 0.dp
             ) {
                 val items = listOf(
+                    Screen.Dashboard to "Dashboard",
                     Screen.Thermal to "Thermal",
                     Screen.Battery to "Battery",
-                    Screen.Benchmark to "Benchmark"
+                    Screen.Record to "Record"
                 )
                 items.forEach { (screen, label) ->
                     val selected = currentRoute == screen.route
@@ -59,7 +62,7 @@ fun ZenithApp(onOpenBenchmark: () -> Unit = {}) {
                         onClick = {
                             if (currentRoute != screen.route) {
                                 navController.navigate(screen.route) {
-                                    popUpTo(Screen.Thermal.route) { saveState = true }
+                                    popUpTo(Screen.Dashboard.route) { saveState = true }
                                     launchSingleTop = true
                                     restoreState = true
                                 }
@@ -68,9 +71,10 @@ fun ZenithApp(onOpenBenchmark: () -> Unit = {}) {
                         icon = {
                             Icon(
                                 imageVector = when (screen) {
+                                    Screen.Dashboard -> Icons.Outlined.Speed
                                     Screen.Thermal -> Icons.Outlined.Whatshot
                                     Screen.Battery -> Icons.Outlined.BatteryFull
-                                    Screen.Benchmark -> Icons.Outlined.Leaderboard
+                                    Screen.Record -> Icons.Outlined.Leaderboard
                                 },
                                 contentDescription = label
                             )
@@ -78,15 +82,15 @@ fun ZenithApp(onOpenBenchmark: () -> Unit = {}) {
                         label = {
                             Text(
                                 label,
-                                fontSize = 11.sp,
+                                fontSize = 10.sp,
                                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
                             )
                         },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = AccentBlue,
                             selectedTextColor = AccentBlue,
-                            unselectedIconColor = Color(0xFFB8C6CA),
-                            unselectedTextColor = Color(0xFFB8C6CA),
+                            unselectedIconColor = UnselectedNav,
+                            unselectedTextColor = UnselectedNav,
                             indicatorColor = AccentBlue.copy(alpha = 0.12f)
                         )
                     )
@@ -96,12 +100,13 @@ fun ZenithApp(onOpenBenchmark: () -> Unit = {}) {
     ) { padding ->
         NavHost(
             navController = navController,
-            startDestination = Screen.Thermal.route,
+            startDestination = Screen.Dashboard.route,
             modifier = Modifier.padding(padding)
         ) {
+            composable(Screen.Dashboard.route) { DashboardScreen() }
             composable(Screen.Thermal.route) { ThermalScreen() }
             composable(Screen.Battery.route) { BatteryScreen() }
-            composable(Screen.Benchmark.route) { BenchmarkScreen() }
+            composable(Screen.Record.route) { RecordScreen() }
         }
     }
 }
