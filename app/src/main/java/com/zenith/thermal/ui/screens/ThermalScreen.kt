@@ -18,13 +18,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.rememberDrawablePainter
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
-import androidx.core.graphics.drawable.toBitmap
 import com.zenith.thermal.AppItem
 import com.zenith.thermal.AppProfileCache
 import com.zenith.thermal.Profile
@@ -109,7 +108,7 @@ fun ThermalScreen() {
         )
         Column(Modifier.fillMaxSize()) {
             // Status bar spacer
-            Spacer(Modifier.height(44.dp))
+            Spacer(Modifier.height(28.dp))
 
             Column(
                 Modifier
@@ -264,10 +263,7 @@ private fun AppCard(item: AppItem, onClick: () -> Unit) {
             Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // App icon (real drawable)
-            val bitmap = remember(item.pkg) {
-                runCatching { item.icon.toBitmap(24, 24).asImageBitmap() }.getOrNull()
-            }
+            // App icon (real drawable — painter, no bitmap decode)
             Box(
                 Modifier
                     .size(36.dp)
@@ -275,11 +271,10 @@ private fun AppCard(item: AppItem, onClick: () -> Unit) {
                     .background(ZenithPurple.copy(alpha = 0.08f)),
                 contentAlignment = Alignment.Center
             ) {
-                bitmap?.let {
-                    Image(it, contentDescription = null, Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)))
-                } ?: Text(
-                    item.name.take(2).uppercase(),
-                    color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold
+                Image(
+                    painter = rememberDrawablePainter(item.icon),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp))
                 )
             }
             Spacer(Modifier.width(10.dp))

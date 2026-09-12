@@ -154,13 +154,6 @@ fun BatteryScreen() {
                     )
                 }
 
-                // Stats row — current/power/temp
-                Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-                    StatPill("Power", "%.2fW".format(powerW), ZenithGreen, Modifier.weight(1f))
-                    StatPill("Battery", "%.0f°C".format(batTempC), ZenithText, Modifier.weight(1f))
-                    StatPill("Current", "%.0fmA".format(batCurrentMa), ZenithText, Modifier.weight(1f))
-                }
-
                 // Temp unit
                 SectionLabel("Battery Temperature Unit")
                 GradientBorderCard(modifier = Modifier.fillMaxWidth(), innerPadding = Space.xs) {
