@@ -62,9 +62,8 @@ fun ZenithApp() {
                         onClick = {
                             if (currentRoute != screen.route) {
                                 navController.navigate(screen.route) {
-                                    popUpTo(Screen.Dashboard.route) { saveState = true }
+                                    popUpTo(Screen.Dashboard.route)
                                     launchSingleTop = true
-                                    restoreState = true
                                 }
                             }
                         },
@@ -103,10 +102,10 @@ fun ZenithApp() {
             startDestination = Screen.Dashboard.route,
             modifier = Modifier.padding(padding)
         ) {
-            composable(Screen.Dashboard.route) { DashboardScreen() }
-            composable(Screen.Thermal.route) { ThermalScreen() }
-            composable(Screen.Battery.route) { BatteryScreen() }
-            composable(Screen.Record.route) { RecordScreen() }
+            composable(Screen.Dashboard.route, enterTransition = { null }, exitTransition = { null }) { DashboardScreen() }
+            composable(Screen.Thermal.route, enterTransition = { null }, exitTransition = { null }) { ThermalScreen() }
+            composable(Screen.Battery.route, enterTransition = { null }, exitTransition = { null }) { BatteryScreen() }
+            composable(Screen.Record.route, enterTransition = { null }, exitTransition = { null }) { RecordScreen() }
         }
     }
 }
