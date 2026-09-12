@@ -121,44 +121,37 @@ fun BatteryScreen() {
                     Spacer(Modifier.height(Space.xs))
                     Text("Real-time battery statistics in notification.", color = ZenithMuted2, fontSize = TextMicro)
                     Spacer(Modifier.height(Space.sm))
-                    Box(
-                        Modifier.fillMaxWidth()
-                            .clip(RoundedCornerShape(Radius.sm))
-                            .background(if (monitorOn) ZenithRed.copy(0.2f) else ZenithPurple.copy(0.2f))
-                            .clickable {
-                                if (monitorOn) {
-                                    ctx.startService(
-                                        Intent(ctx, BatteryMonitorService::class.java).apply {
-                                            action = BatteryMonitorService.ACTION_STOP
-                                        }
-                                    )
-                                    monitorOn = false
-                                    prefs.edit().putBoolean("monitor_running", false).apply()
-                                } else {
-                                    if (Build.VERSION.SDK_INT >= 33 &&
-                                        ctx.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
-                                        android.content.pm.PackageManager.PERMISSION_GRANTED
-                                    ) {
-                                        ctx.startActivity(
-                                            Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                                                .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, ctx.packageName)
-                                        )
-                                    } else {
-                                        val start = Intent(ctx, BatteryMonitorService::class.java)
-                                        if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(start) else ctx.startService(start)
-                                        monitorOn = true
-                                        prefs.edit().putBoolean("monitor_running", true).apply()
+                    ZenithButton(
+                        text = if (monitorOn) "TURN OFF MONITOR" else "TURN ON MONITOR",
+                        onClick = {
+                            if (monitorOn) {
+                                ctx.startService(
+                                    Intent(ctx, BatteryMonitorService::class.java).apply {
+                                        action = BatteryMonitorService.ACTION_STOP
                                     }
+                                )
+                                monitorOn = false
+                                prefs.edit().putBoolean("monitor_running", false).apply()
+                            } else {
+                                if (Build.VERSION.SDK_INT >= 33 &&
+                                    ctx.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
+                                    android.content.pm.PackageManager.PERMISSION_GRANTED
+                                ) {
+                                    ctx.startActivity(
+                                        Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                            .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, ctx.packageName)
+                                    )
+                                } else {
+                                    val start = Intent(ctx, BatteryMonitorService::class.java)
+                                    if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(start) else ctx.startService(start)
+                                    monitorOn = true
+                                    prefs.edit().putBoolean("monitor_running", true).apply()
                                 }
                             }
-                            .padding(vertical = Space.sm),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            if (monitorOn) "TURN OFF MONITOR" else "TURN ON MONITOR",
-                            color = ZenithText, fontSize = TextMicro, fontWeight = FontWeight.Bold
-                        )
-                    }
+                        },
+                        variant = if (monitorOn) ZenithButtonVariant.Danger else ZenithButtonVariant.Primary,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
 
                 // Stats row — current/power/temp
@@ -252,24 +245,18 @@ fun BatteryScreen() {
 
                 Spacer(Modifier.height(Space.sm))
 
-                // Reset button — danger
-                Box(
-                    Modifier.fillMaxWidth()
-                        .clip(RoundedCornerShape(Radius.lg))
-                        .background(ZenithRed.copy(0.1f))
-                        .border(1.dp, ZenithRed.copy(0.15f), RoundedCornerShape(Radius.lg))
-                        .clickable {
-                            ctx.startService(
-                                Intent(ctx, BatteryMonitorService::class.java).apply {
-                                    action = BatteryMonitorService.ACTION_RESET
-                                }
-                            )
-                        }
-                        .padding(vertical = Space.md),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("RESET STATS", color = ZenithRed, fontSize = TextMicro, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
-                }
+                ZenithButton(
+                    text = "RESET STATS",
+                    onClick = {
+                        ctx.startService(
+                            Intent(ctx, BatteryMonitorService::class.java).apply {
+                                action = BatteryMonitorService.ACTION_RESET
+                            }
+                        )
+                    },
+                    variant = ZenithButtonVariant.Danger,
+                    modifier = Modifier.fillMaxWidth()
+                )
 
                 Spacer(Modifier.height(Space.sm))
             }

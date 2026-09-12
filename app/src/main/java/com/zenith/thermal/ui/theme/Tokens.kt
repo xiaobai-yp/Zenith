@@ -44,3 +44,27 @@ val TextHeadingLH = 32.sp
 val TextCaption   = 12.sp
 val TextMini      = 10.sp
 val TextMicro     = 8.sp
+
+// ── Button tokens ──
+// Height 8-multiple system: 32 / 40 / 48. h-padding >= 2x v-padding.
+object ButtonSize {
+    val sm = 32.dp   // small
+    val md = 40.dp   // medium — mobile default, min touch target
+    val lg = 48.dp   // large
+}
+
+object ButtonPad {
+    val smV = Space.xs      // vertical 4dp → horizontal 16dp = 4x
+    val smH = Space.lg
+    val mdV = Space.sm      // vertical 8dp → horizontal 16dp = 2x
+    val mdH = Space.lg
+    val lgV = Space.md      // vertical 12dp → horizontal 32dp ≈ 2.7x
+    val lgH = Space.xxl
+}
+
+// Button typography — follow existing type scale
+object ButtonType {
+    val sm = TextMini   // 10sp
+    val md = TextBodySm // 14sp
+    val lg = TextBody   // 16sp
+}

@@ -12,17 +12,27 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.height
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.zenith.thermal.ui.theme.ButtonPad
+import com.zenith.thermal.ui.theme.ButtonSize
+import com.zenith.thermal.ui.theme.ButtonType
 import com.zenith.thermal.ui.theme.Radius
 import com.zenith.thermal.ui.theme.Space
 import com.zenith.thermal.ui.theme.ZenithBorder2
+import com.zenith.thermal.ui.theme.ZenithRed
 import com.zenith.thermal.ui.theme.ZenithMuted
 import com.zenith.thermal.ui.theme.ZenithMuted2
 import com.zenith.thermal.ui.theme.ZenithMuted3
@@ -165,5 +175,76 @@ fun AppIcon(initials: String, modifier: Modifier = Modifier, gradient: List<Colo
         contentAlignment = Alignment.Center
     ) {
         Text(initials, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+// ── Button variants ──
+enum class ZenithButtonVariant { Primary, Outline, Text, Danger }
+
+// ── Button sizes (32/40/48 system) ──
+enum class ZenithButtonSize(val h: Dp, val vPad: Dp, val hPad: Dp, val fs: TextUnit) {
+    Small(ButtonSize.sm, ButtonPad.smV, ButtonPad.smH, ButtonType.sm),
+    Medium(ButtonSize.md, ButtonPad.mdV, ButtonPad.mdH, ButtonType.md),
+    Large(ButtonSize.lg, ButtonPad.lgV, ButtonPad.lgH, ButtonType.lg)
+}
+
+/** Design-system button: 4 variants × states, token-sized. */
+@Composable
+fun ZenithButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    variant: ZenithButtonVariant = ZenithButtonVariant.Primary,
+    size: ZenithButtonSize = ZenithButtonSize.Medium,
+    enabled: Boolean = true
+) {
+    // State-driven colors — pressed/dim via alpha + scale, disabled via muted
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val fg = when (variant) {
+        ZenithButtonVariant.Primary -> Color.White
+        ZenithButtonVariant.Outline -> ZenithPurple
+        ZenithButtonVariant.Text -> ZenithPurple
+        ZenithButtonVariant.Danger -> Color.White
+    }
+    val bg = when (variant) {
+        ZenithButtonVariant.Primary ->
+            if (pressed) ZenithPurple.copy(alpha = 0.65f) else ZenithPurple.copy(alpha = 0.25f)
+        ZenithButtonVariant.Outline -> Color.Transparent
+        ZenithButtonVariant.Text -> Color.Transparent
+        ZenithButtonVariant.Danger ->
+            if (pressed) ZenithRed.copy(alpha = 0.65f) else ZenithRed.copy(alpha = 0.25f)
+    }
+    val borderColor = when (variant) {
+        ZenithButtonVariant.Primary -> if (pressed) ZenithPurple.copy(alpha = 0.8f) else ZenithPurple.copy(alpha = 0.5f)
+        ZenithButtonVariant.Outline -> if (pressed) ZenithPurple.copy(alpha = 0.8f) else ZenithPurple.copy(alpha = 0.4f)
+        ZenithButtonVariant.Text -> Color.Transparent
+        ZenithButtonVariant.Danger -> if (pressed) ZenithRed.copy(alpha = 0.8f) else ZenithRed.copy(alpha = 0.5f)
+    }
+    val effFg = if (!enabled) ZenithMuted3 else fg
+
+    Box(
+        modifier = modifier
+            .height(size.h)
+            .clip(RoundedCornerShape(Radius.md))
+            .background(
+                if (!enabled) ZenithMuted3.copy(alpha = 0.08f) else bg,
+                RoundedCornerShape(Radius.md)
+            )
+            .then(
+                if (variant != ZenithButtonVariant.Text)
+                    Modifier.border(1.dp, if (!enabled) ZenithMuted3.copy(alpha = 0.15f) else borderColor, RoundedCornerShape(Radius.md))
+                else Modifier
+            )
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                enabled = enabled,
+                onClick = onClick
+            )
+            .padding(horizontal = size.hPad, vertical = size.vPad),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(text, color = effFg, fontSize = size.fs, fontWeight = FontWeight.Bold, letterSpacing = 0.4.sp)
     }
 }
