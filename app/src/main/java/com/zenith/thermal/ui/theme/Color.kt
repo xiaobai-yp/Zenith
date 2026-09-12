@@ -17,3 +17,7 @@ val ZenithMuted3 = Color(0x1AFFFFFF)    // 10% white
 val ZenithCardBg = Color(0xF00C0C18)    // 94% opacity
 val ZenithBorder = Color(0x0FFFFFFF)    // 6% white
 val ZenithBorder2 = Color(0x10FFFFFF)   // 6% white
+
+// Legacy aliases — old names kept so Theme.kt / ZenithApp.kt compile
+val ZenithAccent = ZenithPurple
+val ZenithError = ZenithRed

@@ -24,6 +24,7 @@ import com.zenith.thermal.ui.theme.ZenithBorder2
 import com.zenith.thermal.ui.theme.ZenithMuted
 import com.zenith.thermal.ui.theme.ZenithMuted2
 import com.zenith.thermal.ui.theme.ZenithMuted3
+import com.zenith.thermal.ui.theme.ZenithPink
 import com.zenith.thermal.ui.theme.ZenithPurple
 import com.zenith.thermal.ui.theme.ZenithText
 
