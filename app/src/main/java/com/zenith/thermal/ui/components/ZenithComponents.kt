@@ -20,6 +20,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.zenith.thermal.ui.theme.Radius
+import com.zenith.thermal.ui.theme.Space
 import com.zenith.thermal.ui.theme.ZenithBorder2
 import com.zenith.thermal.ui.theme.ZenithMuted
 import com.zenith.thermal.ui.theme.ZenithMuted2
@@ -38,7 +40,7 @@ fun Badge(
 ) {
     Box(
         modifier = modifier
-            .background(bg, RoundedCornerShape(100.dp))
+            .background(bg, RoundedCornerShape(Radius.sm))
             .padding(horizontal = 8.dp, vertical = 2.dp)
     ) {
         Text(text, color = fg, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.3.sp)
@@ -78,17 +80,17 @@ fun SelectPill(
 ) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(Radius.sm))
             .background(
                 if (selected) ZenithPurple.copy(alpha = 0.12f) else Color(0x0FFFFFFF),
-                RoundedCornerShape(8.dp)
+                RoundedCornerShape(Radius.sm)
             )
             .then(
-                if (selected) Modifier.border(1.dp, ZenithPurple.copy(alpha = 0.25f), RoundedCornerShape(8.dp))
-                else Modifier.border(1.dp, ZenithBorder2, RoundedCornerShape(8.dp))
+                if (selected) Modifier.border(1.dp, ZenithPurple.copy(alpha = 0.25f), RoundedCornerShape(Radius.sm))
+                else Modifier.border(1.dp, ZenithBorder2, RoundedCornerShape(Radius.sm))
             )
             .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 4.dp)
+            .padding(horizontal = Space.sm + Space.xs, vertical = Space.xs)
     ) {
         Text(
             text,
@@ -155,10 +157,10 @@ fun AppIcon(initials: String, modifier: Modifier = Modifier, gradient: List<Colo
     val bg = gradient ?: listOf(ZenithPurple, ZenithPink)
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(Radius.md))
             .background(
                 androidx.compose.ui.graphics.Brush.linearGradient(bg),
-                RoundedCornerShape(10.dp)
+                RoundedCornerShape(Radius.md)
             ),
         contentAlignment = Alignment.Center
     ) {

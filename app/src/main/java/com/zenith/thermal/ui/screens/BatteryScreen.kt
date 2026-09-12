@@ -227,9 +227,9 @@ fun BatteryScreen() {
                 Box(
                     Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(Radius.lg))
                         .background(ZenithRed.copy(0.1f))
-                        .border(1.dp, ZenithRed.copy(0.15f), RoundedCornerShape(12.dp))
+                        .border(1.dp, ZenithRed.copy(0.15f), RoundedCornerShape(Radius.lg))
                         .clickable {
                             val intent = Intent(ctx, BatteryMonitorService::class.java).apply {
                                 action = BatteryMonitorService.ACTION_RESET
@@ -273,10 +273,10 @@ private fun BatteryRing(pct: Int, size: Dp) {
 private fun StatPill(label: String, value: String, color: Color, modifier: Modifier = Modifier) {
     Column(
         modifier
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(Radius.md))
             .background(Color(0x08FFFFFF))
-            .border(1.dp, ZenithBorder2, RoundedCornerShape(10.dp))
-            .padding(vertical = 8.dp),
+            .border(1.dp, ZenithBorder2, RoundedCornerShape(Radius.md))
+            .padding(vertical = Space.sm),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(value, color = color, fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -288,7 +288,7 @@ private fun StatPill(label: String, value: String, color: Color, modifier: Modif
 @Composable
 private fun UnitRow(label: String, code: String, current: String, onSelect: (String) -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clickable { onSelect(code) }.padding(horizontal = 14.dp, vertical = 12.dp),
+        Modifier.fillMaxWidth().clickable { onSelect(code) }.padding(horizontal = Space.lg, vertical = Space.md),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(label, color = ZenithText, fontSize = 12.sp, modifier = Modifier.weight(1f))
@@ -299,7 +299,7 @@ private fun UnitRow(label: String, code: String, current: String, onSelect: (Str
 @Composable
 private fun SwitchRow(text: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+        Modifier.fillMaxWidth().padding(horizontal = Space.lg, vertical = Space.md),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(text, color = ZenithText, fontSize = 12.sp, modifier = Modifier.weight(1f))

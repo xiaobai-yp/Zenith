@@ -132,10 +132,10 @@ fun ThermalScreen() {
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(Radius.lg))
                         .background(Color(0x0DFFFFFF))
-                        .border(1.dp, ZenithBorder2, RoundedCornerShape(10.dp))
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                        .border(1.dp, ZenithBorder2, RoundedCornerShape(Radius.lg))
+                        .padding(horizontal = Space.md, vertical = Space.sm),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("\uD83D\uDD0D", fontSize = 13.sp, color = ZenithMuted2)

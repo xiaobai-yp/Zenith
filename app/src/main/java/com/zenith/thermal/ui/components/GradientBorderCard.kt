@@ -13,6 +13,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.zenith.thermal.ui.theme.Radius
+import com.zenith.thermal.ui.theme.Space
 import com.zenith.thermal.ui.theme.ZenithPurple
 import com.zenith.thermal.ui.theme.ZenithPink
 
@@ -23,7 +25,7 @@ import com.zenith.thermal.ui.theme.ZenithPink
 @Composable
 fun GradientBorderCard(
     modifier: Modifier = Modifier,
-    radius: Dp = 14.dp,
+    radius: Dp = Radius.xl,
     borderPadding: Dp = 1.5.dp,
     gradient: Brush = Brush.linearGradient(
         listOf(
@@ -32,7 +34,7 @@ fun GradientBorderCard(
             ZenithPurple.copy(alpha = 0.15f)
         )
     ),
-    innerPadding: Dp = 14.dp,
+    innerPadding: Dp = Space.lg,
     innerColor: Color = Color(0xF00C0C18),
     onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
