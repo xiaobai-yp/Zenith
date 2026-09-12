@@ -70,7 +70,7 @@ fun ThermalScreen() {
 
     // Centralized icon cache — decode ALL icons once on IO thread
     val iconCache = remember { ConcurrentHashMap<String, androidx.compose.ui.graphics.painter.Painter?>() }
-    var iconsLoaded by remember { mutableStateOf(false) }
+    var iconVersion by remember { mutableIntStateOf(0) }
 
     fun loadApps() {
         val pm = ctx.packageManager
@@ -86,8 +86,8 @@ fun ThermalScreen() {
         apps = loaded
     }
     LaunchedEffect(Unit) {
-        loadApps()
-        // Preload all icons on IO thread after apps load
+        kotlinx.coroutines.withContext(Dispatchers.IO) { loadApps() }
+        // Preload icons in background — don't block render
         kotlinx.coroutines.withContext(Dispatchers.IO) {
             for (item in apps) {
                 if (iconCache.containsKey(item.pkg)) continue
@@ -96,11 +96,11 @@ fun ThermalScreen() {
                     iconCache[item.pkg] = BitmapPainter(bmp)
                 } catch (_: Exception) {}
             }
-            withContext(Dispatchers.Main) { iconsLoaded = true }
+            withContext(Dispatchers.Main) { iconVersion++ }
         }
     }
     LaunchedEffect(showSystem) {
-        loadApps()
+        kotlinx.coroutines.withContext(Dispatchers.IO) { loadApps() }
         kotlinx.coroutines.withContext(Dispatchers.IO) {
             for (item in apps) {
                 if (iconCache.containsKey(item.pkg)) continue

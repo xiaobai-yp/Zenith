@@ -62,8 +62,9 @@ fun ZenithApp() {
                         onClick = {
                             if (currentRoute != screen.route) {
                                 navController.navigate(screen.route) {
-                                    popUpTo(Screen.Dashboard.route)
+                                    popUpTo(Screen.Dashboard.route) { saveState = true }
                                     launchSingleTop = true
+                                    restoreState = true
                                 }
                             }
                         },
