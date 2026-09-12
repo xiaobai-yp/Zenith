@@ -29,9 +29,9 @@ fun GradientBorderCard(
     borderPadding: Dp = 1.5.dp,
     gradient: Brush = Brush.linearGradient(
         listOf(
-            ZenithPurple.copy(alpha = 0.45f),
-            ZenithPink.copy(alpha = 0.4f),
-            ZenithPurple.copy(alpha = 0.3f)
+            ZenithPurple.copy(alpha = 0.55f),
+            ZenithPink.copy(alpha = 0.50f),
+            ZenithPurple.copy(alpha = 0.40f)
         )
     ),
     innerPadding: Dp = Space.lg,

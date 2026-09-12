@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -60,7 +61,6 @@ fun ThermalScreen() {
     var apps by remember { mutableStateOf<List<AppItem>>(emptyList()) }
     var showSystem by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
-    var activeFilter by remember { mutableStateOf(Filter.ALL) }
     var showProfileDialog by remember { mutableStateOf<AppItem?>(null) }
     var showGlobalDialog by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
@@ -81,19 +81,33 @@ fun ThermalScreen() {
     LaunchedEffect(Unit) { loadApps() }
     LaunchedEffect(showSystem) { loadApps() }
 
-    val filtered = remember(apps, searchQuery, activeFilter) {
+    val filtered = remember(apps, searchQuery) {
         val q = searchQuery.trim().lowercase()
-        apps.filter {
-            (q.isEmpty() || it.name.lowercase().contains(q) || it.pkg.lowercase().contains(q))
-                && profileMatchesFilter(it.profileId, activeFilter)
-        }
+        if (q.isEmpty()) apps
+        else apps.filter { it.name.lowercase().contains(q) || it.pkg.lowercase().contains(q) }
     }
 
-    // ——— Root with dark bg ———
+    // ——— Root with gradient bg ———
     Box(Modifier.fillMaxSize().background(ZenithBg)) {
+        // Radial glow top (mirror BatteryScreen / HTML preview)
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.radialGradient(
+                        listOf(
+                            ZenithPurple.copy(alpha = 0.10f),
+                            ZenithPink.copy(alpha = 0.05f),
+                            Color.Transparent
+                        ),
+                        center = Offset(0.5f, 0.1f),
+                        radius = 800f
+                    )
+                )
+        )
         Column(Modifier.fillMaxSize()) {
             // Status bar spacer
-            Spacer(Modifier.height(44.dp))
+            Spacer(Modifier.height(48.dp))
 
             Column(
                 Modifier
@@ -158,23 +172,7 @@ fun ThermalScreen() {
                     )
                 }
 
-                Spacer(Modifier.height(8.dp))
-
-                // Filter chips
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(5.dp)
-                ) {
-                    Filter.entries.forEach { f ->
-                        SelectPill(
-                            text = f.label,
-                            selected = activeFilter == f,
-                            onClick = { activeFilter = f }
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(Space.sm))
 
                 // Section label
                 SectionLabel("Per-App", count = "· ${filtered.size} apps")
@@ -193,38 +191,40 @@ fun ThermalScreen() {
             }
         }
 
-        // ——— Menu overlay ———
+        // ——— Menu dropdown (top-right, text-only) ———
         if (showMenu) {
             Box(
                 Modifier
                     .fillMaxSize()
-                    .background(Color(0x99000000))
+                    .background(Color(0x66000000))
                     .zIndex(10f)
                     .clickable(
                         interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                         indication = null,
                         onClick = { showMenu = false }
-                    ),
-                contentAlignment = Alignment.BottomCenter
+                    )
             ) {
                 GradientBorderCard(
-                    modifier = Modifier.padding(14.dp).padding(bottom = 72.dp),
-                    radius = 16.dp,
-                    innerPadding = 6.dp,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 52.dp, end = 14.dp)
+                        .width(210.dp),
+                    radius = Radius.lg,
+                    innerPadding = 4.dp,
                     innerColor = Color(0xF70C0C18)
                 ) {
-                    OverlayMenuItem("\uD83D\uDC41\uFE0F", "Show System Apps") {
+                    OverlayMenuItem("Show System Apps") {
                         showSystem = !showSystem; showMenu = false; loadApps()
                     }
-                    OverlayMenuItem("\uD83D\uDD04", "Reset Per-App Profiles") {
+                    OverlayMenuItem("Reset Per-App Profiles") {
                         AppProfileCache.prefs(ctx).edit().clear().apply()
                         runCatching { ZenithDaemonClient.resetProfiles() }
                         showMenu = false; loadApps()
                     }
-                    OverlayMenuItem("\uD83C\uDF10", "Global Profile") {
+                    OverlayMenuItem("Global Profile") {
                         showMenu = false; showGlobalDialog = true
                     }
-                    OverlayMenuItem("ℹ️", "About") { showMenu = false }
+                    OverlayMenuItem("About") { showMenu = false }
                 }
             }
         }
@@ -307,15 +307,14 @@ private fun AppCard(item: AppItem, onClick: () -> Unit) {
 }
 
 @Composable
-private fun OverlayMenuItem(icon: String, text: String, onClick: () -> Unit) {
+private fun OverlayMenuItem(text: String, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 13.dp),
+            .padding(horizontal = Space.lg, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(icon, fontSize = 16.sp, modifier = Modifier.width(24.dp))
         Text(text, color = ZenithText, fontSize = 14.sp, fontWeight = FontWeight.Medium)
     }
 }
