@@ -18,12 +18,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.rememberDrawablePainter
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import androidx.core.graphics.drawable.toBitmap
 import com.zenith.thermal.AppItem
 import com.zenith.thermal.AppProfileCache
 import com.zenith.thermal.Profile
@@ -263,7 +265,16 @@ private fun AppCard(item: AppItem, onClick: () -> Unit) {
             Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // App icon (real drawable — painter, no bitmap decode)
+            // App icon (decode bitmap lazily on IO thread, cache per pkg)
+            val painter = remember(item.pkg) { mutableStateOf<androidx.compose.ui.graphics.painter.Painter?>(null) }
+            LaunchedEffect(item.pkg) {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    try {
+                        val bmp = item.icon.toBitmap(24, 24).asImageBitmap()
+                        painter.value = BitmapPainter(bmp)
+                    } catch (_: Exception) {}
+                }
+            }
             Box(
                 Modifier
                     .size(36.dp)
@@ -271,11 +282,9 @@ private fun AppCard(item: AppItem, onClick: () -> Unit) {
                     .background(ZenithPurple.copy(alpha = 0.08f)),
                 contentAlignment = Alignment.Center
             ) {
-                Image(
-                    painter = rememberDrawablePainter(item.icon),
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp))
-                )
+                painter.value?.let {
+                    Image(it, contentDescription = null, Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)))
+                }
             }
             Spacer(Modifier.width(10.dp))
 
