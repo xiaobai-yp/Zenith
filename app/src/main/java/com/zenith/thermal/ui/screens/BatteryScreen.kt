@@ -126,9 +126,9 @@ fun BatteryScreen() {
 
                 // Stats row
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    StatPill("Power", "%.1fW".format(powerW), ZenithGreen)
-                    StatPill("Battery", "%.0f°C".format(batTempC), ZenithText)
-                    StatPill("Current", "%.0f mA".format(kotlin.math.abs(batCurrentMa)), ZenithText)
+                    StatPill("Power", "%.1fW".format(powerW), ZenithGreen, Modifier.weight(1f))
+                    StatPill("Battery", "%.0f°C".format(batTempC), ZenithText, Modifier.weight(1f))
+                    StatPill("Current", "%.0f mA".format(kotlin.math.abs(batCurrentMa)), ZenithText, Modifier.weight(1f))
                 }
 
                 // Temperature unit
@@ -218,18 +218,27 @@ private fun BatteryRing(pct: Int, size: Dp) {
     val sweep = pct.coerceIn(0, 100) * 3.6f
     Box(contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(size)) {
-            drawArc(Color(0x0FFFFFFF), -90f, 360f, false, Stroke(8.dp.toPx(), cap = StrokeCap.Butt), Size(size.toPx(), size.toPx()), Offset.Zero)
-            drawArc(ZenithGreen, -90f, sweep, false, Stroke(8.dp.toPx(), cap = StrokeCap.Butt), Size(size.toPx(), size.toPx()), Offset.Zero)
+            drawArc(
+                color = Color(0x0FFFFFFF),
+                startAngle = -90f, sweepAngle = 360f, useCenter = false,
+                style = Stroke(width = 8.dp.toPx(), cap = StrokeCap.Butt),
+                topLeft = Offset.Zero, size = Size(size.toPx(), size.toPx())
+            )
+            drawArc(
+                color = ZenithGreen,
+                startAngle = -90f, sweepAngle = sweep, useCenter = false,
+                style = Stroke(width = 8.dp.toPx(), cap = StrokeCap.Butt),
+                topLeft = Offset.Zero, size = Size(size.toPx(), size.toPx())
+            )
         }
         Text("$pct%", color = ZenithText, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
     }
 }
 
 @Composable
-private fun StatPill(label: String, value: String, color: Color) {
+private fun StatPill(label: String, value: String, color: Color, modifier: Modifier = Modifier) {
     Column(
-        Modifier
-            .weight(1f)
+        modifier
             .clip(RoundedCornerShape(10.dp))
             .background(Color(0x08FFFFFF))
             .border(1.dp, ZenithBorder2, RoundedCornerShape(10.dp))
