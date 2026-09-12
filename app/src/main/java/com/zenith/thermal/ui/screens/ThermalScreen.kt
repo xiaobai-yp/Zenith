@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
@@ -92,21 +93,26 @@ fun ThermalScreen() {
 
     // ——— Root with gradient bg ———
     Box(Modifier.fillMaxSize().background(ZenithBg)) {
-        // Radial glow top (mirror BatteryScreen / HTML preview)
+        // Radial glow top — drawWithCache, compiled once (not per scroll frame)
         Box(
             Modifier
                 .fillMaxSize()
-                .background(
-                    Brush.radialGradient(
+                .drawWithCache {
+                    val w = size.width
+                    val h = size.height
+                    val brush = Brush.radialGradient(
                         listOf(
                             ZenithPurple.copy(alpha = 0.10f),
                             ZenithPink.copy(alpha = 0.05f),
                             Color.Transparent
                         ),
-                        center = Offset(0.5f, 0.1f),
-                        radius = 500f
+                        center = Offset(w * 0.5f, h * 0.1f),
+                        radius = w * 0.55f
                     )
-                )
+                    onDrawBehind {
+                        drawRect(brush = brush, size = size)
+                    }
+                }
         )
         Column(Modifier.fillMaxSize()) {
             // Status bar spacer
