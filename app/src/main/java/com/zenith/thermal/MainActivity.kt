@@ -13,12 +13,25 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         cleanupLegacyNotificationChannels()
+        ensureDaemon()
 
         setContent {
             ZenithTheme {
                 ZenithApp()
             }
         }
+    }
+
+    /** Ensure zenithd daemon is running (extracted from AppMonitorService). */
+    private fun ensureDaemon() {
+        Thread {
+            try {
+                val ok = DaemonManager.ensureDaemon(this)
+                android.util.Log.i("MainActivity", "ensureDaemon -> $ok")
+            } catch (e: Exception) {
+                android.util.Log.e("MainActivity", "ensureDaemon failed: ${e.message}")
+            }
+        }.start()
     }
 
     private fun cleanupLegacyNotificationChannels() {

@@ -346,10 +346,11 @@ private fun GradientProfileDialog(
 
                     GradientBorderCard(
                         modifier = Modifier.fillMaxWidth(),
-                        radius = 8.dp,
-                        borderPadding = if (selected) 1.5.dp else 0.dp,
-                        gradient = if (selected) Brush.linearGradient(listOf(ZenithPurple, ZenithPink)) else Brush.linearGradient(listOf(Color.Transparent, Color.Transparent)),
-                        innerPadding = 12.dp,
+                        radius = Radius.lg,
+                        borderPadding = if (selected) 1.5.dp else 1.dp,
+                        gradient = if (selected) Brush.linearGradient(listOf(ZenithPurple.copy(0.8f), ZenithPink.copy(0.7f))) else Brush.linearGradient(listOf(ZenithPurple.copy(0.15f), ZenithPink.copy(0.1f))),
+                        innerPadding = Space.md,
+                        innerColor = if (selected) Color(0xF00C0C18) else Color(0xE00C0C18),
                         onClick = {
                             if (pkg != null) {
                                 AppProfileCache.set(ctx, pkg, profileId)
