@@ -1,6 +1,11 @@
 package com.zenith.thermal
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Whatshot
+import androidx.compose.material.icons.outlined.BatteryFull
+import androidx.compose.material.icons.outlined.Leaderboard
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -61,12 +66,13 @@ fun ZenithApp(onOpenBenchmark: () -> Unit = {}) {
                             }
                         },
                         icon = {
-                            Text(
-                                when (screen) {
-                                    Screen.Thermal -> "🔥"
-                                    Screen.Battery -> "🔋"
-                                    Screen.Benchmark -> "📊"
-                                }
+                            Icon(
+                                imageVector = when (screen) {
+                                    Screen.Thermal -> Icons.Outlined.Whatshot
+                                    Screen.Battery -> Icons.Outlined.BatteryFull
+                                    Screen.Benchmark -> Icons.Outlined.Leaderboard
+                                },
+                                contentDescription = label
                             )
                         },
                         label = {

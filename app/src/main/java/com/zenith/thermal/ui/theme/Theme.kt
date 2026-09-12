@@ -9,11 +9,11 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 private val ZenithColorScheme = darkColorScheme(
-    primary = ZenithAccent,
+    primary = ZenithPurple,
     onPrimary = ZenithText,
     primaryContainer = ZenithSurface,
     onPrimaryContainer = ZenithText,
-    secondary = ZenithAccent,
+    secondary = ZenithPurple,
     onSecondary = ZenithText,
     secondaryContainer = ZenithSurface,
     onSecondaryContainer = ZenithText,
@@ -23,8 +23,8 @@ private val ZenithColorScheme = darkColorScheme(
     onSurface = ZenithText,
     surfaceVariant = ZenithSurface,
     onSurfaceVariant = ZenithMuted,
-    outline = ZenithBorder,
-    error = ZenithError,
+    outline = ZenithBorder2,
+    error = ZenithRed,
     onError = ZenithText,
 )
 

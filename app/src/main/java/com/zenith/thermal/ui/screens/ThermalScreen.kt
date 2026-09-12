@@ -11,12 +11,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -137,26 +134,27 @@ fun ThermalScreen() {
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(10.dp))
                         .background(Color(0x0DFFFFFF))
-                        .then(Modifier.border(1.dp, ZenithBorder2, RoundedCornerShape(10.dp)))
-                        .padding(horizontal = 12.dp, vertical = 9.dp),
+                        .border(1.dp, ZenithBorder2, RoundedCornerShape(10.dp))
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // search icon via text
                     Text("\uD83D\uDD0D", fontSize = 13.sp, color = ZenithMuted2)
-                    Spacer(Modifier.width(8.dp))
-                    TextField(
+                    Spacer(Modifier.width(6.dp))
+                    androidx.compose.foundation.text.BasicTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
-                        placeholder = { Text("Cari aplikasi…", color = ZenithMuted2, fontSize = 12.sp) },
                         modifier = Modifier.weight(1f),
-                        colors = TextFieldDefaults.colors(
-                            focusedTextColor = ZenithText,
-                            unfocusedTextColor = ZenithText,
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent,
-                            cursorColor = ZenithPurple
-                        ),
-                        singleLine = true
+                        textStyle = androidx.compose.ui.text.TextStyle(color = ZenithText, fontSize = 12.sp),
+                        singleLine = true,
+                        cursorBrush = androidx.compose.ui.graphics.SolidBrush(ZenithPurple),
+                        decorationBox = { inner ->
+                            Box {
+                                if (searchQuery.isEmpty()) {
+                                    Text("Cari aplikasi…", color = ZenithMuted2, fontSize = 12.sp)
+                                }
+                                inner()
+                            }
+                        }
                     )
                 }
 
@@ -201,7 +199,6 @@ fun ThermalScreen() {
                 Modifier
                     .fillMaxSize()
                     .background(Color(0x99000000))
-                    .blur(8.dp)
                     .zIndex(10f)
                     .clickable(
                         interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
@@ -258,7 +255,8 @@ private fun AppCard(item: AppItem, onClick: () -> Unit) {
     GradientBorderCard(
         modifier = Modifier.fillMaxWidth(),
         radius = 12.dp,
-        innerPadding = 10.dp
+        innerPadding = 10.dp,
+        onClick = onClick
     ) {
         Row(
             Modifier.fillMaxWidth(),

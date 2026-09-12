@@ -104,8 +104,42 @@ fun BatteryScreen() {
                     Text("Zenith Thermal", color = ZenithText, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 }
 
+                // Status Monitor
+                GradientBorderCard(modifier = Modifier.fillMaxWidth(), innerPadding = 12.dp) {
+                    Text("Status Monitor", color = ZenithText, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Real-time battery statistics (Temp, Current mA, Deep Sleep) in notification.",
+                        color = ZenithMuted2, fontSize = 10.sp
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Box(
+                        Modifier.fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (monitorOn) ZenithRed.copy(0.2f) else ZenithPurple.copy(0.2f))
+                            .clickable {
+                                val intent = Intent(ctx, BatteryMonitorService::class.java)
+                                if (monitorOn) {
+                                    intent.action = BatteryMonitorService.ACTION_STOP
+                                }
+                                if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(intent) else ctx.startService(intent)
+                                monitorOn = !monitorOn
+                            }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            if (monitorOn) "TURN OFF MONITOR" else "TURN ON MONITOR",
+                            color = ZenithText, fontSize = 11.sp, fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
                 // Battery ring hero
-                val charging = monitorOn
+                val charging = runCatching {
+                    val bm = ctx.getSystemService(Context.BATTERY_SERVICE) as android.os.BatteryManager
+                    bm.isCharging
+                }.getOrDefault(false)
                 GradientBorderCard(
                     modifier = Modifier.fillMaxWidth(),
                     radius = 14.dp,
