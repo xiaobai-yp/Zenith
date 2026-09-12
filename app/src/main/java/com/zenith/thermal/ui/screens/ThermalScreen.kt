@@ -81,10 +81,12 @@ fun ThermalScreen() {
     LaunchedEffect(Unit) { loadApps() }
     LaunchedEffect(showSystem) { loadApps() }
 
-    val filtered = remember(apps, searchQuery) {
-        val q = searchQuery.trim().lowercase()
-        if (q.isEmpty()) apps
-        else apps.filter { it.name.lowercase().contains(q) || it.pkg.lowercase().contains(q) }
+    val filtered by remember(apps, searchQuery) {
+        derivedStateOf {
+            val q = searchQuery.trim().lowercase()
+            if (q.isEmpty()) apps
+            else apps.filter { it.name.lowercase().contains(q) || it.pkg.lowercase().contains(q) }
+        }
     }
 
     // ——— Root with gradient bg ———
@@ -101,13 +103,13 @@ fun ThermalScreen() {
                             Color.Transparent
                         ),
                         center = Offset(0.5f, 0.1f),
-                        radius = 800f
+                        radius = 500f
                     )
                 )
         )
         Column(Modifier.fillMaxSize()) {
             // Status bar spacer
-            Spacer(Modifier.height(48.dp))
+            Spacer(Modifier.height(44.dp))
 
             Column(
                 Modifier
@@ -264,7 +266,7 @@ private fun AppCard(item: AppItem, onClick: () -> Unit) {
         ) {
             // App icon (real drawable)
             val bitmap = remember(item.pkg) {
-                runCatching { item.icon.toBitmap(36, 36).asImageBitmap() }.getOrNull()
+                runCatching { item.icon.toBitmap(24, 24).asImageBitmap() }.getOrNull()
             }
             Box(
                 Modifier
