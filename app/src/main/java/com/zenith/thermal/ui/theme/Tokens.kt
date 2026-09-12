@@ -34,16 +34,13 @@ object Radius {
 }
 
 // ── Typography tokens ──
-// body: 16sp / 24sp line-height
-// heading: 26sp / 32sp line-height
-// body-sm: 14sp
-// All line-heights aligned to spacing grid (multiples of 4)
-val TextBody     = sp(16)    // default body
-val TextBodyLH   = sp(24)    // 16 × 1.5 = 24
-val TextBodySm   = sp(14)    // small body
-val TextBodySmLH = sp(20)    // 14 × 1.4 ≈ 20
-val TextHeading  = sp(26)    // section heading
-val TextHeadingLH= sp(32)    // 26 × 1.25 ≈ 32
-val TextCaption  = sp(12)    // captions / badges
-val TextMini     = sp(10)    // section labels
-val TextMicro    = sp(8)     // micro labels
+// body: 16sp / 24sp, heading: 26sp / 32sp, body-sm: 14sp
+val TextBody      = 16.sp
+val TextBodyLH    = 24.sp
+val TextBodySm    = 14.sp
+val TextBodySmLH  = 20.sp
+val TextHeading   = 26.sp
+val TextHeadingLH = 32.sp
+val TextCaption   = 12.sp
+val TextMini      = 10.sp
+val TextMicro     = 8.sp
