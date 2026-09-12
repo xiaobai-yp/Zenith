@@ -17,7 +17,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidBrush
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -147,7 +146,7 @@ fun ThermalScreen() {
                         modifier = Modifier.weight(1f),
                         textStyle = androidx.compose.ui.text.TextStyle(color = ZenithText, fontSize = 12.sp),
                         singleLine = true,
-                        cursorBrush = androidx.compose.ui.graphics.SolidBrush(ZenithPurple),
+                        cursorBrush = Brush.solid(ZenithPurple),
                         decorationBox = { inner ->
                             Box {
                                 if (searchQuery.isEmpty()) {
