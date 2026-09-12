@@ -57,6 +57,10 @@ private fun profileMatchesFilter(id: Int, f: Filter): Boolean = when (f) {
     Filter.YOUTUBE -> id in listOf(4, 15)
 }
 
+// File-level caches — survive tab switch, only reload on actual data change
+private var cachedApps: List<AppItem> = emptyList()
+private var cachedShowSystem: Boolean = false
+
 @Composable
 fun ThermalScreen() {
     val ctx = LocalContext.current
@@ -84,8 +88,15 @@ fun ThermalScreen() {
         loaded.sortBy { it.name.lowercase() }
         apps = loaded
     }
+    // Initial load — file cache or fresh from PM on IO thread
     LaunchedEffect(Unit) {
-        loadApps()
+        if (cachedApps.isNotEmpty() && cachedShowSystem == showSystem) {
+            apps = cachedApps
+        } else {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { loadApps() }
+            cachedApps = apps
+            cachedShowSystem = showSystem
+        }
         // Icons on Main — AdaptiveIconDrawable.toBitmap() needs main-thread Canvas
         for (item in apps) {
             if (iconCache.containsKey(item.pkg)) continue
