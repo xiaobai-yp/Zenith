@@ -133,21 +133,16 @@ fun DashboardScreen() {
             modifier = Modifier.padding(start = Space.lg, bottom = Space.sm)
         )
 
-        // Foreground sheet
-        Surface(
-            modifier = Modifier.fillMaxWidth().weight(1f),
-            shape = RoundedCornerShape(topStart = Radius.xxl, topEnd = Radius.xxl),
-            color = Color(0xF50C0C18)
+        // Content
+        Column(
+            Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = Space.lg)
+                .padding(top = Space.lg, bottom = 100.dp),
+            verticalArrangement = Arrangement.spacedBy(Space.md)
         ) {
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = Space.lg)
-                    .padding(top = Space.xl, bottom = 100.dp),
-                verticalArrangement = Arrangement.spacedBy(Space.md)
-            ) {
-                // ── Hero card ──
+            // ── Hero card ──
                 GradientBorderCard(
                     modifier = Modifier.fillMaxWidth(),
                     gradient = Brush.linearGradient(listOf(ZenithPurple.copy(0.8f), ZenithPink.copy(0.7f))),
