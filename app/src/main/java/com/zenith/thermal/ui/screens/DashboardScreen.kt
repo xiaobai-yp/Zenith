@@ -75,14 +75,10 @@ private fun readDeviceInfo(): DeviceInfo = DeviceInfo(
 
 // ── Version string: v{versionName} ({versionCode}-{hash}-release) ──
 private fun buildVersionString(): String = runCatching {
-    val pm = android.app.Application.getPackageManager()
-    val p = pm.getPackageInfo("com.zenith.thermal", 0)
-    val hash = try {
-        Class.forName("com.zenith.thermal.BuildConfig")
-            .getField("GIT_HASH").get(null) as? String ?: ""
-    } catch (_: Exception) { "" }
-    val ver = "${p.versionName}"
-    val code = p.versionCode
+    val bc = Class.forName("com.zenith.thermal.BuildConfig")
+    val ver = bc.getField("VERSION_NAME").get(null) as String
+    val code = bc.getField("VERSION_CODE").get(null) as Int
+    val hash = runCatching { bc.getField("GIT_HASH").get(null) as? String ?: "" }.getOrDefault("")
     val h = hash.takeIf { it.isNotEmpty() }?.take(7) ?: "release"
     "v$ver ($code-$h-release)"
 }.getOrElse { "v1.0.0 (unknown)" }
