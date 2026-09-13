@@ -469,12 +469,14 @@ async fn main() {
                 let fg_pkg = app_monitor::detect_fg()
                     .map(|a| a.package);
 
-                // Skip transient states: launcher, recents, no app
+                // Skip transient states: launcher, recents, systemui, android, no app
                 let is_transient = fg_pkg.as_deref().map_or(false, |p| {
                     let low = p.to_lowercase();
                     low.contains("launcher")
                         || low.contains("recents")
                         || low.contains("home")
+                        || low.contains("systemui")
+                        || low.starts_with("android.")
                 });
 
                 let target = if is_transient {
