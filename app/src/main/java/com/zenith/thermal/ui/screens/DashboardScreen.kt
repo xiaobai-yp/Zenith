@@ -11,6 +11,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Android
+import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.DeveloperBoard
+import androidx.compose.material.icons.outlined.Games
+import androidx.compose.material.icons.outlined.Memory
+import androidx.compose.material.icons.outlined.Smartphone
+import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -239,7 +247,7 @@ fun DashboardScreen() {
                     ) {
                         Column(Modifier.padding(16.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("🎮", fontSize = 15.sp)
+                                Icon(Icons.Outlined.Games, contentDescription = null, tint = ZenithPurple, modifier = Modifier.size(15.dp))
                                 Spacer(Modifier.width(8.dp))
                                 Text("Per-App", color = ZenithMuted, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                             }
@@ -255,7 +263,7 @@ fun DashboardScreen() {
                     ) {
                         Column(Modifier.padding(16.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("⚡", fontSize = 15.sp)
+                                Icon(Icons.Outlined.Bolt, contentDescription = null, tint = ZenithPurple, modifier = Modifier.size(15.dp))
                                 Spacer(Modifier.width(8.dp))
                                 Text("Global Profile", color = ZenithMuted, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                             }
@@ -274,12 +282,12 @@ fun DashboardScreen() {
                     letterSpacing = 1.sp,
                     modifier = Modifier.padding(top = 8.dp, bottom = 0.dp)
                 )
-                HomeMetricItem("🤖", "Android", Build.VERSION.RELEASE)
-                HomeMetricItem("📱", "Device", "${Build.MODEL} (OPPO)")
+                HomeMetricItem(Icons.Outlined.Android, "Android", Build.VERSION.RELEASE)
+                HomeMetricItem(Icons.Outlined.Smartphone, "Device", "${Build.MODEL} (OPPO)")
                 deviceInfo?.let { di ->
-                    HomeMetricItem("⚡", "Processor", di.platform)
-                    HomeMetricItem("🐧", "Kernel", di.kernelVersion)
-                    HomeMetricItem("🎮", "GPU", di.glVersion)
+                    HomeMetricItem(Icons.Outlined.Memory, "Processor", di.platform)
+                    HomeMetricItem(Icons.Outlined.Terminal, "Kernel", di.kernelVersion)
+                    HomeMetricItem(Icons.Outlined.DeveloperBoard, "GPU", di.glVersion)
                 }
             }
         }
@@ -287,7 +295,7 @@ fun DashboardScreen() {
 }
 
 @Composable
-private fun HomeMetricItem(emoji: String, label: String, value: String) {
+private fun HomeMetricItem(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -299,7 +307,12 @@ private fun HomeMetricItem(emoji: String, label: String, value: String) {
             shape = RoundedCornerShape(10.dp),
             color = Color(0xFF2D2345)
         ) {
-            Text(emoji, fontSize = 16.sp, modifier = Modifier.wrapContentSize(Alignment.Center))
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = ZenithPurple,
+                modifier = Modifier.padding(9.dp).wrapContentSize(Alignment.Center)
+            )
         }
         Spacer(Modifier.width(14.dp))
         Text(label, color = Color.White, fontSize = 14.sp, modifier = Modifier.weight(1f))
