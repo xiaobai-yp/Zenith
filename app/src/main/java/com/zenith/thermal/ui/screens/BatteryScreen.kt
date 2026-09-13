@@ -81,7 +81,7 @@ fun BatteryScreen() {
     Box(Modifier.fillMaxSize().background(ZenithBg)) {
         // Content
         Column(Modifier.fillMaxSize()) {
-            Spacer(Modifier.height(28.dp))
+            Spacer(Modifier.height(16.dp))
             Column(
                 Modifier
                     .weight(1f)

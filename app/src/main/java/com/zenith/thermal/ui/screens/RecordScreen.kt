@@ -59,7 +59,7 @@ fun RecordScreen() {
     }
 
     Column(Modifier.fillMaxSize().background(ZenithBg)) {
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(16.dp))
         Column(
             Modifier
                 .weight(1f)

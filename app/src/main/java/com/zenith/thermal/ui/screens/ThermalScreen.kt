@@ -131,7 +131,7 @@ fun ThermalScreen() {
     Box(Modifier.fillMaxSize().background(ZenithBg)) {
         Column(Modifier.fillMaxSize()) {
             // Status bar spacer
-            Spacer(Modifier.height(28.dp))
+            Spacer(Modifier.height(16.dp))
 
             Column(
                 Modifier
