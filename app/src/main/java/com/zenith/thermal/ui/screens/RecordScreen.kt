@@ -98,8 +98,6 @@ fun RecordScreen() {
                 }
             }
 
-        }
-
         // Content sheet
         Surface(
             modifier = Modifier.fillMaxWidth().weight(1f),
@@ -181,7 +179,8 @@ fun RecordScreen() {
             Spacer(Modifier.height(Space.sm))
             SessionRow("BiliBili", "Today 14:02 · 18 min", "58 fps")
             SessionRow("MLBB", "Yesterday 20:11 · 42 min", "60 fps")
-        }
+            }
+            } // Surface
     }
 }
 
