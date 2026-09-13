@@ -32,6 +32,10 @@ android {
 
     kotlinOptions { jvmTarget = '1.8' }
 
+    sourceSets {
+        main { kotlin.srcDirs = ['src/main/kotlin'] }
+    }
+
     signingConfigs {
         debug {
             storeFile file('debug.keystore')

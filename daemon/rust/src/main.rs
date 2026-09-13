@@ -317,6 +317,17 @@ async fn handle_cmd(req: Request) -> Response {
             }
         }
 
+        "unmap_app" => {
+            let pkg = req.args.get("package").and_then(|v| v.as_str());
+            match pkg {
+                Some(p) => {
+                    profile_engine::unmap_app(p);
+                    Response::ok(json!({ "unmapped": p }))
+                }
+                _ => Response::err("need package"),
+            }
+        }
+
         "reset_profiles" => {
             profile_engine::reset_map();
             Response::ok(json!({ "reset": true }))

@@ -268,6 +268,11 @@ object ZenithDaemonClient {
         return sendCommand("map_app", args) != null
     }
 
+    fun unmapApp(pkg: String): Boolean {
+        val args = JSONObject().put("package", pkg)
+        return sendCommand("unmap_app", args) != null
+    }
+
     /** Sync all local per-app mappings (SharedPreferences) to the daemon. */
     fun syncMappings(context: Context) {
         val map = AppProfileCache.all(context)

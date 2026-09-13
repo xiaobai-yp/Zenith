@@ -383,7 +383,11 @@ private fun GradientProfileDialog(
                         onClick = {
                             if (pkg != null) {
                                 AppProfileCache.set(ctx, pkg, profileId)
-                                ZenithDaemonClient.setAppProfile(pkg, profileId)
+                                if (profileId == 0) {
+                                    ZenithDaemonClient.unmapApp(pkg)
+                                } else {
+                                    ZenithDaemonClient.setAppProfile(pkg, profileId)
+                                }
                             } else {
                                 com.zenith.thermal.ThermalController.applyGlobal(ctx, profileId)
                             }
@@ -408,7 +412,11 @@ private fun GradientProfileDialog(
                                 ZenithRadio(checked = false, onClick = {
                                     if (pkg != null) {
                                         AppProfileCache.set(ctx, pkg, profileId)
-                                        ZenithDaemonClient.setAppProfile(pkg, profileId)
+                                        if (profileId == 0) {
+                                            ZenithDaemonClient.unmapApp(pkg)
+                                        } else {
+                                            ZenithDaemonClient.setAppProfile(pkg, profileId)
+                                        }
                                     } else {
                                         com.zenith.thermal.ThermalController.applyGlobal(ctx, profileId)
                                     }

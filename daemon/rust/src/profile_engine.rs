@@ -100,6 +100,12 @@ pub fn reset_map() {
     crate::log!("[profile_engine] package map cleared");
 }
 
+/** Remove a single package from the per-app mapping. */
+pub fn unmap_app(package: &str) {
+    state().write().unwrap().pkg_map.remove(package);
+    crate::log!("[profile_engine] unmapped {package}");
+}
+
 pub async fn reload() -> Result<(), String> {
     let path = state().read().unwrap().path.clone();
     init(&path).await
