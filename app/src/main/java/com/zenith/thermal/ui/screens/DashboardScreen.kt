@@ -153,11 +153,10 @@ fun DashboardScreen() {
                 // ── HeroCard ──
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
-                    color = Color(0xFF2D2345),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, ZenithBorder2)
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color(0xFF2D2345)
                 ) {
-                    Column(Modifier.padding(20.dp)) {
+                    Column(Modifier.padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 16.dp)) {
                         // Title row
                         Row(
                             Modifier.fillMaxWidth(),
@@ -168,39 +167,46 @@ fun DashboardScreen() {
                                 Text(
                                     "Zenith is working",
                                     color = Color.White,
-                                    fontSize = 22.sp,
+                                    fontSize = 20.sp,
                                     fontWeight = FontWeight.ExtraBold,
-                                    lineHeight = 28.sp
+                                    lineHeight = 25.sp
                                 )
-                                Spacer(Modifier.height(2.dp))
+                                Spacer(Modifier.height(1.dp))
                                 Text("v1.0.0", color = ZenithMuted, fontSize = 12.sp)
                             }
                             // Info button
                             Surface(
-                                modifier = Modifier.size(34.dp),
+                                modifier = Modifier.size(30.dp),
                                 shape = CircleShape,
                                 color = Color(0x23ED9DF8)
                             ) {
                                 Text(
                                     "i",
                                     color = Color.White,
-                                    fontSize = 14.sp,
+                                    fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier.wrapContentSize(Alignment.Center)
                                 )
                             }
                         }
-                        Spacer(Modifier.height(14.dp))
-                        // Badges row
+                        Spacer(Modifier.height(12.dp))
+                        // Badges row — round + status dot
                         Row(
                             Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Badge(text = "PID $appPid", bg = Color(0x29ED9DF8), fg = Color.White)
+                            Badge(
+                                text = "PID $appPid",
+                                bg = Color(0x40A78BFA),
+                                fg = Color.White,
+                                round = true,
+                                dot = isDaemonConnected
+                            )
                             Badge(
                                 text = deviceInfo?.productName ?: Build.DEVICE,
-                                bg = Color(0x29ED9DF8),
-                                fg = Color.White
+                                bg = Color(0x40A78BFA),
+                                fg = Color.White,
+                                round = true
                             )
                         }
                     }
@@ -211,35 +217,33 @@ fun DashboardScreen() {
                     // Per-App
                     Surface(
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(24.dp),
-                        color = Color(0xFF16131F),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, ZenithBorder2)
+                        shape = RoundedCornerShape(20.dp),
+                        color = Color(0xFF16131F)
                     ) {
                         Column(Modifier.padding(16.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("🎮", fontSize = 16.sp)
-                                Spacer(Modifier.width(10.dp))
-                                Text("Per-App", color = ZenithMuted, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                Text("🎮", fontSize = 15.sp)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Per-App", color = ZenithMuted, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                             }
-                            Spacer(Modifier.height(16.dp))
-                            Text("$perAppCount", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Black)
+                            Spacer(Modifier.height(10.dp))
+                            Text("$perAppCount", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Black)
                         }
                     }
                     // Profile
                     Surface(
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(24.dp),
-                        color = Color(0xFF16131F),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, ZenithBorder2)
+                        shape = RoundedCornerShape(20.dp),
+                        color = Color(0xFF16131F)
                     ) {
                         Column(Modifier.padding(16.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("⚡", fontSize = 16.sp)
-                                Spacer(Modifier.width(10.dp))
-                                Text("Profile", color = ZenithMuted, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                Text("⚡", fontSize = 15.sp)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Global Profile", color = ZenithMuted, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                             }
-                            Spacer(Modifier.height(16.dp))
-                            Text(profileName, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Black)
+                            Spacer(Modifier.height(10.dp))
+                            Text(profileName, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Black)
                         }
                     }
                 }
@@ -253,7 +257,7 @@ fun DashboardScreen() {
                     letterSpacing = 1.sp,
                     modifier = Modifier.padding(top = 8.dp, bottom = 0.dp)
                 )
-                HomeMetricItem("🤖", "Android", "${Build.VERSION.SDK_INT} (${Build.VERSION.RELEASE})")
+                HomeMetricItem("🤖", "Android", Build.VERSION.RELEASE)
                 HomeMetricItem("📱", "Device", "${Build.MODEL} (OPPO)")
                 deviceInfo?.let { di ->
                     HomeMetricItem("⚡", "Processor", "${di.socModel} (${di.platform})")

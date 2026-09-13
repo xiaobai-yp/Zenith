@@ -6,8 +6,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -43,17 +45,40 @@ import com.zenith.thermal.ui.theme.ZenithText
 /** Badge pill — colors mirrored from preview (purple/pink/green/amber/muted/red) */
 @Composable
 fun Badge(
-    text: String,
-    modifier: Modifier = Modifier,
-    bg: Color = ZenithPurple.copy(alpha = 0.12f),
-    fg: Color = ZenithPurple
+   text: String,
+   modifier: Modifier = Modifier,
+   bg: Color = ZenithPurple.copy(alpha = 0.12f),
+    fg: Color = ZenithPurple,
+    round: Boolean = false,
+    dot: Boolean? = null
 ) {
-    Box(
+    Row(
         modifier = modifier
-            .background(bg, RoundedCornerShape(Radius.sm))
-            .padding(horizontal = 8.dp, vertical = 2.dp)
+            .background(
+                bg,
+                if (round) RoundedCornerShape(999.dp) else RoundedCornerShape(Radius.sm)
+            )
+            .padding(horizontal = if (round) 14.dp else 8.dp, vertical = if (round) 6.dp else 2.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(text, color = fg, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.3.sp)
+        if (dot != null) {
+            Box(
+                modifier = Modifier
+                    .size(7.dp)
+                    .background(
+                        if (dot) Color(0xFF34D399) else Color(0xFFF87171),
+                        CircleShape
+                    )
+            )
+            Spacer(Modifier.width(5.dp))
+        }
+        Text(
+            text,
+            color = fg,
+            fontSize = if (round) 11.sp else 8.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = if (round) 0.3.sp else 0.3.sp
+        )
     }
 }
 
