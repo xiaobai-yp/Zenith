@@ -93,6 +93,15 @@ fun BatteryScreen() {
                 modifier = Modifier.padding(horizontal = Space.lg)
             )
 
+            // Subtitle
+            Text(
+                "Battery monitoring & stats",
+                color = ZenithMuted2,
+                fontSize = TextCaption,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(start = Space.lg, top = 2.dp, bottom = Space.sm)
+            )
+
             // Content sheet
             Surface(
                 modifier = Modifier.fillMaxWidth().weight(1f),
