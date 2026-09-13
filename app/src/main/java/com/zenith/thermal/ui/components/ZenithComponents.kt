@@ -233,32 +233,30 @@ fun ZenithButton(
         ZenithButtonVariant.Danger -> Color.White
     }
     val bg = when (variant) {
-        ZenithButtonVariant.Primary ->
-            if (pressed) ZenithPurple.copy(alpha = 0.65f) else ZenithPurple.copy(alpha = 0.25f)
+        ZenithButtonVariant.Primary -> if (pressed) ZenithPurple.copy(alpha = 0.8f) else ZenithPurple
         ZenithButtonVariant.Outline -> Color.Transparent
         ZenithButtonVariant.Text -> Color.Transparent
-        ZenithButtonVariant.Danger ->
-            if (pressed) ZenithRed.copy(alpha = 0.65f) else ZenithRed.copy(alpha = 0.25f)
+        ZenithButtonVariant.Danger -> if (pressed) ZenithRed.copy(alpha = 0.8f) else ZenithRed
     }
     val borderColor = when (variant) {
-        ZenithButtonVariant.Primary -> if (pressed) ZenithPurple.copy(alpha = 0.8f) else ZenithPurple.copy(alpha = 0.5f)
+        ZenithButtonVariant.Primary -> if (pressed) ZenithPurple.copy(alpha = 0.9f) else ZenithPurple
         ZenithButtonVariant.Outline -> if (pressed) ZenithPurple.copy(alpha = 0.8f) else ZenithPurple.copy(alpha = 0.4f)
         ZenithButtonVariant.Text -> Color.Transparent
-        ZenithButtonVariant.Danger -> if (pressed) ZenithRed.copy(alpha = 0.8f) else ZenithRed.copy(alpha = 0.5f)
+        ZenithButtonVariant.Danger -> if (pressed) ZenithRed.copy(alpha = 0.9f) else ZenithRed
     }
     val effFg = if (!enabled) ZenithMuted3 else fg
 
     Box(
         modifier = modifier
             .height(size.h)
-            .clip(RoundedCornerShape(Radius.md))
+            .clip(RoundedCornerShape(999.dp))
             .background(
                 if (!enabled) ZenithMuted3.copy(alpha = 0.08f) else bg,
-                RoundedCornerShape(Radius.md)
+                RoundedCornerShape(999.dp)
             )
             .then(
                 if (variant != ZenithButtonVariant.Text)
-                    Modifier.border(1.dp, if (!enabled) ZenithMuted3.copy(alpha = 0.15f) else borderColor, RoundedCornerShape(Radius.md))
+                    Modifier.border(1.dp, if (!enabled) ZenithMuted3.copy(alpha = 0.15f) else borderColor, RoundedCornerShape(999.dp))
                 else Modifier
             )
             .clickable(

@@ -74,9 +74,8 @@ object DaemonManager {
             Thread.sleep(200)
         } catch (_: Exception) {}
 
-        // Extract to /data/local/tmp/ — SELinux allows exec there.
-        // App data files dir has system_data_file label which blocks exec.
-        val binFile = File("/data/local/tmp/zenithd")
+        // Extract to /data/zenith/ — system_data_root_file label allows root exec.
+        val binFile = File("/data/zenith/zenithd")
         val assetBytes = context.assets.open(ASSET_NAME).use { it.readBytes() }
 
         // Always extract — compare asset size with on-disk size to detect updates.
@@ -84,14 +83,14 @@ object DaemonManager {
         val needsExtract = !binFile.exists() || binFile.length() != assetBytes.size.toLong()
         if (needsExtract) {
             Log.i(TAG, "Extracting $ASSET_NAME (${assetBytes.size} bytes)")
-            val su = Runtime.getRuntime().exec(arrayOf("su", "-c", "cat > /data/local/tmp/zenithd"))
+            val su = Runtime.getRuntime().exec(arrayOf("su", "-c", "cat > /data/zenith/zenithd"))
             su.outputStream.use { it.write(assetBytes) }
             su.waitFor()
         }
 
         // Make executable
         try {
-            Runtime.getRuntime().exec(arrayOf("su", "-c", "chmod 755 /data/local/tmp/zenithd")).waitFor()
+            Runtime.getRuntime().exec(arrayOf("su", "-c", "chmod 755 /data/zenith/zenithd")).waitFor()
         } catch (e: Exception) {
             Log.e(TAG, "chmod failed: ${e.message}")
             return false
@@ -101,7 +100,7 @@ object DaemonManager {
         // setsid detaches into its own session so it survives su shell exit.
         // KernelSU kills background children of `su -c` on exit;
         // setsid prevents that by creating a new process group.
-        val cmd = arrayOf("su", "-c", "setsid /data/local/tmp/zenithd")
+        val cmd = arrayOf("su", "-c", "setsid /data/zenith/zenithd")
         Log.i(TAG, "Launch: ${cmd.joinToString(" ")}")
         try {
             val p = Runtime.getRuntime().exec(cmd)

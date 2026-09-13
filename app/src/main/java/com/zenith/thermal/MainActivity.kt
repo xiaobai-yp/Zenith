@@ -1,7 +1,10 @@
 package com.zenith.thermal
 
+import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -14,6 +17,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         cleanupLegacyNotificationChannels()
         ensureDaemon()
+        autoStartBatteryMonitor()
 
         setContent {
             ZenithTheme {
@@ -51,5 +55,21 @@ class MainActivity : ComponentActivity() {
                 }
                 .forEach { runCatching { nm.deleteNotificationChannel(it.id) } }
         }
+    }
+
+    /** Auto-start battery monitor if it was running in previous session. */
+    private fun autoStartBatteryMonitor() {
+        Thread {
+            try {
+                val prefs = getSharedPreferences("zenith_battery", Context.MODE_PRIVATE)
+                if (prefs.getBoolean("monitor_running", false)) {
+                    val intent = Intent(this, BatteryMonitorService::class.java)
+                    if (Build.VERSION.SDK_INT >= 26) startForegroundService(intent) else startService(intent)
+                    Log.i("MainActivity", "Auto-started BatteryMonitorService")
+                }
+            } catch (e: Exception) {
+                Log.e("MainActivity", "autoStartBatteryMonitor failed: ${e.message}")
+            }
+        }.start()
     }
 }
