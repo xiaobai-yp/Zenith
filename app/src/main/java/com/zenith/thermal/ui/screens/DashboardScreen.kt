@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.zenith.thermal.AppProfileCache
 import com.zenith.thermal.Profile
+import com.zenith.thermal.R
 import com.zenith.thermal.ZenithDaemonClient
 import com.zenith.thermal.ui.components.*
 import com.zenith.thermal.ui.theme.*
