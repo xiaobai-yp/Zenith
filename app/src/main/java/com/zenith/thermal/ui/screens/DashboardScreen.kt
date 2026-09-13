@@ -124,6 +124,8 @@ fun DashboardScreen() {
             )
         }
 
+        Spacer(Modifier.height(14.dp))
+
         // Foreground sheet
         Surface(
             modifier = Modifier.fillMaxWidth().weight(1f),

@@ -72,7 +72,7 @@ fun RecordScreen() {
                     color = ZenithMuted2,
                     fontSize = TextCaption,
                     fontWeight = FontWeight.Medium,
-                    modifier = Modifier.padding(top = 2.dp)
+                    modifier = Modifier.padding(top = Space.xs)
                 )
             }
                 // Recording badge
@@ -97,6 +97,8 @@ fun RecordScreen() {
                     }
                 }
             }
+
+        Spacer(Modifier.height(10.dp))
 
         // Content sheet
         Surface(
