@@ -1,13 +1,14 @@
 <resources>
-    <color name="bg">#102830</color>
-    <color name="surface">#2A444D</color>
-    <color name="surface2">#304D56</color>
-    <color name="nav">#0D2028</color>
-    <color name="surfaceBorder">#49636B</color>
-    <color name="text">#F2F5F6</color>
-    <color name="muted">#B8C6CA</color>
-    <color name="accent">#5EA7FF</color>
-    <color name="accentSoft">#163B63</color>
-    <color name="radio">#5EA7FF</color>
+    <!-- Base colors — old teal values overwritten by Zenith theme tokens -->
+    <color name="bg">#08080F</color>
+    <color name="surface">#16131F</color>
+    <color name="surface2">#1E1A2B</color>
+    <color name="nav">#08080F</color>
+    <color name="surfaceBorder">#2A2540</color>
+    <color name="text">#FFFFFF</color>
+    <color name="muted">#9A93B5</color>
+    <color name="accent">#A855F7</color>
+    <color name="accentSoft">#2D2345</color>
+    <color name="radio">#A855F7</color>
     <color name="ic_zenith_bg">#08080F</color>
 </resources>

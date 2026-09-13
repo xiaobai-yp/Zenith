@@ -4,11 +4,35 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Z glyph — centered, monochrome white -->
+    <!-- Z glyph — gradient purple → pink -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M62,28v31.5A17,17 0,1 1,46 59.5V28a8,8 0,0 1,16 0zM50,28v34l-2.4,1.4A9,9 0,1 0,60.4 63.4L58,62V28a4,4 0,0 0,-8 0z" />
+        android:pathData="M62,28v31.5A17,17 0,1 1,46 59.5V28a8,8 0,0 1,16 0zM50,28v34l-2.4,1.4A9,9 0,1 0,60.4 63.4L58,62V28a4,4 0,0 0,-8 0z">
+        <aapt:attr xmlns:aapt="http://schemas.android.com/aapt"
+            name="android:fillColor">
+            <gradient
+                android:startX="40"
+                android:startY="25"
+                android:endX="70"
+                android:endY="75"
+                android:type="linear">
+                <item android:offset="0" android:color="#A855F7" />
+                <item android:offset="1" android:color="#EC4899" />
+            </gradient>
+        </aapt:attr>
+    </path>
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M54,56A7,7 0,1 0,54 70A7,7 0,1 0,54 56" />
+        android:pathData="M54,56A7,7 0,1 0,54 70A7,7 0,1 0,54 56">
+        <aapt:attr xmlns:aapt="http://schemas.android.com/aapt"
+            name="android:fillColor">
+            <gradient
+                android:startX="48"
+                android:startY="55"
+                android:endX="60"
+                android:endY="72"
+                android:type="linear">
+                <item android:offset="0" android:color="#A855F7" />
+                <item android:offset="1" android:color="#EC4899" />
+            </gradient>
+        </aapt:attr>
+    </path>
 </vector>
