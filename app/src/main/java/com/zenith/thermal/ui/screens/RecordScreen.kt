@@ -66,7 +66,7 @@ fun RecordScreen() {
         // Header
         Row(Modifier.fillMaxWidth().padding(horizontal = Space.lg), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Record", color = ZenithText, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Text("Record", color = ZenithText, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold)
                 Text(
                     "Session telemetry",
                     color = ZenithMuted2,

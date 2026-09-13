@@ -88,8 +88,8 @@ fun BatteryScreen() {
             Text(
                 "Battery",
                 color = ZenithText,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
+                fontSize = 26.sp,
+                fontWeight = FontWeight.ExtraBold,
                 modifier = Modifier.padding(horizontal = Space.lg)
             )
 

@@ -140,7 +140,7 @@ fun ThermalScreen() {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("Thermal", color = ZenithText, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Text("Thermal", color = ZenithText, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold)
                 }
                 // Menu dots
                 Box(
