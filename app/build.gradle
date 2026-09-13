@@ -16,8 +16,9 @@ android {
         applicationId 'com.zenith.thermal'
         minSdk 26
         targetSdk 35
-        versionCode 1
-        versionName '1.0'
+        versionCode 2
+        versionName '2.0.0'
+        buildConfigField "String", "GIT_HASH", "\"${'$'}{gitHash()}\""
     }
 
     compileOptions {
@@ -62,4 +63,14 @@ dependencies {
     implementation 'androidx.activity:activity-compose:1.9.1'
     implementation 'androidx.navigation:navigation-compose:2.7.7'
     implementation 'androidx.lifecycle:lifecycle-runtime-compose:2.8.0'
+}
+
+def gitHash() {
+    try {
+        def proc = "git rev-parse --short HEAD".execute()
+        proc.waitFor()
+        return proc.text.trim().take(7)
+    } catch (Exception e) {
+        return ""
+    }
 }

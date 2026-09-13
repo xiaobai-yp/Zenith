@@ -6,7 +6,6 @@ import android.os.Build
 import android.os.Process
 import android.os.SystemClock
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -54,14 +53,39 @@ private fun readDeviceInfo(): DeviceInfo = DeviceInfo(
     socModel = "ro.soc.model".sysProp().ifEmpty { "-" },
     platform = "ro.board.platform".sysProp().ifEmpty { "-" },
     kernelVersion = runCatching {
-        File("/proc/version").readText().trim()
+        File("/proc/version").readText().trim().let { raw ->
+            // Extract just "Linux version X.X.X-Name" + builder date
+            val parts = raw.split(" ")
+            val idx = parts.indexOf("SMP")
+            if (idx > 0) parts.subList(0, idx).joinToString(" ")
+            else raw.split("(").first().trim()
+        }
     }.getOrElse { "-" },
     glVersion = runCatching {
         Runtime.getRuntime().exec(arrayOf("su", "-c", "dumpsys SurfaceFlinger"))
             .inputStream.bufferedReader().readText()
-            .lineSequence().firstOrNull { "V@" in it }?.trim() ?: "-"
+            .lineSequence().firstOrNull { "V@" in it }?.let { raw ->
+                // Extract "OpenGL ES 3.2 V@xxxx"
+                val gl = raw.substringAfter("OpenGL ES").trim()
+                val vAt = gl.indexOf("V@")
+                if (vAt > 0) "OpenGL ES " + gl.substring(0, vAt + 15).trim() else raw
+            } ?: "-"
     }.getOrElse { "-" }
 )
+
+// ── Version string: v{versionName} ({versionCode}-{hash}-release) ──
+private fun buildVersionString(): String = runCatching {
+    val pm = android.app.Application.getPackageManager()
+    val p = pm.getPackageInfo("com.zenith.thermal", 0)
+    val hash = try {
+        Class.forName("com.zenith.thermal.BuildConfig")
+            .getField("GIT_HASH").get(null) as? String ?: ""
+    } catch (_: Exception) { "" }
+    val ver = "${p.versionName}"
+    val code = p.versionCode
+    val h = hash.takeIf { it.isNotEmpty() }?.take(7) ?: "release"
+    "v$ver ($code-$h-release)"
+}.getOrElse { "v1.0.0 (unknown)" }
 
 @Composable
 fun DashboardScreen() {
@@ -82,11 +106,13 @@ fun DashboardScreen() {
 
         while (true) {
             isDaemonConnected = ZenithDaemonClient.isConnected
+
+            // Global profile from SharedPreferences (always works, IPC or not)
             runCatching {
-                ZenithDaemonClient.getStatus()?.let { s ->
-                    profileName = Profile.nameForId(s.currentProfileId)
-                }
+                val globalId = AppProfileCache.getGlobal(ctx)
+                profileName = Profile.nameForId(globalId)
             }
+
             runCatching {
                 val bm = ctx.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
                 batPct = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
@@ -172,7 +198,7 @@ fun DashboardScreen() {
                                     lineHeight = 25.sp
                                 )
                                 Spacer(Modifier.height(1.dp))
-                                Text("v1.0.0", color = ZenithMuted, fontSize = 12.sp)
+                                Text(buildVersionString(), color = ZenithMuted, fontSize = 12.sp)
                             }
                             // Info button
                             Surface(
@@ -212,7 +238,7 @@ fun DashboardScreen() {
                     }
                 }
 
-                // ── MiniCardRow: Per-App + Profile ──
+                // ── MiniCardRow: Per-App + Global Profile ──
                 Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
                     // Per-App
                     Surface(
@@ -230,7 +256,7 @@ fun DashboardScreen() {
                             Text("$perAppCount", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Black)
                         }
                     }
-                    // Profile
+                    // Global Profile
                     Surface(
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(20.dp),
@@ -260,7 +286,7 @@ fun DashboardScreen() {
                 HomeMetricItem("🤖", "Android", Build.VERSION.RELEASE)
                 HomeMetricItem("📱", "Device", "${Build.MODEL} (OPPO)")
                 deviceInfo?.let { di ->
-                    HomeMetricItem("⚡", "Processor", "${di.socModel} (${di.platform})")
+                    HomeMetricItem("⚡", "Processor", di.platform)
                     HomeMetricItem("🐧", "Kernel", di.kernelVersion)
                     HomeMetricItem("🎮", "GPU", di.glVersion)
                 }
