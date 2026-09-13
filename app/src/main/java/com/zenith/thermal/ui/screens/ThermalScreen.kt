@@ -139,14 +139,7 @@ fun ThermalScreen() {
                 Modifier.fillMaxWidth().padding(horizontal = Space.lg),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(Modifier.weight(1f)) {
-                    Text("Thermal", color = ZenithText, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(7.dp).clip(CircleShape).background(ZenithGreen))
-                        Spacer(Modifier.width(5.dp))
-                        Text("Running", color = ZenithGreen, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
-                    }
-                }
+                Text("Thermal", color = ZenithText, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 // Menu dots
                 Box(
                     Modifier
@@ -160,15 +153,6 @@ fun ThermalScreen() {
                 }
             }
 
-            // Subtitle
-            Text(
-                "Per-app profile config",
-                color = ZenithMuted2,
-                fontSize = TextCaption,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(start = Space.lg, bottom = Space.sm)
-            )
-
             // Content sheet
             Surface(
                 modifier = Modifier.fillMaxWidth().weight(1f),
@@ -179,7 +163,7 @@ fun ThermalScreen() {
                     Modifier
                         .fillMaxSize()
                         .padding(horizontal = Space.lg)
-                        .padding(top = Space.lg)
+                        .padding(top = Space.xl, bottom = 100.dp)
                 ) {
                     // Search bar
                 Row(

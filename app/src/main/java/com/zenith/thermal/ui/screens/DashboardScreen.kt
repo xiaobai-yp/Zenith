@@ -115,7 +115,7 @@ fun DashboardScreen() {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            GradientTitle("Dashboard")
+            GradientTitle("Home")
             // Status pill
             Badge(
                 text = if (isDaemonConnected) "Running" else "Stopped",
@@ -123,15 +123,6 @@ fun DashboardScreen() {
                 fg = if (isDaemonConnected) ZenithGreen else ZenithRed
             )
         }
-
-        // Subtitle
-        Text(
-            "Thermal & battery status",
-            color = ZenithMuted2,
-            fontSize = TextCaption,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(start = Space.lg, bottom = Space.sm)
-        )
 
         // Foreground sheet
         Surface(

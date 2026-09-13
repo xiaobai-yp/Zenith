@@ -50,7 +50,7 @@ fun ZenithApp() {
                 tonalElevation = 0.dp
             ) {
                 val items = listOf(
-                    Screen.Dashboard to "Dashboard",
+                    Screen.Dashboard to "Home",
                     Screen.Thermal to "Thermal",
                     Screen.Battery to "Battery",
                     Screen.Record to "Record"
