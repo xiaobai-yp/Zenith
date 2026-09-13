@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.Surface
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -59,20 +60,21 @@ fun RecordScreen() {
     }
 
     Column(Modifier.fillMaxSize().background(ZenithBg)) {
+        // Status bar spacer
         Spacer(Modifier.height(16.dp))
-        Column(
-            Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = Space.lg)
-                .padding(bottom = 100.dp)
-        ) {
-            // Header row
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Record", color = ZenithText, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                    Text("Session telemetry", color = ZenithMuted2, fontSize = 12.sp)
-                }
+
+        // Header
+        Row(Modifier.fillMaxWidth().padding(horizontal = Space.lg), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Record", color = ZenithText, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    "Session telemetry",
+                    color = ZenithMuted2,
+                    fontSize = TextCaption,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
                 // Recording badge
                 Box(
                     Modifier
@@ -96,7 +98,22 @@ fun RecordScreen() {
                 }
             }
 
-            Spacer(Modifier.height(Space.xl))
+        }
+
+        // Content sheet
+        Surface(
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            shape = RoundedCornerShape(topStart = Radius.xxl, topEnd = Radius.xxl),
+            color = Color(0xF50C0C18)
+        ) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = Space.lg)
+                    .padding(top = Space.xl, bottom = 100.dp),
+                verticalArrangement = Arrangement.spacedBy(Space.md)
+            ) {
 
             // FPS hero card
             Box(

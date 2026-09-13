@@ -24,6 +24,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.Surface
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
@@ -79,19 +80,42 @@ fun BatteryScreen() {
 
     // Solid bg — konsisten dengan screen lain
     Box(Modifier.fillMaxSize().background(ZenithBg)) {
-        // Content
         Column(Modifier.fillMaxSize()) {
+            // Status bar spacer
             Spacer(Modifier.height(16.dp))
-            Column(
-                Modifier
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = Space.lg)
-                    .padding(bottom = 100.dp),
-                verticalArrangement = Arrangement.spacedBy(Space.sm)
+
+            // Header
+            Text(
+                "Battery",
+                color = ZenithText,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = Space.lg)
+            )
+
+            // Subtitle
+            Text(
+                "Battery monitoring & stats",
+                color = ZenithMuted2,
+                fontSize = TextCaption,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(start = Space.lg, top = 2.dp, bottom = Space.sm)
+            )
+
+            // Content sheet
+            Surface(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                shape = RoundedCornerShape(topStart = Radius.xxl, topEnd = Radius.xxl),
+                color = Color(0xF50C0C18)
             ) {
-                // Header
-                Text("Battery", color = ZenithText, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Column(
+                    Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = Space.lg)
+                        .padding(top = Space.xl, bottom = 100.dp),
+                    verticalArrangement = Arrangement.spacedBy(Space.sm)
+                ) {
 
                 // Status Monitor card
                 GradientBorderCard(modifier = Modifier.fillMaxWidth(), innerPadding = Space.lg) {
@@ -231,7 +255,8 @@ fun BatteryScreen() {
 
                 Spacer(Modifier.height(Space.sm))
             }
-        }
+            } // Surface
+        } // outer Column
     }
 }
 

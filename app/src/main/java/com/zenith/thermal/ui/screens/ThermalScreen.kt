@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.Surface
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.platform.LocalContext
@@ -133,40 +134,54 @@ fun ThermalScreen() {
             // Status bar spacer
             Spacer(Modifier.height(16.dp))
 
-            Column(
-                Modifier
-                    .weight(1f)
-                    .padding(horizontal = Space.lg)
+            // Header
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = Space.lg),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Header
-                Row(
-                    Modifier.fillMaxWidth().padding(top = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Thermal", color = ZenithText, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(7.dp).clip(CircleShape).background(ZenithGreen))
-                            Spacer(Modifier.width(5.dp))
-                            Text("Running", color = ZenithGreen, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
-                        }
-                    }
-                    // Menu dots
-                    Box(
-                        Modifier
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .background(ZenithBorder2)
-                            .clickable { showMenu = true },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("⋯", color = ZenithMuted, fontSize = 16.sp)
+                Column(Modifier.weight(1f)) {
+                    Text("Thermal", color = ZenithText, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(7.dp).clip(CircleShape).background(ZenithGreen))
+                        Spacer(Modifier.width(5.dp))
+                        Text("Running", color = ZenithGreen, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
+                // Menu dots
+                Box(
+                    Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(ZenithBorder2)
+                        .clickable { showMenu = true },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("⋯", color = ZenithMuted, fontSize = 16.sp)
+                }
+            }
 
-                Spacer(Modifier.height(12.dp))
+            // Subtitle
+            Text(
+                "Per-app profile config",
+                color = ZenithMuted2,
+                fontSize = TextCaption,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(start = Space.lg, bottom = Space.sm)
+            )
 
-                // Search bar
+            // Content sheet
+            Surface(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                shape = RoundedCornerShape(topStart = Radius.xxl, topEnd = Radius.xxl),
+                color = Color(0xF50C0C18)
+            ) {
+                Column(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = Space.lg)
+                        .padding(top = Space.lg)
+                ) {
+                    // Search bar
                 Row(
                     Modifier
                         .fillMaxWidth()
@@ -213,7 +228,8 @@ fun ThermalScreen() {
                     }
                 }
             }
-        }
+            } // Surface
+        } // outer Column
 
         // ——— Menu dropdown (top-right, text-only) ———
         if (showMenu) {
