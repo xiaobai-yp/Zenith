@@ -32,7 +32,6 @@ import com.zenith.thermal.ui.theme.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
-import java.io.File
 
 // ── Device info (read once on IO) ──
 private data class DeviceInfo(
@@ -53,22 +52,18 @@ private fun readDeviceInfo(): DeviceInfo = DeviceInfo(
     socModel = "ro.soc.model".sysProp().ifEmpty { "-" },
     platform = "ro.board.platform".sysProp().ifEmpty { "-" },
     kernelVersion = runCatching {
-        File("/proc/version").readText().trim().let { raw ->
-            // Extract just "Linux version X.X.X-Name" + builder date
-            val parts = raw.split(" ")
-            val idx = parts.indexOf("SMP")
-            if (idx > 0) parts.subList(0, idx).joinToString(" ")
-            else raw.split("(").first().trim()
-        }
+        Runtime.getRuntime().exec(arrayOf("sh", "-c", "uname -r"))
+            .inputStream.bufferedReader().readText().trim()
     }.getOrElse { "-" },
     glVersion = runCatching {
         Runtime.getRuntime().exec(arrayOf("su", "-c", "dumpsys SurfaceFlinger"))
             .inputStream.bufferedReader().readText()
             .lineSequence().firstOrNull { "V@" in it }?.let { raw ->
-                // Extract "OpenGL ES 3.2 V@xxxx"
-                val gl = raw.substringAfter("OpenGL ES").trim()
+                val gl = raw.substringAfter("OpenGL ES ").trim()
                 val vAt = gl.indexOf("V@")
-                if (vAt > 0) "OpenGL ES " + gl.substring(0, vAt + 15).trim() else raw
+                val vAtEnd = gl.indexOf(" ", vAt)
+                if (vAt > 0 && vAtEnd > 0) "OpenGL ES " + gl.substring(0, vAtEnd)
+                else "OpenGL ES $gl"
             } ?: "-"
     }.getOrElse { "-" }
 )
