@@ -70,7 +70,7 @@ fun RecordScreen() {
             // Header row
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("Record", color = ZenithText, fontSize = 36.sp, fontWeight = FontWeight.Black)
+                    Text("Record", color = ZenithText, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                     Text("Session telemetry", color = ZenithMuted2, fontSize = 12.sp)
                 }
                 // Recording badge

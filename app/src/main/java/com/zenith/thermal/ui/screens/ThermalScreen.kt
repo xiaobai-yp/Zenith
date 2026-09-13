@@ -136,7 +136,7 @@ fun ThermalScreen() {
             Column(
                 Modifier
                     .weight(1f)
-                    .padding(horizontal = 14.dp)
+                    .padding(horizontal = Space.lg)
             ) {
                 // Header
                 Row(
@@ -144,7 +144,7 @@ fun ThermalScreen() {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text("Zenith Thermal", color = ZenithText, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                        Text("Thermal", color = ZenithText, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.size(7.dp).clip(CircleShape).background(ZenithGreen))
                             Spacer(Modifier.width(5.dp))

@@ -115,7 +115,7 @@ fun DashboardScreen() {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            GradientTitle("Zenith")
+            GradientTitle("Dashboard")
             // Status pill
             Badge(
                 text = if (isDaemonConnected) "Running" else "Stopped",
@@ -306,8 +306,8 @@ private fun GradientTitle(text: String) {
     Text(
         text = text,
         color = ZenithPurple,
-        fontSize = 36.sp,
-        fontWeight = FontWeight.Black,
+        fontSize = 22.sp,
+        fontWeight = FontWeight.Bold,
     )
 }
 
