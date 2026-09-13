@@ -2,27 +2,27 @@ package com.zenith.thermal.ui.screens
 
 import android.content.Context
 import android.os.BatteryManager
+import android.os.Build
+import android.os.Process
 import android.os.SystemClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.zenith.thermal.AppProfileCache
@@ -30,101 +30,111 @@ import com.zenith.thermal.Profile
 import com.zenith.thermal.ZenithDaemonClient
 import com.zenith.thermal.ui.components.*
 import com.zenith.thermal.ui.theme.*
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import java.io.File
 
-// ── Profile badge colors (shared with ThermalScreen) ──
-private data class PBadge(val bg: Color, val fg: Color)
-private fun pBadge(id: Int): PBadge = when (id) {
-    9, 10, 11, 13, 14 -> PBadge(ZenithPurple.copy(alpha = 0.12f), ZenithPurple)
-    7, 12             -> PBadge(ZenithPink.copy(alpha = 0.12f), ZenithPink)
-    1                 -> PBadge(ZenithGreen.copy(alpha = 0.12f), ZenithGreen)
-    4, 15             -> PBadge(ZenithAmber.copy(alpha = 0.12f), ZenithAmber)
-    8                 -> PBadge(ZenithRed.copy(alpha = 0.12f), ZenithRed)
-    else              -> PBadge(Color(0x0DFFFFFF), ZenithMuted)
-}
+// ── Device info (read once on IO) ──
+private data class DeviceInfo(
+    val productName: String,
+    val socModel: String,
+    val platform: String,
+    val kernelVersion: String,
+    val glVersion: String,
+)
+
+private fun String.sysProp(): String = runCatching {
+    Runtime.getRuntime().exec(arrayOf("sh", "-c", "getprop $this"))
+        .inputStream.bufferedReader().readText().trim()
+}.getOrElse { "-" }
+
+private fun readDeviceInfo(): DeviceInfo = DeviceInfo(
+    productName = "ro.product.name".sysProp().ifEmpty { "-" },
+    socModel = "ro.soc.model".sysProp().ifEmpty { "-" },
+    platform = "ro.board.platform".sysProp().ifEmpty { "-" },
+    kernelVersion = runCatching {
+        File("/proc/version").readText().trim()
+    }.getOrElse { "-" },
+    glVersion = runCatching {
+        Runtime.getRuntime().exec(arrayOf("su", "-c", "dumpsys SurfaceFlinger"))
+            .inputStream.bufferedReader().readText()
+            .lineSequence().firstOrNull { "V@" in it }?.trim() ?: "-"
+    }.getOrElse { "-" }
+)
 
 @Composable
 fun DashboardScreen() {
     val ctx = LocalContext.current
 
     // ── Live state ──
-    var cpuLoad by remember { mutableFloatStateOf(0f) }
-    var gpuTempC by remember { mutableFloatStateOf(0f) }
-    var currentFps by remember { mutableIntStateOf(0) }
-    var powerMw by remember { mutableLongStateOf(0L) }
     var profileName by remember { mutableStateOf("Default") }
-    var batTempC by remember { mutableFloatStateOf(0f) }
     var batPct by remember { mutableIntStateOf(0) }
-    var uptimeMs by remember { mutableLongStateOf(0L) }
     var isDaemonConnected by remember { mutableStateOf(ZenithDaemonClient.isConnected) }
+    var perAppCount by remember { mutableIntStateOf(0) }
+    var uptimeMs by remember { mutableLongStateOf(0L) }
 
-    // Per-app top 5
-    var topApps by remember { mutableStateOf<List<Pair<String, Int>>>(emptyList()) }
+    // Device info (read once)
+    var deviceInfo by remember { mutableStateOf<DeviceInfo?>(null) }
 
     LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) { deviceInfo = readDeviceInfo() }
+
         while (true) {
             isDaemonConnected = ZenithDaemonClient.isConnected
-
-            // Daemon telemetry
             runCatching {
                 ZenithDaemonClient.getStatus()?.let { s ->
-                    cpuLoad = s.cpuLoadPct
-                    gpuTempC = s.gpu?.tempC?.toFloat() ?: 0f
-                    currentFps = s.fpsShort
-                    powerMw = s.battery.powerMw
                     profileName = Profile.nameForId(s.currentProfileId)
                 }
             }
-
-            // Battery via BatteryManager (same pattern as BatteryScreen)
             runCatching {
                 val bm = ctx.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
                 batPct = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
             }
             runCatching {
-                val intent = ctx.registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
-                batTempC = (intent?.getIntExtra("temperature", 0) ?: 0) / 10f
-            }
-
-            uptimeMs = SystemClock.elapsedRealtime()
-
-            // Top 5 per-app profiles
-            runCatching {
                 val map = ZenithDaemonClient.getAppsMap()
                 val local = AppProfileCache.all(ctx)
-                val merged = mutableMapOf<String, Int>()
-                map.forEach { (k, v) -> merged[k] = v }
-                local.forEach { (k, v) -> if (v > 0 && !merged.containsKey(k)) merged[k] = v }
-                topApps = merged.entries
-                    .filter { it.value > 0 }
-                    .take(5)
-                    .map { it.key to it.value }
+                var count = 0
+                map.forEach { if (it.value > 0) count++ }
+                local.forEach { if (it.value > 0 && !map.containsKey(it.key)) count++ }
+                perAppCount = count
             }
-
+            uptimeMs = SystemClock.elapsedRealtime()
             delay(2000)
         }
     }
 
-    // ── Layout: Auriya-style pinned header + scrollable sheet ──
+    val appPid = Process.myPid()
+
+    // ── Layout: pinned header + scrollable sheet ──
     Column(modifier = Modifier.fillMaxSize().background(ZenithBg)) {
-        // Pinned header
+        // Header: title + gear icon
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = Space.lg, end = Space.lg, top = Space.md, bottom = Space.md),
+                .padding(horizontal = 20.dp, vertical = 14.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            GradientTitle("Zenith")
-            // Status pill
-            Badge(
-                text = if (isDaemonConnected) "Running" else "Stopped",
-                bg = if (isDaemonConnected) ZenithGreen.copy(alpha = 0.12f) else ZenithRed.copy(alpha = 0.12f),
-                fg = if (isDaemonConnected) ZenithGreen else ZenithRed
+            Text(
+                text = "Zenith",
+                color = Color.White,
+                fontSize = 36.sp,
+                fontWeight = FontWeight.Black,
             )
+            Surface(
+                modifier = Modifier.size(42.dp),
+                shape = CircleShape,
+                color = Color(0xFF1E1A2B)
+            ) {
+                Icon(
+                    Icons.Filled.Settings,
+                    contentDescription = "Settings",
+                    tint = Color.White,
+                    modifier = Modifier.padding(10.dp)
+                )
+            }
         }
-
-        Spacer(Modifier.height(14.dp))
 
         // Foreground sheet
         Surface(
@@ -140,175 +150,145 @@ fun DashboardScreen() {
                     .padding(top = Space.xl, bottom = 100.dp),
                 verticalArrangement = Arrangement.spacedBy(Space.md)
             ) {
-                // ── Hero card ──
-                GradientBorderCard(
+                // ── HeroCard ──
+                Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    gradient = Brush.linearGradient(listOf(ZenithPurple.copy(0.8f), ZenithPink.copy(0.7f))),
-                    innerPadding = Space.lg
+                    shape = RoundedCornerShape(24.dp),
+                    color = Color(0xFF2D2345),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, ZenithBorder2)
                 ) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text("Profile: $profileName", color = Color.White, fontSize = TextHeading, fontWeight = FontWeight.ExtraBold)
-                            Spacer(Modifier.height(Space.xs))
-                            Text(
-                                "Battery: ${batTempC}°C  ·  ${batPct}%",
-                                color = Color.White.copy(alpha = 0.75f),
-                                fontSize = TextBodySm
-                            )
-                        }
-                        // Uptime pill
-                        Text(
-                            formatUptime(uptimeMs),
-                            color = Color.White.copy(alpha = 0.6f),
-                            fontSize = TextCaption,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-
-                // ── Telemetry grid 2×2 ──
-                Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-                    TelemetryCard("CPU Load", cpuLoad, 100f, ZenithPurple, "%", Modifier.weight(1f))
-                    TelemetryCard("GPU Temp", gpuTempC, 100f, ZenithPink, "°C", Modifier.weight(1f))
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-                    TelemetryCard("FPS", currentFps.toFloat(), 120f, ZenithGreen, "", Modifier.weight(1f))
-                    TelemetryCard("Power", powerMw / 1000f, 10f, ZenithAmber, "W", Modifier.weight(1f))
-                }
-
-                // ── Global profile selector ──
-                SectionLabel("Global Profile")
-                GradientBorderCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    radius = Radius.xl,
-                    innerPadding = Space.xs,
-                    gradient = null
-                ) {
-                    val selectedIdx = Profile.indexOf(ZenithDaemonClient.getStatus()?.currentProfileId ?: 0)
-                    for (i in 0 until Profile.count()) {
-                        val pid = Profile.value(i)
-                        val selected = selectedIdx == i
+                    Column(Modifier.padding(20.dp)) {
+                        // Title row
                         Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    com.zenith.thermal.ThermalController.applyGlobal(ctx, pid)
-                                }
-                                .padding(horizontal = Space.lg, vertical = Space.md),
-                            verticalAlignment = Alignment.CenterVertically
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.Top
                         ) {
-                            Text(
-                                Profile.MENU_NAMES[i],
-                                color = if (selected) ZenithPurple else ZenithText,
-                                fontSize = TextBodySm,
-                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                modifier = Modifier.weight(1f)
-                            )
-                            ZenithRadio(checked = selected, onClick = {
-                                com.zenith.thermal.ThermalController.applyGlobal(ctx, pid)
-                            })
-                        }
-                    }
-                }
-
-                // ── Per-app top 5 ──
-                if (topApps.isNotEmpty()) {
-                    SectionLabel("Per-App", count = "· ${topApps.size}")
-                    GradientBorderCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        radius = Radius.xl,
-                        innerPadding = Space.xs,
-                        gradient = null
-                    ) {
-                        for ((pkg, pid) in topApps) {
-                            val b = pBadge(pid)
-                            Row(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = Space.lg, vertical = Space.md),
-                                verticalAlignment = Alignment.CenterVertically
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    "Zenith is working",
+                                    color = Color.White,
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    lineHeight = 28.sp
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                Text("v1.0.0", color = ZenithMuted, fontSize = 12.sp)
+                            }
+                            // Info button
+                            Surface(
+                                modifier = Modifier.size(34.dp),
+                                shape = CircleShape,
+                                color = Color(0x23ED9DF8)
                             ) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(
-                                        pkg.substringAfterLast('.'),
-                                        color = ZenithText,
-                                        fontSize = TextBodySm,
-                                        fontWeight = FontWeight.Medium,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Text(pkg, color = ZenithMuted2, fontSize = TextMicro, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                }
-                                Spacer(Modifier.width(Space.sm))
-                                Badge(text = Profile.name(pid).uppercase(), bg = b.bg, fg = b.fg)
+                                Text(
+                                    "i",
+                                    color = Color.White,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.wrapContentSize(Alignment.Center)
+                                )
                             }
                         }
+                        Spacer(Modifier.height(14.dp))
+                        // Badges row
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Badge(text = "PID $appPid", bg = Color(0x29ED9DF8), fg = Color.White)
+                            Badge(
+                                text = deviceInfo?.productName ?: Build.DEVICE,
+                                bg = Color(0x29ED9DF8),
+                                fg = Color.White
+                            )
+                        }
                     }
                 }
 
-                Spacer(Modifier.height(Space.lg))
+                // ── MiniCardRow: Per-App + Profile ──
+                Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                    // Per-App
+                    Surface(
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(24.dp),
+                        color = Color(0xFF16131F),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, ZenithBorder2)
+                    ) {
+                        Column(Modifier.padding(16.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("🎮", fontSize = 16.sp)
+                                Spacer(Modifier.width(10.dp))
+                                Text("Per-App", color = ZenithMuted, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Spacer(Modifier.height(16.dp))
+                            Text("$perAppCount", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Black)
+                        }
+                    }
+                    // Profile
+                    Surface(
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(24.dp),
+                        color = Color(0xFF16131F),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, ZenithBorder2)
+                    ) {
+                        Column(Modifier.padding(16.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("⚡", fontSize = 16.sp)
+                                Spacer(Modifier.width(10.dp))
+                                Text("Profile", color = ZenithMuted, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Spacer(Modifier.height(16.dp))
+                            Text(profileName, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Black)
+                        }
+                    }
+                }
+
+                // ── System Metrics ──
+                Text(
+                    "SYSTEM METRICS",
+                    color = ZenithPurple,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 1.sp,
+                    modifier = Modifier.padding(top = 8.dp, bottom = 0.dp)
+                )
+                HomeMetricItem("🤖", "Android", "${Build.VERSION.SDK_INT} (${Build.VERSION.RELEASE})")
+                HomeMetricItem("📱", "Device", "${Build.MODEL} (OPPO)")
+                deviceInfo?.let { di ->
+                    HomeMetricItem("⚡", "Processor", "${di.socModel} (${di.platform})")
+                    HomeMetricItem("🐧", "Kernel", di.kernelVersion)
+                    HomeMetricItem("🎮", "GPU", di.glVersion)
+                }
             }
         }
     }
 }
 
-// ── Telemetry mini-card with bar ──
 @Composable
-private fun TelemetryCard(
-    label: String,
-    value: Float,
-    max: Float,
-    accent: Color,
-    unit: String,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(Radius.xl),
-        color = Color(0x0DFFFFFF),
-        border = androidx.compose.foundation.BorderStroke(1.dp, ZenithBorder2)
+private fun HomeMetricItem(emoji: String, label: String, value: String) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(Modifier.padding(Space.md)) {
-            Text(label.uppercase(), color = ZenithMuted2, fontSize = TextMicro, fontWeight = FontWeight.SemiBold, letterSpacing = 0.6.sp)
-            Spacer(Modifier.height(Space.xs))
-            Text(
-                "${if (unit == "W") "%.1f".format(value) else value.toInt()}$unit",
-                color = accent,
-                fontSize = TextHeading,
-                fontWeight = FontWeight.ExtraBold
-            )
-            Spacer(Modifier.height(Space.sm))
-            LinearProgressIndicator(
-                progress = { (value / max).coerceIn(0f, 1f) },
-                modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(Radius.sm)),
-                color = accent,
-                trackColor = accent.copy(alpha = 0.12f),
-                strokeCap = StrokeCap.Round
-            )
+        Surface(
+            modifier = Modifier.size(36.dp),
+            shape = RoundedCornerShape(10.dp),
+            color = Color(0xFF2D2345)
+        ) {
+            Text(emoji, fontSize = 16.sp, modifier = Modifier.wrapContentSize(Alignment.Center))
         }
+        Spacer(Modifier.width(14.dp))
+        Text(label, color = Color.White, fontSize = 14.sp, modifier = Modifier.weight(1f))
+        Text(
+            value,
+            color = ZenithPurple,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 2,
+            modifier = Modifier.widthIn(max = 200.dp)
+        )
     }
-}
-
-// ── Gradient text title (solid accent — perf) ──
-@Composable
-private fun GradientTitle(text: String) {
-    Text(
-        text = text,
-        color = Color.White,
-        fontSize = 26.sp,
-        fontWeight = FontWeight.ExtraBold,
-    )
-}
-
-// ── Uptime formatter ──
-private fun formatUptime(ms: Long): String {
-    val totalSec = ms / 1000
-    val d = totalSec / 86400
-    val h = (totalSec % 86400) / 3600
-    val m = (totalSec % 3600) / 60
-    return if (d > 0) "${d}d ${h}h" else if (h > 0) "${h}h ${m}m" else "${m}m"
 }
