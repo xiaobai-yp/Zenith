@@ -18,6 +18,7 @@ import androidx.compose.material.icons.outlined.DeveloperBoard
 import androidx.compose.material.icons.outlined.Games
 import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.Smartphone
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
@@ -201,16 +202,15 @@ fun DashboardScreen() {
                             }
                             // Info button
                             Surface(
-                                modifier = Modifier.size(30.dp),
+                                modifier = Modifier.size(34.dp),
                                 shape = CircleShape,
                                 color = Color(0x23ED9DF8)
                             ) {
-                                Text(
-                                    "i",
-                                    color = Color.White,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.wrapContentSize(Alignment.Center)
+                                Icon(
+                                    Icons.Outlined.Info,
+                                    contentDescription = "Info",
+                                    tint = Color.White,
+                                    modifier = Modifier.padding(9.dp)
                                 )
                             }
                         }
