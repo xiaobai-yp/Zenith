@@ -192,9 +192,9 @@ private fun SessionInfoCard(s: SessionEntry) {
                     Text(s.appName.take(1), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.width(10.dp))
-                Text(s.date, color = Color(0xFF8e8e93), fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text(s.date, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
                 Column(horizontalAlignment = Alignment.End) {
-                    Text("${s.appName}(${s.version})", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Normal)
+                    Text("${s.appName}(${s.version})", color = Color(0xFF8e8e93), fontSize = 11.sp, fontWeight = FontWeight.Normal)
                     Text("crop: ${s.crop}", color = Color(0xFF8e8e93), fontSize = 10.sp)
                 }
             }
@@ -276,46 +276,70 @@ private fun ChartLegend(items: List<Pair<String, Color>>) {
     }
 }
 
-// ── Chart with aligned axis labels — Y-axis text drawn on Canvas at same y as grid lines ──
+// ── Chart with L-shape axes — Y-axis and X-axis share the same 0 origin point ──
 @OptIn(ExperimentalTextApi::class)
 @Composable
 private fun ChartWithAxes(yLabelsLeft: List<String>, yLabelsRight: List<String>? = null, chartContent: @Composable () -> Unit) {
     val textMeasurer = rememberTextMeasurer()
-    val gutter = 32.dp
+    val gutter = 30.dp
+    val axisGap = 2.dp // tiny gap between chart border and label row
     Column(Modifier.padding(horizontal = 14.dp)) {
+        // Y-axis labels + chart area + right Y-axis
         Row(Modifier.fillMaxWidth().height(chartH)) {
-            // Left Y-axis: text left-aligned at the far left, same level as x-axis labels
+            // Left Y-axis — top label at top, bottom label aligns with X-axis line
             Canvas(Modifier.width(gutter).fillMaxHeight()) {
                 val h = size.height
                 yLabelsLeft.forEachIndexed { i, label ->
                     val y = h * i / (yLabelsLeft.size - 1).coerceAtLeast(1)
                     val result = textMeasurer.measure(AnnotatedString(label), style = TextStyle(fontSize = 8.sp, color = dimText))
-                    drawText(result, topLeft = Offset(0f, y - result.size.height / 2f))
+                    // Top labels flush left, bottom label (origin) shifts right slightly to sit on axis line
+                    val xOff = if (i == yLabelsLeft.size - 1) result.size.width * 0.1f else 0f
+                    drawText(result, topLeft = Offset(xOff, y - result.size.height / 2f))
                 }
             }
-            Spacer(Modifier.width(2.dp))
-            // Chart area
-            Box(Modifier.weight(1f).fillMaxHeight()) { chartContent() }
+            Spacer(Modifier.width(axisGap))
+            // Chart area with L-shape axis overlay (left Y line + bottom X line, shared origin)
+            Box(Modifier.weight(1f).fillMaxHeight()) {
+                chartContent()
+                Canvas(Modifier.fillMaxSize()) {
+                    val lw = 1.dp.toPx()
+                    drawLine(Color(0xFF8e8e93), Offset(0f, 0f), Offset(0f, size.height), strokeWidth = lw)
+                    drawLine(Color(0xFF8e8e93), Offset(0f, size.height), Offset(size.width, size.height), strokeWidth = lw)
+                }
+            }
             if (yLabelsRight != null) {
-                Spacer(Modifier.width(2.dp))
+                Spacer(Modifier.width(axisGap))
                 // Right Y-axis
                 Canvas(Modifier.width(gutter).fillMaxHeight()) {
                     val h = size.height
                     yLabelsRight.forEachIndexed { i, label ->
                         val y = h * i / (yLabelsRight.size - 1).coerceAtLeast(1)
                         val result = textMeasurer.measure(AnnotatedString(label), style = TextStyle(fontSize = 8.sp, color = dimText))
-                        drawText(result, topLeft = Offset(size.width - result.size.width, y - result.size.height / 2f))
+                        val xOff = if (i == yLabelsRight.size - 1) size.width - result.size.width * 1.1f else size.width - result.size.width
+                        drawText(result, topLeft = Offset(xOff, y - result.size.height / 2f))
                     }
                 }
             }
         }
-        // X-axis timeline — indented to align exactly with chart area edges
-        Row(Modifier.fillMaxWidth().padding(top = 2.dp)) {
-            Spacer(Modifier.width(gutter + 2.dp))
-            Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                xLabels.forEach { Text(it, color = dimText, fontSize = 7.sp) }
+        // X-axis timeline — first label shares the same origin as Y-axis bottom
+        Row(Modifier.fillMaxWidth().padding(top = 1.dp)) {
+            // origin label (first x-label) sits right at the Y-axis origin, below it
+            Canvas(Modifier.width(gutter).height(14.dp)) {
+                val result = textMeasurer.measure(AnnotatedString(xLabels.first()), style = TextStyle(fontSize = 7.sp, color = dimText))
+                // center above the origin point
+                drawText(result, topLeft = Offset(result.size.width * 0.1f, 0f))
             }
-            if (yLabelsRight != null) Spacer(Modifier.width(gutter + 2.dp))
+            Spacer(Modifier.width(axisGap))
+            // remaining x-labels spread across chart width
+            Row(Modifier.weight(1f).height(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                xLabels.drop(1).forEach { label ->
+                    Text(label, color = dimText, fontSize = 7.sp, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
+                }
+            }
+            if (yLabelsRight != null) {
+                Spacer(Modifier.width(axisGap))
+                Spacer(Modifier.width(gutter))
+            }
         }
     }
 }
