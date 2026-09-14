@@ -247,7 +247,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
             Spacer(Modifier.width(18.dp))
             Icon(Icons.Outlined.FileDownload, "Export", tint = Faint, modifier = Modifier.size(22.dp))
         })
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 17.dp, bottom = 40.dp)) {
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 17.dp).padding(bottom = 40.dp)) {
             DeviceCard(
                 listOf(
                     Pair<@Composable () -> Unit, Pair<String, String>>({ ChipIcon(Color(0xFF7B6FEF)) }, "Platform" to Build.BOARD),
