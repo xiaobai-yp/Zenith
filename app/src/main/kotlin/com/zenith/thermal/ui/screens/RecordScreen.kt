@@ -192,9 +192,9 @@ private fun SessionInfoCard(s: SessionEntry) {
                     Text(s.appName.take(1), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.width(10.dp))
-                Text(s.date, color = Color(0xFF8e8e93), fontSize = 11.sp, modifier = Modifier.weight(1f))
+                Text(s.date, color = Color(0xFF8e8e93), fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 Column(horizontalAlignment = Alignment.End) {
-                    Text("${s.appName}(${s.version})", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text("${s.appName}(${s.version})", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Normal)
                     Text("crop: ${s.crop}", color = Color(0xFF8e8e93), fontSize = 10.sp)
                 }
             }
@@ -281,38 +281,41 @@ private fun ChartLegend(items: List<Pair<String, Color>>) {
 @Composable
 private fun ChartWithAxes(yLabelsLeft: List<String>, yLabelsRight: List<String>? = null, chartContent: @Composable () -> Unit) {
     val textMeasurer = rememberTextMeasurer()
+    val gutter = 32.dp
     Column(Modifier.padding(horizontal = 14.dp)) {
-        // Y-axis left labels + Chart area + Y-axis right labels
-        // All three columns share the same vertical space; grid lines drawn in chartContent
         Row(Modifier.fillMaxWidth().height(chartH)) {
-            // Left Y-axis: text drawn relative to grid-line y positions
-            Canvas(Modifier.width(28.dp).fillMaxHeight()) {
+            // Left Y-axis: text left-aligned at the far left, same level as x-axis labels
+            Canvas(Modifier.width(gutter).fillMaxHeight()) {
                 val h = size.height
                 yLabelsLeft.forEachIndexed { i, label ->
                     val y = h * i / (yLabelsLeft.size - 1).coerceAtLeast(1)
                     val result = textMeasurer.measure(AnnotatedString(label), style = TextStyle(fontSize = 8.sp, color = dimText))
-                    drawText(result, topLeft = Offset(size.width - result.size.width, y - result.size.height / 2f))
+                    drawText(result, topLeft = Offset(0f, y - result.size.height / 2f))
                 }
             }
-            Spacer(Modifier.width(4.dp))
+            Spacer(Modifier.width(2.dp))
             // Chart area
             Box(Modifier.weight(1f).fillMaxHeight()) { chartContent() }
             if (yLabelsRight != null) {
-                Spacer(Modifier.width(4.dp))
+                Spacer(Modifier.width(2.dp))
                 // Right Y-axis
-                Canvas(Modifier.width(28.dp).fillMaxHeight()) {
+                Canvas(Modifier.width(gutter).fillMaxHeight()) {
                     val h = size.height
                     yLabelsRight.forEachIndexed { i, label ->
                         val y = h * i / (yLabelsRight.size - 1).coerceAtLeast(1)
                         val result = textMeasurer.measure(AnnotatedString(label), style = TextStyle(fontSize = 8.sp, color = dimText))
-                        drawText(result, topLeft = Offset(0f, y - result.size.height / 2f))
+                        drawText(result, topLeft = Offset(size.width - result.size.width, y - result.size.height / 2f))
                     }
                 }
             }
         }
-        // X-axis timeline
-        Row(Modifier.fillMaxWidth().padding(top = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            xLabels.forEach { Text(it, color = dimText, fontSize = 7.sp) }
+        // X-axis timeline — indented to align exactly with chart area edges
+        Row(Modifier.fillMaxWidth().padding(top = 2.dp)) {
+            Spacer(Modifier.width(gutter + 2.dp))
+            Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                xLabels.forEach { Text(it, color = dimText, fontSize = 7.sp) }
+            }
+            if (yLabelsRight != null) Spacer(Modifier.width(gutter + 2.dp))
         }
     }
 }
