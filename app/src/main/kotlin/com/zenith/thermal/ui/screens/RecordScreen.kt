@@ -177,10 +177,10 @@ private fun SessionListView(sessions: List<SessionEntry>, onSelect: (SessionEntr
         })
         Column(Modifier.padding(horizontal = 17.dp)) {
             DeviceCard(
-                listOf<Pair<@Composable () -> Unit, Pair<String, String>>>(
-                    { ChipIcon(Color(0xFF7B6FEF)) } to ("Platform" to Build.BOARD),
-                    { PhoneIcon(Color(0xFF5B9CF6)) } to ("Model" to Build.MODEL),
-                    { AndroidIcon(Color(0xFF76C442)) } to ("OS" to "Android ${Build.VERSION.RELEASE}"))
+                listOf(
+                    Pair<@Composable () -> Unit, Pair<String, String>>({ ChipIcon(Color(0xFF7B6FEF)) }, "Platform" to Build.BOARD),
+                    Pair<@Composable () -> Unit, Pair<String, String>>({ PhoneIcon(Color(0xFF5B9CF6)) }, "Model" to Build.MODEL),
+                    Pair<@Composable () -> Unit, Pair<String, String>>({ AndroidIcon(Color(0xFF76C442)) }, "OS" to "Android ${Build.VERSION.RELEASE}"))
             )
         }
         Spacer(Modifier.height(26.dp))
@@ -249,11 +249,11 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
         })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 17.dp, bottom = 40.dp)) {
             DeviceCard(
-                listOf<Pair<@Composable () -> Unit, Pair<String, String>>>(
-                    { ChipIcon(Color(0xFF7B6FEF)) } to ("Platform" to Build.BOARD),
-                    { PhoneIcon(Color(0xFF5B9CF6)) } to ("Model" to Build.MODEL),
-                    { AndroidIcon(Color(0xFF76C442)) } to ("OS" to "Android ${Build.VERSION.RELEASE}"),
-                    { Text("◉", color = Orange, fontSize = 32.sp, lineHeight = 40.sp) } to ("Profile" to "###"))
+                listOf(
+                    Pair<@Composable () -> Unit, Pair<String, String>>({ ChipIcon(Color(0xFF7B6FEF)) }, "Platform" to Build.BOARD),
+                    Pair<@Composable () -> Unit, Pair<String, String>>({ PhoneIcon(Color(0xFF5B9CF6)) }, "Model" to Build.MODEL),
+                    Pair<@Composable () -> Unit, Pair<String, String>>({ AndroidIcon(Color(0xFF76C442)) }, "OS" to "Android ${Build.VERSION.RELEASE}"),
+                    Pair<@Composable () -> Unit, Pair<String, String>>({ Text("◉", color = Orange, fontSize = 32.sp, lineHeight = 40.sp) }, "Profile" to "###"))
             )
             Spacer(Modifier.height(12.dp))
             SessionStatsCard(s)
