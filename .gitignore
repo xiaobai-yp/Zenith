@@ -30,3 +30,4 @@ graphify-out/
 ksu-module/
 zenithd.zip
 Thermal.md
+*.sh

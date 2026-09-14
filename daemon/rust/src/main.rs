@@ -467,7 +467,6 @@ async fn main() {
 
             let mut active_prop = global_prop.clone();
             let mut tick = 0u64;
-            let mut pending_fg: Option<String> = None;
             loop {
                 // Detect EXTERNAL prop change (app set global profile via setprop).
                 // Daemon's own writes are tracked via active_prop, so they're
@@ -488,33 +487,16 @@ async fn main() {
                 let fg_pkg = app_monitor::detect_fg()
                     .map(|a| a.package);
 
-                // Skip transient states: launcher, recents, systemui, android, no app
-                let is_transient = fg_pkg.as_deref().map_or(false, |p| {
-                    let low = p.to_lowercase();
-                    low.contains("launcher")
-                        || low.contains("recents")
-                        || low.contains("home")
-                        || low.contains("systemui")
-                        || low.starts_with("android.")
-                });
-
-                let target = if is_transient {
-                    active_prop.clone() // keep current, don't switch
-                } else if let Some(ref pkg) = fg_pkg {
+                // ── profile resolution (Auriya-style) ──
+                // No transient filter — launcher/systemui = unmapped → global profile.
+                // Same-app with valid PID: skip reapply (optimization).
+                let target = if let Some(ref pkg) = fg_pkg {
                     match profile_engine::lookup(pkg) {
                         pid if pid != 0 => pid.to_string(), // mapped → immediate
-                        _ => {
-                            // unmapped app → 1-tick pending
-                            if fg_pkg == pending_fg {
-                                get_global_profile_id()
-                            } else {
-                                pending_fg = fg_pkg;
-                                active_prop.clone()
-                            }
-                        }
+                        _ => get_global_profile_id(),        // unmapped → global
                     }
                 } else {
-                    active_prop.clone()
+                    get_global_profile_id()                  // no FG → global
                 };
 
                 // Only setprop if target differs from what's active
