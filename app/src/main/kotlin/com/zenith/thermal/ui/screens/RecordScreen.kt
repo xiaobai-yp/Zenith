@@ -1,5 +1,6 @@
 package com.zenith.thermal.ui.screens
 
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import android.os.Build
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.Canvas
@@ -176,9 +177,9 @@ private fun SessionListView(sessions: List<SessionEntry>, onSelect: (SessionEntr
         })
         Column(Modifier.padding(horizontal = 17.dp)) {
             DeviceCard(
-                listOf(ChipIcon(LabelC) to ("Platform" to Build.BOARD),
-                    PhoneIcon(LabelC) to ("Model" to Build.MODEL),
-                    AndroidIcon(Color(0xFF76C442)) to ("OS" to "Android ${Build.VERSION.RELEASE}"))
+                listOf({ ChipIcon(Color(0xFF7B6FEF)) } to ("Platform" to Build.BOARD),
+                    { PhoneIcon(Color(0xFF5B9CF6)) } to ("Model" to Build.MODEL),
+                    { AndroidIcon(Color(0xFF76C442)) } to ("OS" to "Android ${Build.VERSION.RELEASE}"))
             )
         }
         Spacer(Modifier.height(26.dp))
@@ -247,9 +248,9 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
         })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 17.dp, bottom = 40.dp)) {
             DeviceCard(
-                listOf(ChipIcon(LabelC) to ("Platform" to Build.BOARD),
-                    PhoneIcon(LabelC) to ("Model" to Build.MODEL),
-                    AndroidIcon(Color(0xFF76C442)) to ("OS" to "Android ${Build.VERSION.RELEASE}"),
+                listOf({ ChipIcon(Color(0xFF7B6FEF)) } to ("Platform" to Build.BOARD),
+                    { PhoneIcon(Color(0xFF5B9CF6)) } to ("Model" to Build.MODEL),
+                    { AndroidIcon(Color(0xFF76C442)) } to ("OS" to "Android ${Build.VERSION.RELEASE}"),
                     { Text("◉", color = Orange, fontSize = 32.sp, lineHeight = 40.sp) } to ("Profile" to "###"))
             )
             Spacer(Modifier.height(12.dp))
@@ -368,7 +369,7 @@ private fun SessionStatsCard(s: SessionEntry) {
                 StatCell("VARIANCE", comma(s.variance), "FPS", Modifier.weight(1f))
             }
             Spacer(Modifier.height(14.dp))
-            Row(Modifier.fillMaxWidth().background(Divider, RoundedCornerShape(2.dp)).height(1.dp))
+            Row(Modifier.fillMaxWidth().background(Divider, RoundedCornerShape(2.dp)).height(1.dp)) {}
             Spacer(Modifier.height(14.dp))
             Row(Modifier.fillMaxWidth()) {
                 StatCell("≥45FPS", comma(s.smoothPct, 1) + "%", "Smoothness", Modifier.weight(1f), valueColor = Green)
@@ -405,6 +406,7 @@ private data class ChartSpec(
     val dashed: Set<Int> = emptySet(),
 )
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ChartCard(
     title: String, titleRight: String? = null, rightColor: Color = S_TEMP,
