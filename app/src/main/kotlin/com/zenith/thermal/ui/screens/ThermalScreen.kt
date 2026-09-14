@@ -259,6 +259,7 @@ fun ThermalScreen() {
                     OverlayMenuItem("Global Profile") {
                         showMenu = false; showGlobalDialog = true
                     }
+                    OverlayMenuItem("About") { showMenu = false }
                 }
             }
         }
