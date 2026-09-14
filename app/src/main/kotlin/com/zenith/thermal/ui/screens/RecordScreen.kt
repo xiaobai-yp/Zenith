@@ -119,9 +119,9 @@ private fun TopBar(title: String, onBack: (() -> Unit)? = null, actions: @Compos
 }
 
 @Composable
-private fun ChipIcon(tint: Color, size: Int = 46) {
+private fun ChipIcon(tint: Color, side: Int = 46) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.size(size.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(side.dp), contentAlignment = Alignment.Center) {
             Canvas(Modifier.fillMaxSize()) {
                 val s = size.width; val b = s * 0.12f
                 drawRect(Color.Transparent, Offset.Zero, this.size)
@@ -138,8 +138,8 @@ private fun ChipIcon(tint: Color, size: Int = 46) {
 }
 
 @Composable
-private fun PhoneIcon(tint: Color, size: Int = 46) {
-    Canvas(Modifier.size(size.dp)) {
+private fun PhoneIcon(tint: Color, side: Int = 46) {
+    Canvas(Modifier.size(side.dp)) {
         val w = size.width * 0.6f; val h = size.height * 0.78f
         val x = (size.width - w) / 2; val y = (size.height - h) / 2
         drawRoundRect(Color.Transparent, Offset.Zero, this.size)
