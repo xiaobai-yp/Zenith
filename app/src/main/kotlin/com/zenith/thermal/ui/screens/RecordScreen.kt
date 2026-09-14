@@ -137,7 +137,7 @@ private fun SessionListItem(s: SessionEntry, onClick: () -> Unit) {
 @Composable
 private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().background(Color.Black)) {
-        // Header: back + app name + version/sub + filter/share/download icons
+        // Header: back + app name + version/sub + icons
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             Surface(onClick = onBack, shape = CircleShape, color = Color(0xFF1c1c2d), modifier = Modifier.size(42.dp)) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White, modifier = Modifier.padding(11.dp))
@@ -154,34 +154,22 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
             Icon(Icons.Outlined.Settings, null, tint = Color(0xFF8e8e93), modifier = Modifier.size(20.dp))
         }
 
-        // Device card 4 cols (with Profile)
-        DeviceInfoCard(showProfile = true, modifier = Modifier.padding(horizontal = 14.dp))
-        Spacer(Modifier.height(8.dp))
-
-        // Session card: icon+date center | name+crop right | stats grid
-        SessionInfoCard(s)
-        Spacer(Modifier.height(4.dp))
-
-        // All chart cards — scrollable
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 40.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            // 1. FPS & Temperature (dual Y-axis)
-            item { FpsTempChart(s.chartData) }
-            // 2. Frame Time (bar)
-            item { FrameTimeChart(s.chartData) }
-            // 3. CPU Usage (4 lines)
-            item { CpuUsageChart(s.chartData) }
-            // 4. CPU Frequency (3 lines)
-            item { CpuFreqChart(s.chartData) }
-            // 5. CPU Cycles + CPU Temp (side by side)
-            item { CpuCyclesTempChart(s.chartData) }
-            // 6. GPU Frequency & Usage
-            item { GpuChart(s.chartData) }
-            // 7. DDR
-            item { DdrChart(s.chartData) }
-            // 8. Power + Capacity (side by side)
-            item { PowerCapacityChart(s.chartData) }
-            // 9. CPU Temperature
-            item { CpuTempChart(s.chartData) }
+        // Everything scrollable as ONE column
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 40.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            // Device card
+            DeviceInfoCard(showProfile = true, modifier = Modifier.padding(horizontal = 14.dp))
+            // Session card
+            SessionInfoCard(s)
+            // Charts
+            FpsTempChart(s.chartData)
+            FrameTimeChart(s.chartData)
+            CpuUsageChart(s.chartData)
+            CpuFreqChart(s.chartData)
+            CpuCyclesTempChart(s.chartData)
+            GpuChart(s.chartData)
+            DdrChart(s.chartData)
+            PowerCapacityChart(s.chartData)
+            CpuTempChart(s.chartData)
         }
     }
 }
@@ -345,38 +333,31 @@ private fun CpuFreqChart(d: ChartData) {
     }
 }
 
-// ── 5. CPU Cycles + CPU Temperature (side by side) ──
+// ── 5. CPU Cycles(M) & CPU Temperature(°C) — SATU chart, 4 warna (same legend: CPU 0~3, CPU 4~6, CPU 7, TEMP(°C)) ──
 @Composable
 private fun CpuCyclesTempChart(d: ChartData) {
-    Surface(shape = RoundedCornerShape(14.dp), color = cardBg, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Column(Modifier.weight(1f)) {
-                    Text("CPU Cycles(M)", color = mutedText, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.height(6.dp))
-                    Box(Modifier.fillMaxWidth().height(100.dp)) { MultiLineChart(listOf(d.cpu03 to Color(0xFFc084fc), d.cpu46 to Color(0xFF22d3ee), d.cpu7 to Color(0xFFfb923c)), 0f, 100f) }
-                }
-                Column(Modifier.weight(1f)) {
-                    Text("CPU Temperature(°C)", color = mutedText, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.height(6.dp))
-                    Box(Modifier.fillMaxWidth().height(100.dp)) { AreaChart(d.temp, Color(0xFFfb923c)) }
-                }
-            }
-            Spacer(Modifier.height(4.dp))
-            ChartLegend(listOf("CPU 0~3" to Color(0xFFc084fc), "CPU 4~6" to Color(0xFF22d3ee), "CPU 7" to Color(0xFFfb923c), "TEMP(°C)" to Color(0xFFfb923c)))
+    ChartCard("CPU Cycles(M)", "CPU Temperature(°C)", legend = {
+        ChartLegend(listOf("CPU 0~3" to Color(0xFFc084fc), "CPU 4~6" to Color(0xFF22d3ee), "CPU 7" to Color(0xFFfb923c), "TEMP(°C)" to Color(0xFF34d399)))
+    }) {
+        Box(Modifier.fillMaxWidth().height(130.dp)) {
+            MultiLineChart(listOf(
+                d.cpu03 to Color(0xFFc084fc),
+                d.cpu46 to Color(0xFF22d3ee),
+                d.cpu7 to Color(0xFFfb923c),
+                d.temp to Color(0xFF34d399),
+            ), 0f, 100f)
         }
     }
 }
 
-// ── 6. GPU Frequency & Usage ──
+// ── 6. GPU Frequency(MHz) & Usage(%) — dual Y-axis ──
 @Composable
 private fun GpuChart(d: ChartData) {
     ChartCard("GPU Frequency (MHz)", "Usage(%)") {
         Box(Modifier.fillMaxWidth().height(130.dp)) {
-            MultiLineChart(listOf(d.gpuFreq to Color(0xFF87ceeb), d.gpuUsage to Color(0xFF60a5fa)), 0f, 600f)
+            DualAxisLineChart(d.gpuFreq, d.gpuUsage, 0f, 600f, 0f, 100f, Color(0xFF87ceeb), Color(0xFF60a5fa))
         }
     }
-    ChartLegend(listOf("Frequency(MHz)" to Color(0xFF87ceeb), "Usage(%)" to Color(0xFF60a5fa)))
 }
 
 // ── 7. DDR ──
@@ -389,25 +370,14 @@ private fun DdrChart(d: ChartData) {
     }
 }
 
-// ── 8. Power + Capacity (side by side) ──
+// ── 8. Power(W) & Capacity % — SATU chart ──
 @Composable
 private fun PowerCapacityChart(d: ChartData) {
-    val maxP = (d.powerW.maxOrNull()?.coerceAtLeast(5f) ?: 10f) * 1.2f
-    Surface(shape = RoundedCornerShape(14.dp), color = cardBg, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Power(W)", color = mutedText, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                Text("Capacity %", color = mutedText, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-            }
-            Spacer(Modifier.height(6.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.weight(1f).height(100.dp)) { LineChart(d.powerW, accentBlue, 0f, maxP) }
-                Box(Modifier.weight(1f).height(100.dp)) { LineChart(d.capacity, Color.White, 0f, 100f) }
-            }
-            Spacer(Modifier.height(4.dp))
-            ChartLegend(listOf("Power(W)" to accentBlue, "Capacity(%)" to Color.White))
-            Spacer(Modifier.height(4.dp))
-            Text("MAX: ${"%.2f".format(d.powerW.maxOrNull() ?: 0f)}W  MIN: ${"%.2f".format(d.powerW.minOrNull() ?: 0f)}W  AVG: ${"%.2f".format(d.powerW.average())}W", color = dimText, fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+    ChartCard("Power(W)", "Capacity %", legend = {
+        ChartLegend(listOf("Power(W)" to accentBlue, "Capacity(%)" to Color.White))
+    }, stats = "MAX: ${"%.2f".format(d.powerW.maxOrNull() ?: 0f)}W  MIN: ${"%.2f".format(d.powerW.minOrNull() ?: 0f)}W  AVG: ${"%.2f".format(d.powerW.average())}W") {
+        Box(Modifier.fillMaxWidth().height(130.dp)) {
+            DualAxisLineChart(d.powerW, d.capacity, 0f, 10f, 0f, 100f, accentBlue, Color.White)
         }
     }
 }
