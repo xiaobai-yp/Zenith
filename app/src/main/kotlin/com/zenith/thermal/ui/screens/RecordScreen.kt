@@ -190,7 +190,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
 @Composable
 private fun DeviceInfoCard(showProfile: Boolean = false, modifier: Modifier = Modifier) {
     Surface(shape = RoundedCornerShape(14.dp), color = Color(0xFF1c1c2d), modifier = modifier.fillMaxWidth()) {
-        Row(Modifier.padding(vertical = 14.dp), horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(vertical = 14.dp).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
             DevInfoItem(Icons.Outlined.Memory, "Platform", Build.BOARD)
             DevInfoItem(Icons.Outlined.Smartphone, "Model", Build.MODEL)
             DevInfoItem(Icons.Outlined.Android, "OS", "Android ${Build.VERSION.RELEASE}")
