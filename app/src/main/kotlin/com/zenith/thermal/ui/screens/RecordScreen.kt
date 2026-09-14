@@ -2,12 +2,12 @@ package com.zenith.thermal.ui.screens
 
 import android.os.Build
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -23,13 +23,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
@@ -42,30 +42,37 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 
 // ═══════════════════════════════════════════════
-// Palette — user-approved FPS Stats reference
+// Palette v15 — user-approved (Scene order, full ticks)
 // ═══════════════════════════════════════════════
-private val Bg = Color(0xFF171717)
-private val Panel = Color(0xFF090909)
-private val Ink = Color(0xFFF4F4F4)
-private val MutedC = Color(0xFFA4A4A4)
-private val LabelC = Color(0xFF999999)
-private val StatBlue = Color(0xFF3180FF)
-private val CloudBlue = Color(0xFF2B75FF)
-private val AxisC = Color(0xFF777777)
-private val ChartTitleC = Color(0xFFA9A9A9)
-private val LegendC = Color(0xFF8D8D8D)
-private val GridC = Color(0x40BEBEBE)
+private val Bg = Color(0xFF111111)
+private val Panel = Color(0xFF1C1C1E)
+private val Divider = Color(0xFF2A2A2E)
+private val Ink = Color(0xFFE8E8E8)
+private val Muted = Color(0xFF888888)
+private val Dim = Color(0xFF666666)
+private val Faint = Color(0xFF555555)
+private val AxisC = Color(0xFF444444)
+private val StatBlue = Color(0xFF5B9CF6)
+private val Green = Color(0xFF76C442)
+private val Orange = Color(0xFFFF7756)
+private val TitleC = Color(0xFFAAAAAA)
+private val LegendC = Color(0xFFAAAAAA)
+private val GridC = Color(0xFF222222)
 // series
-private val S_FPS = Color(0xFF828282)
-private val S_TEMP = Color(0xFFB06B2C)
-private val S_CPU03 = Color(0xFF8E62C7)
-private val S_CPU46 = Color(0xFF36C6C4)
-private val S_CPU7 = Color(0xFFEE923E)
-private val S_GF = Color(0xFF8DC9E8)
-private val S_GU = Color(0xFF2D6FFF)
-private val S_DDR = Color(0xFF90D4F3)
-private val S_PWR = Color(0xFF2D6FFF)
-private val S_CAP = Color(0xFF8DC9E8)
+private val S_FPS = Color(0xFF5B9CF6)
+private val S_TEMP = Color(0xFFE58C3A)          // battery temp (battery stats line)
+private val S_CPU_PCT = Color(0xFFCC79C8)       // pink: CPU(%) placeholder line
+private val S_GPU_PCT = Color(0xFF4CC9D8)       // cyan: GPU(%) placeholder line
+private val S_CPU03 = Color(0xFFCC79C8)
+private val S_CPU46 = Color(0xFF4CC9D8)
+private val S_CPU7 = Color(0xFFE58C3A)
+private val S_GF = Color(0xFF5B9CF6)
+private val S_GU = Color(0xFF5B9CF6)
+private val S_DDR = Color(0xFF5B9CF6)
+private val S_PWR = Color(0xFF5B9CF6)
+private val S_CAP = Color(0xFFB0B0B0)
+private val S_TEMPL = Color(0xFF5B9CF6)         // CPU temperature line
+private val S_TEMP2 = Color(0xFF8DC9E8)         // temp on cycles chart
 
 private data class SessionEntry(
     val id: Long, val appName: String, val appPkg: String,
@@ -91,7 +98,7 @@ private enum class RecordView { LIST, DETAIL }
 fun RecordScreen() {
     var view by remember { mutableStateOf(RecordView.LIST) }
     var selected by remember { mutableStateOf<SessionEntry?>(null) }
-    var sessions by remember { mutableStateOf(loadSessions()) }
+    val sessions = remember { loadSessions() }
     AnimatedContent(view, label = "rt") { cur ->
         when (cur) {
             RecordView.LIST -> SessionListView(sessions, { selected = it; view = RecordView.DETAIL })
@@ -120,20 +127,15 @@ private fun TopBar(title: String, onBack: (() -> Unit)? = null, actions: @Compos
 
 @Composable
 private fun ChipIcon(tint: Color, side: Int = 46) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.size(side.dp), contentAlignment = Alignment.Center) {
-            Canvas(Modifier.fillMaxSize()) {
-                val s = size.width; val b = s * 0.12f
-                drawRect(Color.Transparent, Offset.Zero, this.size)
-                drawRoundRect(tint, Offset(b, b * 1.6f), Size(s - 2 * b, s - 3.2f * b), CornerRadius(4.dp.toPx()))
-                val pin = b * 0.9f
-                drawLine(tint, Offset(s / 2 - pin * 2, 0f), Offset(s / 2 - pin * 2, b), strokeWidth = b * 0.55f)
-                drawLine(tint, Offset(s / 2 + pin * 2, 0f), Offset(s / 2 + pin * 2, b), strokeWidth = b * 0.55f)
-                drawLine(tint, Offset(s / 2 - pin * 2, s - b), Offset(s / 2 - pin * 2, s), strokeWidth = b * 0.55f)
-                drawLine(tint, Offset(s / 2 + pin * 2, s - b), Offset(s / 2 + pin * 2, s), strokeWidth = b * 0.55f)
-                drawRect(tint, Offset(b, s / 2 - b * 0.35f), Size(s - 2 * b, b * 0.7f))
-            }
-        }
+    Canvas(Modifier.size(side.dp)) {
+        val s = size.width; val b = s * 0.12f
+        drawRoundRect(tint, Offset(b, b * 1.6f), Size(s - 2 * b, s - 3.2f * b), CornerRadius(4.dp.toPx()))
+        val pin = b * 0.9f
+        drawLine(tint, Offset(s / 2 - pin * 2, 0f), Offset(s / 2 - pin * 2, b), strokeWidth = b * 0.55f)
+        drawLine(tint, Offset(s / 2 + pin * 2, 0f), Offset(s / 2 + pin * 2, b), strokeWidth = b * 0.55f)
+        drawLine(tint, Offset(s / 2 - pin * 2, s - b), Offset(s / 2 - pin * 2, s), strokeWidth = b * 0.55f)
+        drawLine(tint, Offset(s / 2 + pin * 2, s - b), Offset(s / 2 + pin * 2, s), strokeWidth = b * 0.55f)
+        drawRect(tint, Offset(b, s / 2 - b * 0.35f), Size(s - 2 * b, b * 0.7f))
     }
 }
 
@@ -142,15 +144,14 @@ private fun PhoneIcon(tint: Color, side: Int = 46) {
     Canvas(Modifier.size(side.dp)) {
         val w = size.width * 0.6f; val h = size.height * 0.78f
         val x = (size.width - w) / 2; val y = (size.height - h) / 2
-        drawRoundRect(Color.Transparent, Offset.Zero, this.size)
         drawRoundRect(tint, Offset(x, y), Size(w, h), CornerRadius(4.dp.toPx()), style = Stroke(2.2.dp.toPx()))
         drawCircle(tint, radius = 1.6.dp.toPx(), center = Offset(size.width / 2, y + h - 5.dp.toPx()))
     }
 }
 
 @Composable
-private fun AndroidIcon(tint: Color, size: Int = 46) {
-    Icon(Icons.Outlined.Android, null, tint = tint, modifier = Modifier.size(size.dp))
+private fun AndroidIcon(tint: Color, side: Int = 46) {
+    Icon(Icons.Outlined.Android, null, tint = tint, modifier = Modifier.size(side.dp))
 }
 
 @Composable
@@ -158,7 +159,7 @@ private fun GameIcon(name: String, size: Int = 88, fontSize: Int = 14, radius: I
     Box(Modifier.size(size.dp).clip(RoundedCornerShape(radius.dp)).background(Brush.linearGradient(listOf(Color(0xFF7D8C9F), Color(0xFF243C53)))),
         contentAlignment = Alignment.Center) {
         Text(name.take(4), color = Color.White, fontSize = fontSize.sp, fontWeight = FontWeight.Black,
-            modifier = Modifier.background(Color(0x11111111)).padding(horizontal = 5.dp, vertical = 3.dp))
+            modifier = Modifier.background(Color(0x11111111)).padding(horizontal = 3.dp, vertical = 1.dp))
     }
 }
 
@@ -171,33 +172,39 @@ private fun comma(v: Float, dec: Int = 1): String = String.format("%.${dec}f", v
 private fun SessionListView(sessions: List<SessionEntry>, onSelect: (SessionEntry) -> Unit) {
     Column(Modifier.fillMaxSize().background(Bg)) {
         TopBar("FPS Stats", actions = {
-            Icon(Icons.Outlined.CloudUpload, "Refresh", tint = CloudBlue, modifier = Modifier.size(34.dp))
+            Icon(Icons.Outlined.CloudUpload, "Refresh", tint = StatBlue, modifier = Modifier.size(32.dp))
         })
         Column(Modifier.padding(horizontal = 17.dp)) {
             DeviceCard(
                 listOf(ChipIcon(LabelC) to ("Platform" to Build.BOARD),
                     PhoneIcon(LabelC) to ("Model" to Build.MODEL),
-                    AndroidIcon(Color(0xFF8BD25A)) to ("OS" to "Android ${Build.VERSION.RELEASE}"))
+                    AndroidIcon(Color(0xFF76C442)) to ("OS" to "Android ${Build.VERSION.RELEASE}"))
             )
         }
         Spacer(Modifier.height(26.dp))
         if (sessions.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No sessions yet", color = Color(0xFF555555), fontSize = 18.sp)
+                Text("No sessions yet", color = Faint, fontSize = 18.sp)
             }
         } else LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 17.dp, end = 17.dp, bottom = 30.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             items(sessions) { s ->
-                Surface(shape = RoundedCornerShape(22.dp), color = Panel, modifier = Modifier.fillMaxWidth().clickable { onSelect(s) }) {
-                    Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        GameIcon(s.appName, size = 88, fontSize = 14, radius = 20)
-                        Spacer(Modifier.width(16.dp))
+                Surface(shape = RoundedCornerShape(16.dp), color = Panel, modifier = Modifier.fillMaxWidth().clickable { onSelect(s) }) {
+                    Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        GameIcon(s.appName, size = 52, fontSize = 8, radius = 12)
+                        Spacer(Modifier.width(14.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(s.appName, color = Ink, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Spacer(Modifier.height(7.dp))
-                            Text("${s.date.take(10)} · ${comma(s.avgFps, 2)} · ${comma(s.avgPowerW, 2)}W", color = MutedC, fontSize = 15.sp)
+                            Text(s.appName, color = Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Spacer(Modifier.height(4.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(s.date.take(10), color = Dim, fontSize = 12.sp)
+                                Spacer(Modifier.width(10.dp))
+                                Text(comma(s.avgFps, 2), color = StatBlue, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                Spacer(Modifier.width(10.dp))
+                                Text("${comma(s.avgPowerW, 2)}W", color = Dim, fontSize = 12.sp)
+                            }
                         }
                         Spacer(Modifier.width(10.dp))
-                        Text(fmtDur(s.durationSec), color = MutedC, fontSize = 18.sp)
+                        Text(fmtDur(s.durationSec), color = Muted, fontSize = 13.sp)
                     }
                 }
             }
@@ -207,15 +214,18 @@ private fun SessionListView(sessions: List<SessionEntry>, onSelect: (SessionEntr
 
 @Composable
 private fun DeviceCard(items: List<Pair<@Composable () -> Unit, Pair<String, String>>>) {
-    Surface(shape = RoundedCornerShape(24.dp), color = Panel, modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 28.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-            items.forEach { (icon, pair) ->
+    Surface(shape = RoundedCornerShape(16.dp), color = Panel, modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 18.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+            items.forEachIndexed { i, (icon, pair) ->
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
                     icon()
-                    Spacer(Modifier.height(11.dp))
-                    Text(pair.first, color = LabelC, fontSize = 16.sp)
-                    Spacer(Modifier.height(9.dp))
-                    Text(pair.second, color = Ink, fontSize = 21.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Spacer(Modifier.height(8.dp))
+                    Text(pair.first, color = Muted, fontSize = 11.sp)
+                    Spacer(Modifier.height(6.dp))
+                    Text(pair.second, color = Ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                if (i < items.size - 1) {
+                    Box(Modifier.width(1.dp).height(40.dp).background(Divider))
                 }
             }
         }
@@ -229,103 +239,139 @@ private fun DeviceCard(items: List<Pair<@Composable () -> Unit, Pair<String, Str
 private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().background(Bg)) {
         TopBar(s.appName, onBack = onBack, actions = {
-            Icon(Icons.Outlined.Tune, "Filter", tint = Color(0xFFBBBBBB), modifier = Modifier.size(26.dp))
+            Icon(Icons.Outlined.FilterList, "Filter", tint = Faint, modifier = Modifier.size(22.dp))
             Spacer(Modifier.width(18.dp))
-            Icon(Icons.Outlined.Share, "Share", tint = Color(0xFFBBBBBB), modifier = Modifier.size(26.dp))
+            Icon(Icons.Outlined.Share, "Share", tint = Faint, modifier = Modifier.size(22.dp))
             Spacer(Modifier.width(18.dp))
-            Icon(Icons.Outlined.CloudDownload, "Export", tint = Color(0xFFBBBBBB), modifier = Modifier.size(26.dp))
+            Icon(Icons.Outlined.FileDownload, "Export", tint = Faint, modifier = Modifier.size(22.dp))
         })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 17.dp, bottom = 40.dp)) {
             DeviceCard(
                 listOf(ChipIcon(LabelC) to ("Platform" to Build.BOARD),
                     PhoneIcon(LabelC) to ("Model" to Build.MODEL),
-                    AndroidIcon(Color(0xFF8BD25A)) to ("OS" to "Android ${Build.VERSION.RELEASE}"),
-                    { Text("◉", color = Color(0xFFFF7756), fontSize = 40.sp, lineHeight = 40.sp) } to ("Profile" to "###"))
+                    AndroidIcon(Color(0xFF76C442)) to ("OS" to "Android ${Build.VERSION.RELEASE}"),
+                    { Text("◉", color = Orange, fontSize = 32.sp, lineHeight = 40.sp) } to ("Profile" to "###"))
             )
-            Spacer(Modifier.height(14.dp))
-            // Note placeholder
-            Surface(shape = RoundedCornerShape(22.dp), color = Panel, modifier = Modifier.fillMaxWidth()) {
-                Text("Note not set, click here to enter", color = Color(0xFF999999), fontSize = 20.sp,
-                    modifier = Modifier.padding(25.dp))
-            }
-            Spacer(Modifier.height(28.dp))
-            StatsCard(s)
-            ChartCard4("FPS", titleRight = "Temperature(°C)", fields = listOf(
-                "FPS" to S_FPS, "TEMP(°C)" to S_TEMP, "CPU(%)" to Color(0xFFA35AA2), "GPU(%)" to Color(0xFF6BC9EA)
-            )) {
-                FpsCanvas(listOf(s.chartData.fps to S_FPS, s.chartData.temp to S_TEMP), 0f, 90f)
-            }
-            ChartCard4("Frame Time(ms)", fields = listOf("MAX: 207ms" to null)) {
-                FpsCanvas(listOf(s.chartData.frameTime to Color(0xFF87CBED)), 0f, 110f, bar = true)
-            }
-            ChartCard4("CPU Usage(%)", fields = listOf(
-                "CPU 0~3" to S_CPU03, "CPU 4~6" to S_CPU46, "CPU 7" to S_CPU7
-            )) {
-                FpsCanvas(listOf(s.chartData.cpu03 to S_CPU03, s.chartData.cpu46 to S_CPU46, s.chartData.cpu7 to S_CPU7), 0f, 100f)
-            }
-            ChartCard4("CPU Frequency(MHz)", fields = listOf(
-                "CPU 0~3" to S_CPU03, "CPU 4~6" to S_CPU46, "CPU 7" to S_CPU7
-            )) {
-                FpsCanvas(listOf(s.chartData.cpu03 to S_CPU03, s.chartData.cpu46 to S_CPU46, s.chartData.cpu7 to S_CPU7), 300f, 3000f)
-            }
-            ChartCard4("CPU Cycles(M) / CPU Temperature(°C)", fields = listOf(
-                "CPU 0~3" to S_CPU03, "CPU 4~6" to S_CPU46, "CPU 7" to S_CPU7, "TEMP(°C)" to S_TEMP
-            )) {
-                FpsCanvas(listOf(
-                    s.chartData.cpu03.map { it * 16f } to S_CPU03,
-                    s.chartData.cpu46.map { it * 20f } to S_CPU46,
-                    s.chartData.cpu7.map { it * 24f } to S_CPU7,
-                    s.chartData.temp to S_TEMP
-                ), 0f, 2900f)
-            }
-            ChartCard4("GPU Frequency(MHz) / Usage(%)", fields = listOf(
-                "Frequency(MHz)" to S_GF, "Usage(%)" to S_GU
-            )) {
-                FpsCanvas(listOf(s.chartData.gpuFreq to S_GF, s.chartData.gpuUsage to S_GU), 0f, 600f)
-            }
-            ChartCard4("DDR(MHz | Mbps)", fields = emptyList()) {
-                FpsCanvas(listOf(s.chartData.ddr to S_DDR), 0f, 6410f)
-            }
-            ChartCard4("Power(W) / Capacity %", fields = listOf(
-                "MAX: 6,28W" to null, "MIN: 2,01W" to null, "AVG: 4,50W" to null
-            )) {
-                FpsCanvas(listOf(
-                    s.chartData.powerW to S_PWR,
-                    s.chartData.capacity.map { it / 10f } to S_CAP
-                ), 0f, 7f)
-            }
-            ChartCard4("CPU Temperature(°C)", fields = listOf(
-                "MAX: 82,5°C" to null, "MIN: 51,0°C" to null, "AVG: 68,7°C" to null
-            )) {
-                FpsCanvas(listOf(s.chartData.temp to S_TEMP), 0f, 100f)
-            }
+            Spacer(Modifier.height(12.dp))
+            SessionStatsCard(s)
+            Spacer(Modifier.height(12.dp))
+            // ── Charts (Scene order) ──
+            ChartCard(title = "FPS", titleRight = "Temperature(°C)", rightColor = S_TEMP,
+                legend = listOf("FPS" to S_FPS, "TEMP(°C)" to S_TEMP, "CPU(%)" to S_CPU_PCT, "GPU(%)" to S_GPU_PCT),
+                spec = ChartSpec(
+                    series = listOf(s.chartData.fps to S_FPS),
+                    rightSeries = listOf(s.chartData.temp to S_TEMP),
+                    yMin = 0f, yMax = 90f,
+                    leftTicks = listOf("90", "60", "30", "0"),
+                    rightTicks = listOf("45", "40"), rightMin = 35f, rightMax = 50f,
+                ))
+            ChartCard(title = "Frame Time (ms)",
+                legend = emptyList(), sub = "MAX: 207ms",
+                spec = ChartSpec(
+                    series = listOf(s.chartData.frameTime to S_FPS),
+                    yMin = 8f, yMax = 100f,
+                    leftTicks = listOf("100", "91", "83", "75", "66", "58", "50", "41", "33", "25", "16", "8"),
+                    bar = true,
+                ))
+            ChartCard(title = "CPU Usage (%)", opts = true,
+                legend = listOf("Total" to S_FPS, "CPU 0~3" to S_CPU03, "CPU 4~6" to S_CPU46, "CPU 7" to S_CPU7),
+                spec = ChartSpec(
+                    series = listOf(
+                        s.chartData.cpu03 to S_CPU03,
+                        s.chartData.cpu46 to S_CPU46,
+                        s.chartData.cpu7 to S_CPU7,
+                        s.chartData.cpu03.mapIndexed { i, v -> (v + (s.chartData.cpu46.getOrElse(i) { v }) * 0.6f + (s.chartData.cpu7.getOrElse(i) { v }) * 0.3f).coerceAtMost(100f) } to S_FPS,
+                    ),
+                    dashed = setOf(3),
+                    yMin = 0f, yMax = 100f,
+                    leftTicks = (100 downTo 10 step 10).map { it.toString() },
+                ))
+            ChartCard(title = "CPU Frequency (MHz)", opts = true,
+                legend = listOf("CPU 0~3" to S_CPU03, "CPU 4~6" to S_CPU46, "CPU 7" to S_CPU7),
+                spec = ChartSpec(
+                    series = listOf(
+                        s.chartData.cpu03.map { it * 65f } to S_CPU03,
+                        s.chartData.cpu46.map { it * 55f } to S_CPU46,
+                        s.chartData.cpu7.map { it * 30f } to S_CPU7,
+                    ),
+                    yMin = 0f, yMax = 3000f,
+                    leftTicks = listOf("2918", "2700", "2400", "2100", "1800", "1500", "1200", "900", "600", "300"),
+                ))
+            ChartCard(title = "CPU Cycles (M)", titleRight = "CPU Temperature (°C)", rightColor = S_TEMP2,
+                legend = listOf("CPU 0~3" to S_CPU03, "CPU 4~6" to S_CPU46, "CPU 7" to S_CPU7, "TEMP(°C)" to S_TEMP2),
+                spec = ChartSpec(
+                    series = listOf(
+                        s.chartData.cpu03.map { it * 50f } to S_CPU03,
+                        s.chartData.cpu46.map { it * 28f } to S_CPU46,
+                        s.chartData.cpu7.map { it * 24f } to S_CPU7,
+                    ),
+                    rightSeries = listOf(s.chartData.temp to S_TEMP2),
+                    yMin = 0f, yMax = 3000f,
+                    leftTicks = listOf("2890", "2700", "2400", "2100", "1800", "1500", "1200", "900", "600", "300"),
+                    rightTicks = (100 downTo 10 step 10).map { "${it}°" }, rightMin = 0f, rightMax = 100f,
+                ))
+            ChartCard(title = "GPU Frequency (MHz)", titleRight = "Usage (%)",
+                legend = listOf("Frequency (MHz)" to S_GF, "Usage (%)" to S_GU),
+                spec = ChartSpec(
+                    series = listOf(s.chartData.gpuFreq to S_GF),
+                    rightSeries = listOf(s.chartData.gpuUsage to S_GU),
+                    yMin = 0f, yMax = 600f,
+                    leftTicks = listOf("600", "500", "400", "300", "200", "100"),
+                    rightTicks = listOf("100", "90", "75", "50"), rightMin = 0f, rightMax = 100f,
+                ))
+            ChartCard(title = "DDR (MHz | Mbps)",
+                legend = emptyList(),
+                spec = ChartSpec(
+                    series = listOf(s.chartData.ddr to S_DDR),
+                    yMin = 3000f, yMax = 6500f,
+                    leftTicks = listOf("6410", "5479", "4192", "3418", "3110"),
+                ))
+            ChartCard(title = "Power (W)", titleRight = "Capacity %",
+                legend = listOf("Power (W)" to S_PWR, "Capacity (%)" to S_CAP),
+                sub = "MAX: 6,28W | MIN: 2,01W | AVG: 4,50W",
+                spec = ChartSpec(
+                    series = listOf(s.chartData.powerW to S_PWR),
+                    rightSeries = listOf(s.chartData.capacity to S_CAP),
+                    yMin = 0f, yMax = 7f,
+                    leftTicks = listOf("7W", "6W", "5W", "4W", "3W", "2W", "1W", "0"),
+                    rightTicks = listOf("100", "80", "60", "40", "20"), rightMin = 0f, rightMax = 100f,
+                ))
+            ChartCard(title = "CPU Temperature (°C)",
+                legend = emptyList(), sub = "MAX: 82,5°C | MIN: 51,0°C | AVG: 68,7°C",
+                spec = ChartSpec(
+                    series = listOf(s.chartData.temp to S_TEMPL),
+                    yMin = 0f, yMax = 100f,
+                    leftTicks = (100 downTo 10 step 10).map { "${it}°C" },
+                ))
         }
     }
 }
 
 @Composable
-private fun StatsCard(s: SessionEntry) {
-    Surface(shape = RoundedCornerShape(22.dp), color = Panel, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(horizontal = 22.dp, vertical = 25.dp)) {
+private fun SessionStatsCard(s: SessionEntry) {
+    Surface(shape = RoundedCornerShape(16.dp), color = Panel, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                GameIcon(s.appName, size = 45, fontSize = 8, radius = 12)
+                GameIcon(s.appName, size = 40, fontSize = 6, radius = 10)
                 Spacer(Modifier.width(12.dp))
-                Text(s.date, color = Color(0xFFD9D9D9), fontSize = 18.sp)
-                Spacer(Modifier.weight(1f))
-                Column(horizontalAlignment = Alignment.End) {
-                    Text("${s.appName}(${s.version})", color = Color(0xFF969696), fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text("crop: ${s.crop}", color = Color(0xFF969696), fontSize = 15.sp)
+                Column {
+                    Text(s.date, color = Ink, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(3.dp))
+                    Text("${s.appName} (${s.version}) · crop: ${s.crop}", color = Dim, fontSize = 11.sp)
                 }
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(14.dp))
             Row(Modifier.fillMaxWidth()) {
                 StatCell("MAX", comma(s.maxFps), "FPS", Modifier.weight(1f))
                 StatCell("MIN", comma(s.minFps), "FPS", Modifier.weight(1f))
                 StatCell("AVG", comma(s.avgFps, 2), "FPS", Modifier.weight(1f))
                 StatCell("VARIANCE", comma(s.variance), "FPS", Modifier.weight(1f))
             }
+            Spacer(Modifier.height(14.dp))
+            Row(Modifier.fillMaxWidth().background(Divider, RoundedCornerShape(2.dp)).height(1.dp))
+            Spacer(Modifier.height(14.dp))
             Row(Modifier.fillMaxWidth()) {
-                StatCell("≥45FPS", comma(s.smoothPct, 1) + "%", "Smoothness", Modifier.weight(1f))
+                StatCell("≥45FPS", comma(s.smoothPct, 1) + "%", "Smoothness", Modifier.weight(1f), valueColor = Green)
                 StatCell("5% Low", comma(s.low5Pct), "FPS", Modifier.weight(1f))
                 StatCell("MAX", comma(s.peakTemp), "Temperature", Modifier.weight(1f))
                 StatCell("AVG", comma(s.avgPowerW, 2), "Power(W)", Modifier.weight(1f))
@@ -335,42 +381,62 @@ private fun StatsCard(s: SessionEntry) {
 }
 
 @Composable
-private fun StatCell(label: String, value: String, unit: String, modifier: Modifier = Modifier) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier.padding(vertical = 8.dp)) {
-        Text(label, color = Color(0xFF969696), fontSize = 16.sp, fontWeight = FontWeight.Medium)
-        Spacer(Modifier.height(3.dp))
-        Text(value, color = StatBlue, fontSize = 37.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+private fun StatCell(label: String, value: String, unit: String, modifier: Modifier = Modifier, valueColor: Color = StatBlue) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier.padding(vertical = 6.dp)) {
+        Text(label, color = Dim, fontSize = 10.sp)
+        Spacer(Modifier.height(4.dp))
+        Text(value, color = valueColor, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         Spacer(Modifier.height(2.dp))
-        Text(unit, color = Color(0xFF9B9B9B), fontSize = 15.sp)
+        Text(unit, color = Faint, fontSize = 10.sp)
     }
 }
 
 // ═══════════════════════════════════════════════
-// Chart card + canvas (FPS Stats style, single left axis)
+// Chart card + canvas
 // ═══════════════════════════════════════════════
+private data class ChartSpec(
+    val series: List<Pair<List<Float>, Color>> = emptyList(),
+    val rightSeries: List<Pair<List<Float>, Color>> = emptyList(),
+    val yMin: Float = 0f, val yMax: Float = 100f,
+    val leftTicks: List<String> = listOf("100", "50", "0"),
+    val rightTicks: List<String>? = null,
+    val rightMin: Float = 0f, val rightMax: Float = 100f,
+    val bar: Boolean = false,
+    val dashed: Set<Int> = emptySet(),
+)
+
 @Composable
-private fun ChartCard4(title: String, titleRight: String? = null, fields: List<Pair<String, Color?>>, canvas: @Composable () -> Unit) {
-    Surface(shape = RoundedCornerShape(22.dp), color = Panel, modifier = Modifier.fillMaxWidth().padding(top = 18.dp)) {
-        Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 22.dp, bottom = 20.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(title, color = ChartTitleC, fontSize = 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                if (titleRight != null) Text(titleRight, color = ChartTitleC, fontSize = 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+private fun ChartCard(
+    title: String, titleRight: String? = null, rightColor: Color = S_TEMP,
+    opts: Boolean = false,
+    legend: List<Pair<String, Color>> = emptyList(),
+    sub: String? = null,
+    spec: ChartSpec,
+) {
+    Surface(shape = RoundedCornerShape(16.dp), color = Panel, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(title, color = TitleC, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                if (titleRight != null) Text(titleRight, color = rightColor, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                else if (opts) Text("Chart Options ▸", color = Dim, fontSize = 11.sp)
             }
-            Spacer(Modifier.height(7.dp))
-            canvas()
-            if (fields.isNotEmpty()) {
-                Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(12.dp))
+            ChartCanvas(spec)
+            if (legend.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
                 FlowRow(horizontalArrangement = Arrangement.Center, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    fields.forEach { (name, clr) ->
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp)) {
-                            if (clr != null) {
-                                Box(Modifier.size(11.dp).clip(RoundedCornerShape(2.dp)).background(clr))
-                                Spacer(Modifier.width(5.dp))
-                            }
-                            Text(name, color = LegendC, fontSize = 15.sp)
+                    legend.forEach { (name, clr) ->
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 7.dp)) {
+                            Box(Modifier.size(9.dp).clip(RoundedCornerShape(2.dp)).background(clr))
+                            Spacer(Modifier.width(5.dp))
+                            Text(name, color = LegendC, fontSize = 12.sp)
                         }
                     }
                 }
+            }
+            if (sub != null) {
+                Spacer(Modifier.height(8.dp))
+                Text(sub, color = Faint, fontSize = 11.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth())
             }
         }
     }
@@ -378,49 +444,68 @@ private fun ChartCard4(title: String, titleRight: String? = null, fields: List<P
 
 @OptIn(ExperimentalTextApi::class)
 @Composable
-private fun FpsCanvas(series: List<Pair<List<Float>, Color>>, yMin: Float, yMax: Float, bar: Boolean = false) {
+private fun ChartCanvas(spec: ChartSpec) {
     val tm = rememberTextMeasurer()
-    val labelStyle = TextStyle(fontSize = 13.sp, color = AxisC)
+    val labelStyle = TextStyle(fontSize = 9.sp, color = AxisC)
     val times = listOf("0", "45s", "1m30s", "2m15s", "3m", "3m45s")
-    Canvas(Modifier.fillMaxWidth().height(280.dp)) {
-        val left = 44.dp.toPx(); val right = 18.dp.toPx(); val top = 14.dp.toPx(); val bottom = 32.dp.toPx()
-        val w = size.width - left - right; val h = size.height - top - bottom
-        drawRect(Panel, Offset.Zero, size)
-        val dash = PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 5.dp.toPx()))
-        for (i in 0..5) {
-            val y = top + h * i / 5f
-            drawLine(GridC, Offset(left, y), Offset(left + w, y), strokeWidth = 1.dp.toPx(), pathEffect = dash)
+    val maxTicks = maxOf(spec.leftTicks.size, spec.rightTicks?.size ?: 0)
+    Canvas(Modifier.fillMaxWidth().height(220.dp)) {
+        val insetL = 22.dp.toPx(); val insetR = if (spec.rightTicks != null) 30.dp.toPx() else 22.dp.toPx()
+        val top = 8.dp.toPx(); val bottom = 28.dp.toPx()
+        val w = size.width - insetL - insetR; val h = size.height - top - bottom
+        // grid (dashed)
+        val dash = PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 3.dp.toPx()))
+        for (i in 0 until maxTicks) {
+            val y = top + h * i / (maxTicks - 1)
+            drawLine(GridC, Offset(insetL, y), Offset(insetL + w, y), strokeWidth = 0.8.dp.toPx(), pathEffect = dash)
         }
-        for (i in 0..5) {
-            val v = (yMax - (yMax - yMin) * i / 5f).roundToInt().toString()
+        // left y labels
+        spec.leftTicks.forEachIndexed { i, v ->
             val res = tm.measure(AnnotatedString(v), style = labelStyle)
-            val y = top + h * i / 5f
-            drawText(res, topLeft = Offset(left - 7.dp.toPx() - res.size.width, y - res.size.height / 2f))
+            val y = top + h * i / (spec.leftTicks.size - 1)
+            drawText(res, topLeft = Offset(insetL - res.size.width - 6.dp.toPx(), y - res.size.height / 2f))
         }
+        // right y labels
+        spec.rightTicks?.forEachIndexed { i, v ->
+            val res = tm.measure(AnnotatedString(v), style = labelStyle)
+            val y = top + h * i / (spec.rightTicks.size - 1)
+            drawText(res, topLeft = Offset(size.width - insetR + 6.dp.toPx(), y - res.size.height / 2f))
+        }
+        // x labels
         times.forEachIndexed { i, t ->
             val res = tm.measure(AnnotatedString(t), style = labelStyle)
-            val x = left + w * i / 5f
-            drawText(res, topLeft = Offset(x - res.size.width / 2f, size.height - 8.dp.toPx() - res.size.height))
+            val x = insetL + w * i / (times.size - 1)
+            drawText(res, topLeft = Offset(x - res.size.width / 2f, size.height - 6.dp.toPx() - res.size.height))
         }
-        if (bar) {
-            val a = series[0].first; val c = series[0].second
+        // data
+        fun yOf(v: Float, min: Float, max: Float) = top + h - ((v - min) / (max - min)).coerceIn(0f, 1f) * h
+        if (spec.bar) {
+            val a = spec.series.firstOrNull()?.first ?: return@Canvas; val c = spec.series.first().second
             if (a.size >= 2) {
                 val n = a.size - 1
-                val bw = maxOf(2.dp.toPx(), w / n - 1.5.dp.toPx())
+                val bw = maxOf(2.dp.toPx(), w / n - 2.dp.toPx())
                 a.forEachIndexed { i, v ->
-                    val x = left + (i / n.toFloat()) * w
-                    val rawY = top + h - ((v - yMin) / (yMax - yMin)) * h
-                    val y = rawY.coerceAtLeast(top)
-                    drawRect(c, Offset(x - bw / 2, y), Size(bw, top + h - y))
+                    val x = insetL + (i / n.toFloat()) * w
+                    val y = yOf(v, spec.yMin, spec.yMax)
+                    drawRect(c.copy(alpha = 0.7f), Offset(x - bw / 2, y), Size(bw, top + h - y))
                 }
             }
         } else {
-            series.forEach { (data, color) ->
+            spec.series.forEachIndexed { idx, (data, color) ->
+                if (data.size < 2) return@forEachIndexed
+                val step = w / (data.size - 1)
+                val pts = data.mapIndexed { i, v -> Offset(insetL + i * step, yOf(v, spec.yMin, spec.yMax)) }
+                val path = Path().apply { moveTo(pts.first().x, pts.first().y); for (i in 1 until pts.size) lineTo(pts[i].x, pts[i].y) }
+                val style = if (idx in spec.dashed) Stroke(1.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round,
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 3.dp.toPx()))) else Stroke(1.8.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                drawPath(path, color, style = style)
+            }
+            spec.rightSeries.forEach { (data, color) ->
                 if (data.size < 2) return@forEach
                 val step = w / (data.size - 1)
-                val pts = data.mapIndexed { i, v -> Offset(left + i * step, top + h - ((v - yMin) / (yMax - yMin)) * h) }
+                val pts = data.mapIndexed { i, v -> Offset(insetL + i * step, yOf(v, spec.rightMin, spec.rightMax)) }
                 val path = Path().apply { moveTo(pts.first().x, pts.first().y); for (i in 1 until pts.size) lineTo(pts[i].x, pts[i].y) }
-                drawPath(path, color, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+                drawPath(path, color, style = Stroke(1.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
             }
         }
     }
