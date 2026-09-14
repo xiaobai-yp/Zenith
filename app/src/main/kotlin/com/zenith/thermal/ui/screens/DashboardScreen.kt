@@ -198,21 +198,16 @@ fun DashboardScreen() {
                                 )
                                 Spacer(Modifier.height(1.dp))
                                 Text(buildVersionString(), color = ZenithMuted, fontSize = 12.sp)
+                                Spacer(Modifier.height(2.dp))
+                                Text("Android thermal management daemon with hardware profile control.", color = ZenithMuted, fontSize = 11.sp)
                             }
                             // Info button
-                            Surface(
-                                modifier = Modifier.size(30.dp),
-                                shape = CircleShape,
-                                color = Color(0x23ED9DF8)
-                            ) {
-                                Text(
-                                    "i",
-                                    color = Color.White,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.wrapContentSize(Alignment.Center)
-                                )
-                            }
+                            Text(
+                                "i",
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
                         }
                         Spacer(Modifier.height(12.dp))
                         // Badges row — round + status dot
