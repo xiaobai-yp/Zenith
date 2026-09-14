@@ -268,6 +268,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                     leftTicks = listOf("90", "60", "30", "0"),
                     rightTicks = listOf("45", "40"), rightMin = 35f, rightMax = 50f,
                 ))
+            Spacer(Modifier.height(14.dp))
             ChartCard(title = "Frame Time (ms)",
                 legend = emptyList(), sub = "MAX: 207ms",
                 spec = ChartSpec(
@@ -276,6 +277,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                     leftTicks = listOf("100", "91", "83", "75", "66", "58", "50", "41", "33", "25", "16", "8"),
                     bar = true,
                 ))
+            Spacer(Modifier.height(14.dp))
             ChartCard(title = "CPU Usage (%)", opts = true,
                 legend = listOf("Total" to S_FPS, "CPU 0~3" to S_CPU03, "CPU 4~6" to S_CPU46, "CPU 7" to S_CPU7),
                 spec = ChartSpec(
@@ -289,6 +291,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                     yMin = 0f, yMax = 100f,
                     leftTicks = (100 downTo 10 step 10).map { it.toString() },
                 ))
+            Spacer(Modifier.height(14.dp))
             ChartCard(title = "CPU Frequency (MHz)", opts = true,
                 legend = listOf("CPU 0~3" to S_CPU03, "CPU 4~6" to S_CPU46, "CPU 7" to S_CPU7),
                 spec = ChartSpec(
@@ -300,6 +303,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                     yMin = 0f, yMax = 3000f,
                     leftTicks = listOf("2918", "2700", "2400", "2100", "1800", "1500", "1200", "900", "600", "300"),
                 ))
+            Spacer(Modifier.height(14.dp))
             ChartCard(title = "CPU Cycles (M)", titleRight = "CPU Temperature (°C)", rightColor = S_TEMP2,
                 legend = listOf("CPU 0~3" to S_CPU03, "CPU 4~6" to S_CPU46, "CPU 7" to S_CPU7, "TEMP(°C)" to S_TEMP2),
                 spec = ChartSpec(
@@ -313,6 +317,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                     leftTicks = listOf("2890", "2700", "2400", "2100", "1800", "1500", "1200", "900", "600", "300"),
                     rightTicks = (100 downTo 10 step 10).map { "${it}°" }, rightMin = 0f, rightMax = 100f,
                 ))
+            Spacer(Modifier.height(14.dp))
             ChartCard(title = "GPU Frequency (MHz)", titleRight = "Usage (%)",
                 legend = listOf("Frequency (MHz)" to S_GF, "Usage (%)" to S_GU),
                 spec = ChartSpec(
@@ -322,6 +327,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                     leftTicks = listOf("600", "500", "400", "300", "200", "100"),
                     rightTicks = listOf("100", "90", "75", "50"), rightMin = 0f, rightMax = 100f,
                 ))
+            Spacer(Modifier.height(14.dp))
             ChartCard(title = "DDR (MHz | Mbps)",
                 legend = emptyList(),
                 spec = ChartSpec(
@@ -329,6 +335,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                     yMin = 3000f, yMax = 6500f,
                     leftTicks = listOf("6410", "5479", "4192", "3418", "3110"),
                 ))
+            Spacer(Modifier.height(14.dp))
             ChartCard(title = "Power (W)", titleRight = "Capacity %",
                 legend = listOf("Power (W)" to S_PWR, "Capacity (%)" to S_CAP),
                 sub = "MAX: 6,28W | MIN: 2,01W | AVG: 4,50W",
@@ -339,6 +346,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                     leftTicks = listOf("7W", "6W", "5W", "4W", "3W", "2W", "1W", "0"),
                     rightTicks = listOf("100", "80", "60", "40", "20"), rightMin = 0f, rightMax = 100f,
                 ))
+            Spacer(Modifier.height(14.dp))
             ChartCard(title = "CPU Temperature (°C)",
                 legend = emptyList(), sub = "MAX: 82,5°C | MIN: 51,0°C | AVG: 68,7°C",
                 spec = ChartSpec(
