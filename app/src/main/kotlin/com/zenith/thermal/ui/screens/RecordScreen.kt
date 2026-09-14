@@ -18,16 +18,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.drawscope.*
-import androidx.compose.ui.input.pointer.*
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.zenith.thermal.BuildConfig
+import com.zenith.thermal.ZenithDaemonClient
 import com.zenith.thermal.ui.theme.*
 import kotlin.math.*
 
@@ -123,7 +122,7 @@ private fun SessionListItem(s: SessionEntry, onClick: () -> Unit) {
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(s.appName, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("${s.date} · %.0f fps · %.2fW · ${fmtDur(s.durationSec)}".format(s.avgFps, s.powerW), color = Color(0xFF8e8e93), fontSize = 11.sp)
+                Text("${s.date} · %.0f fps · %.2fW · ${fmtDur(s.durationSec)}".format(s.avgFps, s.avgPowerW), color = Color(0xFF8e8e93), fontSize = 11.sp)
             }
             Surface(shape = CircleShape, color = Color(0xFF2c2c2e), modifier = Modifier.size(32.dp)) {
                 Icon(Icons.Outlined.Delete, "Delete", tint = Color(0xFF8e8e93), modifier = Modifier.padding(7.dp))
@@ -201,7 +200,7 @@ private fun DeviceInfoCard(showProfile: Boolean = false, modifier: Modifier = Mo
 }
 @Composable
 private fun DevInfoItem(icon: ImageVector, label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(IntrinsicSize.Max)) {
         Icon(icon, null, tint = Color(0xFF4a9eff), modifier = Modifier.size(20.dp))
         Spacer(Modifier.height(4.dp))
         Text(label, color = Color(0xFF8e8e93), fontSize = 9.sp, fontWeight = FontWeight.Medium)
@@ -303,15 +302,13 @@ private fun ChartLegend(items: List<Pair<String, Color>>) {
 // ── 1. FPS & Temperature (dual Y-axis) ──
 @Composable
 private fun FpsTempChart(d: ChartData) {
-    ChartCard("FPS", "Temperature(C°)") {
+    ChartCard("FPS", "Temperature(C°)", legend = {
+        ChartLegend(listOf("FPS" to accentGray, "TEMP(°C)" to Color(0xFFfb923c), "CPU(%)" to Color(0xFFc084fc), "GPU(%)" to Color(0xFF22d3ee)))
+    }) {
         Box(Modifier.fillMaxWidth().height(140.dp)) {
             DualAxisLineChart(d.fps, d.temp, 0f, 100f, 30f, 50f, accentGray, Color(0xFFfb923c))
         }
-    }?.also {
-        // Legend after chart
     }
-    // legend outside ChartCard
-    ChartLegend(listOf("FPS" to accentGray, "TEMP(°C)" to Color(0xFFfb923c), "CPU(%)" to Color(0xFFc084fc), "GPU(%)" to Color(0xFF22d3ee)))
 }
 
 // ── 2. Frame Time (bar) ──
@@ -327,23 +324,25 @@ private fun FrameTimeChart(d: ChartData) {
 // ── 3. CPU Usage (4 lines) ──
 @Composable
 private fun CpuUsageChart(d: ChartData) {
-    ChartCard("CPU Usage(%)", chartOptions = true) {
+    ChartCard("CPU Usage(%)", chartOptions = true, legend = {
+        ChartLegend(listOf("Total" to Color(0xFF60a5fa), "CPU 0~3" to Color(0xFFc084fc), "CPU 4~6" to Color(0xFF22d3ee), "CPU 7" to Color(0xFFfb923c)))
+    }) {
         Box(Modifier.fillMaxWidth().height(130.dp)) {
             MultiLineChart(listOf(d.cpuTotal to Color(0xFF60a5fa), d.cpu03 to Color(0xFFc084fc), d.cpu46 to Color(0xFF22d3ee), d.cpu7 to Color(0xFFfb923c)), 0f, 100f)
         }
-    }?.also {}
-    ChartLegend(listOf("Total" to Color(0xFF60a5fa), "CPU 0~3" to Color(0xFFc084fc), "CPU 4~6" to Color(0xFF22d3ee), "CPU 7" to Color(0xFFfb923c)))
+    }
 }
 
 // ── 4. CPU Frequency (3 lines) ──
 @Composable
 private fun CpuFreqChart(d: ChartData) {
-    ChartCard("CPU Frequency (MHz)", chartOptions = true) {
+    ChartCard("CPU Frequency (MHz)", chartOptions = true, legend = {
+        ChartLegend(listOf("CPU 0~3" to Color(0xFFc084fc), "CPU 4~6" to Color(0xFF22d3ee), "CPU 7" to Color(0xFFfb923c)))
+    }) {
         Box(Modifier.fillMaxWidth().height(130.dp)) {
             MultiLineChart(listOf(d.cpu03 to Color(0xFFc084fc), d.cpu46 to Color(0xFF22d3ee), d.cpu7 to Color(0xFFfb923c)), 0f, 3000f)
         }
     }
-    ChartLegend(listOf("CPU 0~3" to Color(0xFFc084fc), "CPU 4~6" to Color(0xFF22d3ee), "CPU 7" to Color(0xFFfb923c)))
 }
 
 // ── 5. CPU Cycles + CPU Temperature (side by side) ──
