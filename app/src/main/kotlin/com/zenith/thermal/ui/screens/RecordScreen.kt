@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -275,23 +276,37 @@ private fun ChartLegend(items: List<Pair<String, Color>>) {
     }
 }
 
-// ── Chart area with Y-axis labels (left + optional right) + X-axis timeline ──
+// ── Chart with aligned axis labels — Y-axis text drawn on Canvas at same y as grid lines ──
+@OptIn(ExperimentalTextApi::class)
 @Composable
 private fun ChartWithAxes(yLabelsLeft: List<String>, yLabelsRight: List<String>? = null, chartContent: @Composable () -> Unit) {
+    val textMeasurer = rememberTextMeasurer()
     Column(Modifier.padding(horizontal = 14.dp)) {
+        // Y-axis left labels + Chart area + Y-axis right labels
+        // All three columns share the same vertical space; grid lines drawn in chartContent
         Row(Modifier.fillMaxWidth().height(chartH)) {
-            // Y-axis left
-            Column(Modifier.width(26.dp).fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween, horizontalAlignment = Alignment.End) {
-                yLabelsLeft.forEach { Text(it, color = dimText, fontSize = 7.sp, textAlign = TextAlign.End, lineHeight = 9.sp) }
+            // Left Y-axis: text drawn relative to grid-line y positions
+            Canvas(Modifier.width(28.dp).fillMaxHeight()) {
+                val h = size.height
+                yLabelsLeft.forEachIndexed { i, label ->
+                    val y = h * i / (yLabelsLeft.size - 1).coerceAtLeast(1)
+                    val result = textMeasurer.measure(AnnotatedString(label), style = TextStyle(fontSize = 8.sp, color = dimText))
+                    drawText(result, topLeft = Offset(size.width - result.size.width, y - result.size.height / 2f))
+                }
             }
             Spacer(Modifier.width(4.dp))
-            // Chart canvas
+            // Chart area
             Box(Modifier.weight(1f).fillMaxHeight()) { chartContent() }
             if (yLabelsRight != null) {
                 Spacer(Modifier.width(4.dp))
-                // Y-axis right
-                Column(Modifier.width(26.dp).fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween, horizontalAlignment = Alignment.Start) {
-                    yLabelsRight.forEach { Text(it, color = dimText, fontSize = 7.sp, lineHeight = 9.sp) }
+                // Right Y-axis
+                Canvas(Modifier.width(28.dp).fillMaxHeight()) {
+                    val h = size.height
+                    yLabelsRight.forEachIndexed { i, label ->
+                        val y = h * i / (yLabelsRight.size - 1).coerceAtLeast(1)
+                        val result = textMeasurer.measure(AnnotatedString(label), style = TextStyle(fontSize = 8.sp, color = dimText))
+                        drawText(result, topLeft = Offset(0f, y - result.size.height / 2f))
+                    }
                 }
             }
         }
