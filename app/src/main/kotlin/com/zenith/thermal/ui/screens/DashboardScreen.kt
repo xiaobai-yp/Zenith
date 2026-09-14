@@ -20,6 +20,7 @@ import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.Smartphone
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Terminal
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -100,6 +101,7 @@ fun DashboardScreen() {
 
     // Device info (read once)
     var deviceInfo by remember { mutableStateOf<DeviceInfo?>(null) }
+    var showAbout by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) { deviceInfo = readDeviceInfo() }
@@ -204,7 +206,8 @@ fun DashboardScreen() {
                             Surface(
                                 modifier = Modifier.size(34.dp),
                                 shape = CircleShape,
-                                color = Color(0x23ED9DF8)
+                                color = Color(0x23ED9DF8),
+                                onClick = { showAbout = true }
                             ) {
                                 Icon(
                                     Icons.Outlined.Info,
@@ -290,6 +293,11 @@ fun DashboardScreen() {
                     HomeMetricItem(Icons.Outlined.DeveloperBoard, "GPU", di.glVersion)
                 }
             }
+
+            // ── About dialog ──
+            if (showAbout) {
+                AboutDialog(onDismiss = { showAbout = false })
+            }
         }
     }
 }
@@ -324,5 +332,40 @@ private fun HomeMetricItem(icon: androidx.compose.ui.graphics.vector.ImageVector
             maxLines = 2,
             modifier = Modifier.widthIn(max = 200.dp)
         )
+    }
+}
+
+@Composable
+private fun AboutDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            ZenithButton(text = "Close", onClick = onDismiss, variant = ZenithButtonVariant.Outline)
+        },
+        containerColor = Color(0xFF1E1A2B),
+        titleContentColor = Color.White,
+        textContentColor = ZenithMuted,
+        title = { Text("ZenithThermal", fontWeight = FontWeight.Bold) },
+        text = {
+            Column {
+                AboutItem("Version", buildVersionString())
+                AboutItem("Package", "com.zenith.thermal")
+                AboutItem("Daemon", if (ZenithDaemonClient.isConnected) "Connected" else "Disconnected")
+                AboutItem("Maintainer", "@xiaobai-yp")
+            }
+        }
+    )
+}
+
+@Composable
+private fun AboutItem(label: String, value: String) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, color = ZenithMuted, fontSize = 13.sp, modifier = Modifier.weight(1f))
+        Text(value, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
     }
 }
