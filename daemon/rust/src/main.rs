@@ -68,6 +68,22 @@ use std::sync::{OnceLock, RwLock};
 static LAST_SNAPSHOT: OnceLock<RwLock<sysfs_monitor::SysfsSnapshot>> =
     OnceLock::new();
 
+// ── global profile ID (separate from property) ──
+// property persist.sys.zenith.thermal can be clobbered by per-app setprop.
+// This tracks the TRUE global profile ID set by setglobalprofile.
+static GLOBAL_PROFILE_ID: OnceLock<RwLock<String>> = OnceLock::new();
+fn set_global_profile_id(id: &str) {
+    if let Some(lock) = GLOBAL_PROFILE_ID.get() {
+        *lock.write().unwrap() = id.to_string();
+    }
+}
+fn get_global_profile_id() -> String {
+    GLOBAL_PROFILE_ID
+        .get()
+        .map(|l| l.read().unwrap().clone())
+        .unwrap_or_else(|| "0".to_string())
+}
+
 fn update_snapshot(snap: sysfs_monitor::SysfsSnapshot) {
     if let Some(lock) = LAST_SNAPSHOT.get() {
         *lock.write().unwrap() = snap;
@@ -285,6 +301,7 @@ async fn handle_cmd(req: Request) -> Response {
             // Set property → init.rc triggers hardware (governor, freq, etc.)
             let prop_result = write_prop_sync("persist.sys.zenith.thermal", id);
             crate::log!("[zenithd] setglobalprofile {} prop_result={:?}", id, prop_result);
+            set_global_profile_id(id);
             // Write sconfig for Oplus thermal HAL
             match thermal_core::apply_global_profile(id).await {
                 Ok(()) => Response::ok(json!({ "applied": id })),
@@ -420,6 +437,7 @@ async fn main() {
     benchmark::init();
 
     let _ = LAST_SNAPSHOT.set(RwLock::new(sysfs_monitor::SysfsSnapshot::default()));
+    let _ = GLOBAL_PROFILE_ID.set(RwLock::new(String::from("0")));
 
     // Periodic monitoring tasks (no shutdown channel needed — exits when
     // the tokio runtime drops, which happens when main returns).
@@ -441,6 +459,7 @@ async fn main() {
             // Read global baseline property
             let mut global_prop = read_prop_sync("persist.sys.zenith.thermal")
                 .unwrap_or_default();
+            set_global_profile_id(&global_prop);
             // Apply sconfig on startup
             if !global_prop.is_empty() {
                 let _ = run_async(thermal_core::apply_profile(&global_prop));
@@ -487,7 +506,7 @@ async fn main() {
                         _ => {
                             // unmapped app → 1-tick pending
                             if fg_pkg == pending_fg {
-                                global_prop.clone()
+                                get_global_profile_id()
                             } else {
                                 pending_fg = fg_pkg;
                                 active_prop.clone()

@@ -275,6 +275,13 @@ object ZenithDaemonClient {
 
     /** Sync all local per-app mappings (SharedPreferences) to the daemon. */
     fun syncMappings(context: Context) {
+        // Global profile first — daemon fallback untuk unmapped apps
+        try {
+            val global = AppProfileCache.getGlobal(context)
+            setGlobalProfile(global)
+        } catch (e: Exception) {
+            Log.w(TAG, "Sync global failed: ${e.message}")
+        }
         val map = AppProfileCache.all(context)
         if (map.isEmpty()) return
         for ((pkg, id) in map) {
