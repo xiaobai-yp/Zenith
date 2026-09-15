@@ -14,6 +14,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -242,20 +244,22 @@ private fun DeviceCard(items: List<Pair<@Composable () -> Unit, Pair<String, Str
 // ═══════════════════════════════════════════════
 
 @Composable
-private fun FilterDropdown(hidden: Set<String>, onToggle: (Set<String>) -> Unit, onClose: () -> Unit) {
+private fun FilterDropdown(
+    hidden: Set<String>, onToggle: (Set<String>) -> Unit, expanded: Boolean, onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val items = listOf("Info", "Jank", "Frame Time", "Power", "DDR", "GPU", "CPU temperature")
-    Box(Modifier.fillMaxWidth().background(Color(0xF50C0C18), RoundedCornerShape(12.dp)).padding(vertical = 6.dp)) {
-        Column {
-            items.forEach { itm ->
-                val isHidden = itm in hidden
-                Row(Modifier.fillMaxWidth().clickable {
-                    onToggle(if (isHidden) hidden - itm else hidden + itm)
-                }.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (isHidden) "☐" else "☑", color = if (isHidden) Faint else StatBlue, fontSize = 15.sp)
-                    Spacer(Modifier.width(10.dp))
+    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss, modifier = modifier.background(Color(0xF50C0C18), RoundedCornerShape(14.dp))) {
+        Text("Hide/Show Cards", color = Faint, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+        items.forEach { itm ->
+            val isHidden = itm in hidden
+            DropdownMenuItem(text = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (isHidden) "☐" else "☑", color = if (isHidden) Faint else StatBlue, fontSize = 16.sp, modifier = Modifier.width(22.dp))
+                    Spacer(Modifier.width(8.dp))
                     Text(itm, color = if (isHidden) Faint else Ink, fontSize = 15.sp)
                 }
-            }
+            }, onClick = { onToggle(if (isHidden) hidden - itm else hidden + itm) })
         }
     }
 }
@@ -294,7 +298,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().background(Bg)) {
         TopBar(s.appName, onBack = onBack, actions = {
             Box(Modifier.clickable { showFilter = !showFilter }) { Icon(Icons.Outlined.FilterList, "Filter", tint = Faint, modifier = Modifier.size(22.dp)) }
-            if (showFilter) { FilterDropdown(hiddenCards, { hiddenCards = it }, { showFilter = false }) }
+            FilterDropdown(hiddenCards, { hiddenCards = it }, expanded = showFilter, onDismiss = { showFilter = false })
             Spacer(Modifier.width(18.dp))
             Icon(Icons.Outlined.Share, "Share", tint = Faint, modifier = Modifier.size(22.dp))
             Spacer(Modifier.width(18.dp))
