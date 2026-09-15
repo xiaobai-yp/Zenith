@@ -43,14 +43,16 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.zenith.thermal.ui.theme.ZenithBg
 import com.zenith.thermal.ui.theme.ZenithMuted2
+import com.zenith.thermal.ui.theme.ZenithText
 import java.io.File
 import kotlin.math.roundToInt
 
 // ═══════════════════════════════════════════════
 // Palette v15 — user-approved (Scene order, full ticks)
 // ═══════════════════════════════════════════════
-private val Bg = Color(0xFF111111)
+private val Bg = ZenithBg
 private val Panel = Color(0xFF1C1C1E)
 private val Divider = Color(0xFF2A2A2E)
 private val Ink = Color(0xFFE8E8E8)
@@ -156,7 +158,7 @@ private fun TopBar(title: String, onBack: (() -> Unit)? = null, subtitle: String
     if (onBack == null && subtitle != null) {
         Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 18.dp, top = 16.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(title, color = Color.Black, fontSize = 36.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(title, color = ZenithText, fontSize = 36.sp, fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(subtitle, color = ZenithMuted2, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Spacer(Modifier.width(8.dp))
@@ -171,7 +173,7 @@ private fun TopBar(title: String, onBack: (() -> Unit)? = null, subtitle: String
                 .clickable(enabled = onBack != null) { onBack?.invoke() }
                 .padding(horizontal = 6.dp, vertical = 2.dp))
         Spacer(Modifier.width(14.dp))
-        Text(title, color = Ink, fontSize = 34.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Text(title, color = ZenithText, fontSize = 36.sp, fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         Spacer(Modifier.width(8.dp))
         actions()
     }
