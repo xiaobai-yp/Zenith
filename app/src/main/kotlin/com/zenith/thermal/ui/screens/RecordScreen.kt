@@ -103,9 +103,38 @@ private enum class RecordView { LIST, DETAIL }
 // ═══════════════════════════════════════════════
 @Composable
 fun RecordScreen() {
+    val ctx = LocalContext.current
     var view by remember { mutableStateOf(RecordView.LIST) }
     var selected by remember { mutableStateOf<SessionEntry?>(null) }
-    val sessions = remember { loadSessions() }
+    var sessions by remember { mutableStateOf(loadSessions()) }
+
+    // Scoped storage (API 30+): ask once per install, poll until granted, then reload
+    LaunchedEffect(Unit) {
+        val prefs = ctx.getSharedPreferences("zenith_record", 0)
+        if (Build.VERSION.SDK_INT >= 30 && !android.os.Environment.isExternalStorageManager()) {
+            if (!prefs.getBoolean("asked_all_files", false)) {
+                prefs.edit().putBoolean("asked_all_files", true).apply()
+                try {
+                    val i = android.content.Intent(
+                        android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                        android.net.Uri.parse("package:${ctx.packageName}")
+                    )
+                    ctx.startActivity(i)
+                } catch (e: Exception) {
+                    try {
+                        ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+                    } catch (e2: Exception) { /* ignore */ }
+                }
+            }
+        }
+        // wait until granted (user returns from settings), then re-scan
+        while (Build.VERSION.SDK_INT >= 30 && !android.os.Environment.isExternalStorageManager()) {
+            kotlinx.coroutines.delay(2000)
+        }
+        if (Build.VERSION.SDK_INT < 30 || android.os.Environment.isExternalStorageManager()) {
+            sessions = loadSessions()
+        }
+    }
     AnimatedContent(view, label = "rt") { cur ->
         when (cur) {
             RecordView.LIST -> SessionListView(sessions, { selected = it; view = RecordView.DETAIL })
