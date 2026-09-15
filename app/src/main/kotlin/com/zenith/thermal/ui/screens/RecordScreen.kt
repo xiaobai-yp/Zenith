@@ -40,6 +40,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -167,13 +168,11 @@ private fun TopBar(title: String, onBack: (() -> Unit)? = null, subtitle: String
         return
     }
     Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 18.dp, top = 16.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("‹", color = Color.White, fontSize = 42.sp, lineHeight = 36.sp,
-            modifier = Modifier
-                .clip(RoundedCornerShape(22.dp))
-                .clickable(enabled = onBack != null) { onBack?.invoke() }
-                .padding(horizontal = 6.dp, vertical = 2.dp))
+        Box(Modifier.size(40.dp).clip(RoundedCornerShape(22.dp)).clickable(enabled = onBack != null) { onBack?.invoke() }, contentAlignment = Alignment.Center) {
+            Text("‹", color = Color.White, fontSize = 30.sp, textAlign = TextAlign.Center)
+        }
         Spacer(Modifier.width(14.dp))
-        Text(title, color = ZenithText, fontSize = 36.sp, fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Text(title, color = ZenithText, fontSize = 24.sp, fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         Spacer(Modifier.width(8.dp))
         actions()
     }
