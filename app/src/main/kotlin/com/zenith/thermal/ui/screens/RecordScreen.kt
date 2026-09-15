@@ -172,14 +172,40 @@ private fun GameIcon(name: String, size: Int = 88, fontSize: Int = 14, radius: I
 
 private fun comma(v: Float, dec: Int = 1): String = String.format("%.${dec}f", v).replace('.', ',')
 
+private fun exportCsv(s: SessionEntry?, ctx: android.content.Context) {
+    if (s == null) return
+    val fmt = java.text.SimpleDateFormat("yyyy-MM-dd HH-mm-ss", java.util.Locale.US)
+    val ts = fmt.format(java.util.Date())
+    val name = "${s.appName} $ts.csv"
+    val sb = StringBuilder()
+    sb.appendLine("Session,${s.appName},${s.date},${s.version},${s.crop}")
+    sb.appendLine("FPS,AVG=${s.avgFps},MAX=${s.maxFps},MIN=${s.minFps},VAR=${s.variance},Smooth=${s.smoothPct},5%Low=${s.low5Pct}")
+    sb.appendLine("Temp,Peak=${s.peakTemp}")
+    sb.appendLine("Power,AVG=${s.avgPowerW}W")
+    sb.appendLine()
+    sb.appendLine("t,FPS,Temp,FrameTime,Jank,BigJank,Cpu03,Cpu46,Cpu7,GpuFreq,GpuUsage,DDR,Power,Capacity")
+    val n = s.chartData.fps.size
+    val d2 = s.chartData
+    fun g(l: List<Float>, i: Int): String = if (i < l.size) l[i].toString() else ""
+    for (i in 0 until n) {
+        sb.append(i).append(',').append(g(d2.fps, i)).append(',').append(g(d2.temp, i)).append(',').append(g(d2.frameTime, i)).append(',')
+        sb.append(g(d2.jank, i)).append(',').append(g(d2.bigJank, i)).append(',').append(g(d2.cpu03, i)).append(',').append(g(d2.cpu46, i)).append(',')
+        sb.append(g(d2.cpu7, i)).append(',').append(g(d2.gpuFreq, i)).append(',').append(g(d2.gpuUsage, i)).append(',').append(g(d2.ddr, i)).append(',')
+        sb.append(g(d2.powerW, i)).append(',').append(g(d2.capacity, i)).appendLine()
+    }
+    java.io.File("/sdcard", name).writeText(sb.toString())
+    android.widget.Toast.makeText(ctx, "Saved to /sdcard/$name", android.widget.Toast.LENGTH_SHORT).show()
+}
+
 // ═══════════════════════════════════════════════
 // LIST VIEW
 // ═══════════════════════════════════════════════
 @Composable
 private fun SessionListView(sessions: List<SessionEntry>, onSelect: (SessionEntry) -> Unit) {
+    val ctx = LocalContext.current
     Column(Modifier.fillMaxSize().background(Bg)) {
         TopBar("Record", actions = {
-                Box(Modifier.clickable { exportCsv() }) { Icon(Icons.Outlined.Share, "Share CSV", tint = Faint, modifier = Modifier.size(22.dp)) }
+                Box(Modifier.clickable { exportCsv(null, ctx) }) { Icon(Icons.Outlined.Share, "Share CSV", tint = Faint, modifier = Modifier.size(22.dp)) }
             })
         Column(Modifier.padding(horizontal = 17.dp)) {
             DeviceCard(
@@ -271,39 +297,14 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
     var showFilter by remember { mutableStateOf(false) }
     var hiddenCards by remember { mutableStateOf(setOf<String>()) }
 
-    // ── CSV export ──
-    fun exportCsv() {
-        val fmt = java.text.SimpleDateFormat("yyyy-MM-dd HH-mm-ss", java.util.Locale.US)
-        val ts = fmt.format(java.util.Date())
-        val name = "${s.appName} $ts.csv"
-        val sb = StringBuilder()
-        sb.appendLine("Session,${s.appName},${s.date},${s.version},${s.crop}")
-        sb.appendLine("FPS,AVG=${s.avgFps},MAX=${s.maxFps},MIN=${s.minFps},VAR=${s.variance},Smooth=${s.smoothPct},5%Low=${s.low5Pct}")
-        sb.appendLine("Temp,Peak=${s.peakTemp}")
-        sb.appendLine("Power,AVG=${s.avgPowerW}W")
-        sb.appendLine()
-        sb.appendLine("t,FPS,Temp,FrameTime,Jank,BigJank,Cpu03,Cpu46,Cpu7,GpuFreq,GpuUsage,DDR,Power,Capacity")
-        val n = s.chartData.fps.size
-        val d2 = s.chartData
-        fun g(l: List<Float>, i: Int): String = if (i < l.size) l[i].toString() else ""
-        for (i in 0 until n) {
-            sb.append(i).append(',').append(g(d2.fps, i)).append(',').append(g(d2.temp, i)).append(',').append(g(d2.frameTime, i)).append(',')
-            sb.append(g(d2.jank, i)).append(',').append(g(d2.bigJank, i)).append(',').append(g(d2.cpu03, i)).append(',').append(g(d2.cpu46, i)).append(',')
-            sb.append(g(d2.cpu7, i)).append(',').append(g(d2.gpuFreq, i)).append(',').append(g(d2.gpuUsage, i)).append(',').append(g(d2.ddr, i)).append(',')
-            sb.append(g(d2.powerW, i)).append(',').append(g(d2.capacity, i)).appendLine()
-        }
-        java.io.File("/sdcard", name).writeText(sb.toString())
-        android.widget.Toast.makeText(ctx, "Saved to /sdcard/$name", android.widget.Toast.LENGTH_SHORT).show()
-    }
-
     Column(Modifier.fillMaxSize().background(Bg)) {
         TopBar(s.appName, onBack = onBack, actions = {
             Box(Modifier.clickable { showFilter = !showFilter }) { Icon(Icons.Outlined.FilterList, "Filter", tint = Faint, modifier = Modifier.size(22.dp)) }
             FilterDropdown(hiddenCards, { hiddenCards = it }, expanded = showFilter, onDismiss = { showFilter = false })
             Spacer(Modifier.width(18.dp))
-            Box(Modifier.clickable { exportCsv() }) { Icon(Icons.Outlined.Share, "Share", tint = Faint, modifier = Modifier.size(22.dp)) }
+            Box(Modifier.clickable { exportCsv(s, ctx) }) { Icon(Icons.Outlined.Share, "Share", tint = Faint, modifier = Modifier.size(22.dp)) }
             Spacer(Modifier.width(18.dp))
-            Box(Modifier.clickable { exportCsv() }) { Icon(Icons.Outlined.FileDownload, "Export", tint = Faint, modifier = Modifier.size(22.dp)) }
+            Box(Modifier.clickable { exportCsv(s, ctx) }) { Icon(Icons.Outlined.FileDownload, "Export", tint = Faint, modifier = Modifier.size(22.dp)) }
         })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 17.dp).padding(bottom = 40.dp)) {
             if ("Info" !in hiddenCards) {
