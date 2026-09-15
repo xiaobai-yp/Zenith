@@ -333,6 +333,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                         rightSeries = listOf(s.chartData.bigJank to S_TEMP2),
                         yMin = 0f, yMax = 5f,
                         leftTicks = listOf("5"),
+                        height = 120,
                         bar = true,
                     ))
             }
@@ -482,6 +483,7 @@ private data class ChartSpec(
     val rightMin: Float = 0f, val rightMax: Float = 100f,
     val bar: Boolean = false,
     val dashed: Set<Int> = emptySet(),
+    val height: Int = 220,
 )
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -529,7 +531,7 @@ private fun ChartCanvas(spec: ChartSpec) {
     val labelStyle = TextStyle(fontSize = 9.sp, color = AxisC)
     val times = listOf("0", "45s", "1m30s", "2m15s", "3m", "3m45s")
     val maxTicks = maxOf(spec.leftTicks.size, spec.rightTicks?.size ?: 0); val denG = (maxTicks - 1).coerceAtLeast(1); val denL = (spec.leftTicks.size - 1).coerceAtLeast(1); val denR = ((spec.rightTicks?.size ?: 1) - 1).coerceAtLeast(1)
-    Canvas(Modifier.fillMaxWidth().height(220.dp)) {
+    Canvas(Modifier.fillMaxWidth().height(spec.height.dp)) {
         val insetL = 22.dp.toPx(); val insetR = if (spec.rightTicks != null) 30.dp.toPx() else 22.dp.toPx()
         val top = 8.dp.toPx(); val bottom = 28.dp.toPx()
         val w = size.width - insetL - insetR; val h = size.height - top - bottom
