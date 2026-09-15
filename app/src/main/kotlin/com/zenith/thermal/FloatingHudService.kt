@@ -23,7 +23,7 @@ import android.view.MotionEvent
 import android.graphics.PixelFormat
 import android.view.WindowManager
 import android.widget.Toast
-import java.io.File
+import kotlinx.coroutines.channels.Channel
 import java.util.Locale
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -48,9 +48,8 @@ class FloatingHudService : Service() {
         const val ACTION_START = "com.zenith.thermal.action.HUD_START"
         const val ACTION_STOP = "com.zenith.thermal.action.HUD_STOP"
 
-        // Broadcast for new CSV saved — RecordScreen listens
-        private val _newCsvFlow = kotlinx.coroutines.channels.Channel<String>(capacity = 1)
-        val newCsvFlow: kotlinx.coroutines.channels.Channel<String> = _newCsvFlow
+        private val _newCsvFlow = Channel<String>(capacity = 1)
+        val newCsvFlow: Channel<String> = _newCsvFlow
 
         fun start(context: Context) {
             val intent = Intent(context, FloatingHudService::class.java)
