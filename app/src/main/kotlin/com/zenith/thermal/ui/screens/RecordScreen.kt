@@ -279,13 +279,13 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
         sb.appendLine()
         sb.appendLine("t,FPS,Temp,FrameTime,Jank,BigJank,Cpu03,Cpu46,Cpu7,GpuFreq,GpuUsage,DDR,Power,Capacity")
         val n = s.chartData.fps.size
+        val d2 = s.chartData
+        fun g(l: List<Float>, i: Int): String = if (i < l.size) l[i].toString() else ""
         for (i in 0 until n) {
-            val d2 = s.chartData
-            sb.appendLine("${i},${d2.fps.getOrElse(i){""}},${d2.temp.getOrElse(i){""}},${d2.frameTime.getOrElse(i){""}},${
-                d2.jank.getOrElse(i){""}},${d2.bigJank.getOrElse(i){""}},${d2.cpu03.getOrElse(i){""}},${d2.cpu46.getOrElse(i){""}},${
-                d2.cpu7.getOrElse(i){""}},${d2.gpuFreq.getOrElse(i){""}},${d2.gpuUsage.getOrElse(i){""}},${d2.ddr.getOrElse(i){""}},${
-                d2.powerW.getOrElse(i){""}},${d2.capacity.getOrElse(i){""}}"
-            }
+            sb.append(i).append(',').append(g(d2.fps, i)).append(',').append(g(d2.temp, i)).append(',').append(g(d2.frameTime, i)).append(',')
+            sb.append(g(d2.jank, i)).append(',').append(g(d2.bigJank, i)).append(',').append(g(d2.cpu03, i)).append(',').append(g(d2.cpu46, i)).append(',')
+            sb.append(g(d2.cpu7, i)).append(',').append(g(d2.gpuFreq, i)).append(',').append(g(d2.gpuUsage, i)).append(',').append(g(d2.ddr, i)).append(',')
+            sb.append(g(d2.powerW, i)).append(',').append(g(d2.capacity, i)).appendLine()
         }
         java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), name).writeText(sb.toString())
         android.widget.Toast.makeText(ctx, "Saved: $name", android.widget.Toast.LENGTH_SHORT).show()
