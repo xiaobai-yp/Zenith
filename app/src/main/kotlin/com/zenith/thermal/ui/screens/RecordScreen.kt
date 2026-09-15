@@ -43,6 +43,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.zenith.thermal.ui.theme.ZenithMuted2
 import java.io.File
 import kotlin.math.roundToInt
 
@@ -95,6 +96,8 @@ private data class ChartData(
     val frameTime: List<Float> = emptyList(),
     val jank: List<Float> = emptyList(),
     val bigJank: List<Float> = emptyList(),
+    val cpuFreq03: List<Float> = emptyList(), val cpuFreq46: List<Float> = emptyList(), val cpuFreq7: List<Float> = emptyList(),
+    val cpuCyc03: List<Float> = emptyList(), val cpuCyc46: List<Float> = emptyList(), val cpuCyc7: List<Float> = emptyList(),
 )
 private enum class RecordView { LIST, DETAIL }
 
@@ -137,7 +140,9 @@ fun RecordScreen() {
     }
     AnimatedContent(view, label = "rt") { cur ->
         when (cur) {
-            RecordView.LIST -> SessionListView(sessions, { selected = it; view = RecordView.DETAIL })
+            RecordView.LIST -> SessionListView(sessions, { selected = it; view = RecordView.DETAIL },
+                onDeleteAll = { deleteAllSessions(ctx); sessions = emptyList() },
+                onDeleteSession = { s -> deleteSessionFile(s, ctx); sessions = sessions.filter { it.date != s.date } })
             RecordView.DETAIL -> selected?.let { SessionDetailView(it) { view = RecordView.LIST } }
         }
     }
@@ -147,7 +152,18 @@ fun RecordScreen() {
 // Shared widgets
 // ═══════════════════════════════════════════════
 @Composable
-private fun TopBar(title: String, onBack: (() -> Unit)? = null, actions: @Composable RowScope.() -> Unit = {}) {
+private fun TopBar(title: String, onBack: (() -> Unit)? = null, subtitle: String? = null, actions: @Composable RowScope.() -> Unit = {}) {
+    if (onBack == null && subtitle != null) {
+        Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 18.dp, top = 16.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(title, color = Color.Black, fontSize = 36.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(subtitle, color = ZenithMuted2, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Spacer(Modifier.width(8.dp))
+            actions()
+        }
+        return
+    }
     Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 18.dp, top = 16.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Text("‹", color = Color.White, fontSize = 42.sp, lineHeight = 36.sp,
             modifier = Modifier
@@ -226,16 +242,36 @@ private fun exportCsv(s: SessionEntry?, ctx: android.content.Context) {
     android.widget.Toast.makeText(ctx, "Saved to /sdcard/$name", android.widget.Toast.LENGTH_SHORT).show()
 }
 
+private fun deleteAllSessions(ctx: android.content.Context): Int {
+    val sdcard = File("/sdcard")
+    if (!sdcard.exists()) return 0
+    val regex = Regex("""^(.+) (\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2})\.csv$""")
+    val files = sdcard.listFiles { f -> f.isFile && regex.matches(f.name) } ?: return 0
+    var count = 0
+    files.forEach { if (it.delete()) count++ }
+    android.widget.Toast.makeText(ctx, "Deleted $count session(s)", android.widget.Toast.LENGTH_SHORT).show()
+    return count
+}
+
+private fun deleteSessionFile(s: SessionEntry, ctx: android.content.Context) {
+    val fileName = "${s.appName} ${s.date.replace(':', '-')}.csv"
+    val file = File("/sdcard", fileName)
+    if (file.exists()) {
+        file.delete()
+        android.widget.Toast.makeText(ctx, "Deleted ${s.appName} session", android.widget.Toast.LENGTH_SHORT).show()
+    }
+}
+
 // ═══════════════════════════════════════════════
 // LIST VIEW
 // ═══════════════════════════════════════════════
 @Composable
-private fun SessionListView(sessions: List<SessionEntry>, onSelect: (SessionEntry) -> Unit) {
+private fun SessionListView(sessions: List<SessionEntry>, onSelect: (SessionEntry) -> Unit, onDeleteAll: () -> Unit = {}, onDeleteSession: (SessionEntry) -> Unit = {}) {
     val ctx = LocalContext.current
     Column(Modifier.fillMaxSize().background(Bg)) {
-        TopBar("Record", actions = {
-                Box(Modifier.clickable { exportCsv(null, ctx) }) { Icon(Icons.Outlined.Share, "Share CSV", tint = Faint, modifier = Modifier.size(22.dp)) }
-            })
+        TopBar("Record", subtitle = "Session telemetry", actions = {
+            Box(Modifier.clickable { onDeleteAll() }) { Icon(Icons.Outlined.DeleteForever, "Delete All", tint = Color(0xFFEF4444), modifier = Modifier.size(22.dp)) }
+        })
         Column(Modifier.padding(horizontal = 17.dp)) {
             DeviceCard(
                 listOf(
@@ -268,6 +304,8 @@ private fun SessionListView(sessions: List<SessionEntry>, onSelect: (SessionEntr
                         }
                         Spacer(Modifier.width(10.dp))
                         Text(fmtDur(s.durationSec), color = Muted, fontSize = 13.sp)
+                        Spacer(Modifier.width(10.dp))
+                        Box(Modifier.clip(RoundedCornerShape(8.dp)).clickable { onDeleteSession(s) }) { Icon(Icons.Outlined.Delete, "Delete", tint = Color(0xFFEF4444), modifier = Modifier.size(20.dp)) }
                     }
                 }
             }
@@ -326,12 +364,20 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
     var showFilter by remember { mutableStateOf(false) }
     var hiddenCards by remember { mutableStateOf(setOf<String>()) }
 
+    val totalJank = s.chartData.jank.sum().toInt()
+    val totalBig = s.chartData.bigJank.sum().toInt()
+    val maxFt = if (s.chartData.frameTime.isNotEmpty()) s.chartData.frameTime.max().toInt() else 0
+    val pMax = if (s.chartData.powerW.isNotEmpty()) s.chartData.powerW.max() else 0f
+    val pMin = if (s.chartData.powerW.isNotEmpty()) s.chartData.powerW.min() else 0f
+    val pAvg = if (s.chartData.powerW.isNotEmpty()) s.chartData.powerW.average() else 0.0
+    val tMax = if (s.chartData.temp.isNotEmpty()) s.chartData.temp.max() else 0f
+    val tMin = if (s.chartData.temp.isNotEmpty()) s.chartData.temp.min() else 0f
+    val tAvg = if (s.chartData.temp.isNotEmpty()) s.chartData.temp.average() else 0.0
+
     Column(Modifier.fillMaxSize().background(Bg)) {
         TopBar(s.appName, onBack = onBack, actions = {
             Box(Modifier.clickable { showFilter = !showFilter }) { Icon(Icons.Outlined.FilterList, "Filter", tint = Faint, modifier = Modifier.size(22.dp)) }
             FilterDropdown(hiddenCards, { hiddenCards = it }, expanded = showFilter, onDismiss = { showFilter = false })
-            Spacer(Modifier.width(18.dp))
-            Box(Modifier.clickable { exportCsv(s, ctx) }) { Icon(Icons.Outlined.Share, "Share", tint = Faint, modifier = Modifier.size(22.dp)) }
             Spacer(Modifier.width(18.dp))
             Box(Modifier.clickable { exportCsv(s, ctx) }) { Icon(Icons.Outlined.FileDownload, "Export", tint = Faint, modifier = Modifier.size(22.dp)) }
         })
@@ -342,7 +388,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                         Pair<@Composable () -> Unit, Pair<String, String>>({ ChipIcon(Color(0xFF7B6FEF)) }, "Platform" to Build.BOARD),
                         Pair<@Composable () -> Unit, Pair<String, String>>({ PhoneIcon(Color(0xFF5B9CF6)) }, "Model" to Build.MODEL),
                         Pair<@Composable () -> Unit, Pair<String, String>>({ AndroidIcon(Color(0xFF76C442)) }, "OS" to "Android ${Build.VERSION.RELEASE}"),
-                        Pair<@Composable () -> Unit, Pair<String, String>>({ Text("◉", color = Orange, fontSize = 32.sp, lineHeight = 40.sp) }, "Profile" to "###"))
+                        Pair<@Composable () -> Unit, Pair<String, String>>({ Text("◉", color = Orange, fontSize = 32.sp, lineHeight = 40.sp) }, "Profile" to "Default"))
                 )
                 Spacer(Modifier.height(12.dp))
                 SessionStatsCard(s)
@@ -362,7 +408,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
             if ("Jank" !in hiddenCards) {
                 ChartCard(title = "Jank",
                     legend = listOf("Jank" to S_CPU03, "Big Jank" to S_TEMP2),
-                    sub = "Jank: 73 | Big Jank: 9",
+                    sub = "Jank: $totalJank | Big Jank: $totalBig",
                     spec = ChartSpec(
                         series = listOf(s.chartData.jank to S_CPU03),
                         rightSeries = listOf(s.chartData.bigJank to S_TEMP2),
@@ -374,7 +420,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
             }
             Spacer(Modifier.height(14.dp))
             if ("Frame Time" !in hiddenCards) ChartCard(title = "Frame Time (ms)",
-                legend = emptyList(), sub = "MAX: 207ms",
+                legend = emptyList(), sub = "MAX: ${maxFt}ms",
                 spec = ChartSpec(
                     series = listOf(s.chartData.frameTime to S_FPS),
                     yMin = 8f, yMax = 100f,
@@ -400,9 +446,9 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                 legend = listOf("CPU 0~3" to S_CPU03, "CPU 4~6" to S_CPU46, "CPU 7" to S_CPU7),
                 spec = ChartSpec(
                     series = listOf(
-                        s.chartData.cpu03.map { it * 65f } to S_CPU03,
-                        s.chartData.cpu46.map { it * 55f } to S_CPU46,
-                        s.chartData.cpu7.map { it * 30f } to S_CPU7,
+                        s.chartData.cpuFreq03 to S_CPU03,
+                        s.chartData.cpuFreq46 to S_CPU46,
+                        s.chartData.cpuFreq7 to S_CPU7,
                     ),
                     yMin = 0f, yMax = 3000f,
                     leftTicks = listOf("2918", "2700", "2400", "2100", "1800", "1500", "1200", "900", "600", "300"),
@@ -412,9 +458,9 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                 legend = listOf("CPU 0~3" to S_CPU03, "CPU 4~6" to S_CPU46, "CPU 7" to S_CPU7, "TEMP(°C)" to S_TEMP2),
                 spec = ChartSpec(
                     series = listOf(
-                        s.chartData.cpu03.map { it * 50f } to S_CPU03,
-                        s.chartData.cpu46.map { it * 28f } to S_CPU46,
-                        s.chartData.cpu7.map { it * 24f } to S_CPU7,
+                        s.chartData.cpuCyc03 to S_CPU03,
+                        s.chartData.cpuCyc46 to S_CPU46,
+                        s.chartData.cpuCyc7 to S_CPU7,
                     ),
                     rightSeries = listOf(s.chartData.temp to S_TEMP2),
                     yMin = 0f, yMax = 3000f,
@@ -442,7 +488,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
             Spacer(Modifier.height(14.dp))
             if ("Power" !in hiddenCards) ChartCard(title = "Power (W)", titleRight = "Capacity %",
                 legend = listOf("Power (W)" to S_PWR, "Capacity (%)" to S_CAP),
-                sub = "MAX: 6,28W | MIN: 2,01W | AVG: 4,50W",
+                sub = "MAX: ${comma(pMax, 2)}W | MIN: ${comma(pMin, 2)}W | AVG: ${comma(pAvg.toFloat(), 2)}W",
                 spec = ChartSpec(
                     series = listOf(s.chartData.powerW to S_PWR),
                     rightSeries = listOf(s.chartData.capacity to S_CAP),
@@ -452,7 +498,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                 ))
             Spacer(Modifier.height(14.dp))
             ChartCard(title = "CPU Temperature (°C)",
-                legend = emptyList(), sub = "MAX: 82,5°C | MIN: 51,0°C | AVG: 68,7°C",
+                legend = emptyList(), sub = "MAX: ${comma(tMax)}°C | MIN: ${comma(tMin)}°C | AVG: ${comma(tAvg.toFloat())}°C",
                 spec = ChartSpec(
                     series = listOf(s.chartData.temp to S_TEMPL),
                     yMin = 0f, yMax = 100f,
@@ -710,12 +756,18 @@ private fun parseCsvFile(file: File, regex: Regex): SessionEntry? {
         val gpuFI = col("GPU(MHz)"); val gpuUI = col("GPU(%)")
         val ddrI = col("DDR(Mbps)"); val pwrI = col("Power(mW)")
         val capI = col("Battery(%)"); val tmpI = col("CPU(℃)")
+        val cf0I = col("CPU0(MHz)"); val cf1I = col("CPU1(MHz)"); val cf2I = col("CPU2(MHz)"); val cf3I = col("CPU3(MHz)")
+        val cf4I = col("CPU4(MHz)"); val cf5I = col("CPU5(MHz)"); val cf6I = col("CPU6(MHz)"); val cf7I = col("CPU7(MHz)")
+        val cc0I = col("CPU0(M Cycles)"); val cc1I = col("CPU1(M Cycles)"); val cc2I = col("CPU2(M Cycles)"); val cc3I = col("CPU3(M Cycles)")
+        val cc4I = col("CPU4(M Cycles)"); val cc5I = col("CPU5(M Cycles)"); val cc6I = col("CPU6(M Cycles)"); val cc7I = col("CPU7(M Cycles)")
 
         val fpsL = mutableListOf<Float>(); val jankL = mutableListOf<Float>(); val bjL = mutableListOf<Float>()
         val ftL = mutableListOf<Float>(); val c03L = mutableListOf<Float>(); val c46L = mutableListOf<Float>()
         val c7L = mutableListOf<Float>(); val gfL = mutableListOf<Float>(); val guL = mutableListOf<Float>()
         val ddrL = mutableListOf<Float>(); val pwrL = mutableListOf<Float>(); val capL = mutableListOf<Float>()
         val tmpL = mutableListOf<Float>()
+        val cf03L = mutableListOf<Float>(); val cf46L = mutableListOf<Float>(); val cf7L = mutableListOf<Float>()
+        val cc03L = mutableListOf<Float>(); val cc46L = mutableListOf<Float>(); val cc7L = mutableListOf<Float>()
 
         for (i in 1 until lines.size) {
             val line = lines[i]
@@ -736,6 +788,16 @@ private fun parseCsvFile(file: File, regex: Regex): SessionEntry? {
             ddrL.add(safeFloat(ddrI, c))
             pwrL.add(safeFloat(pwrI, c) / 1000f) // mW → W
             capL.add(safeFloat(capI, c))
+            val f0 = safeFloat(cf0I, c); val f1 = safeFloat(cf1I, c); val f2 = safeFloat(cf2I, c); val f3 = safeFloat(cf3I, c)
+            cf03L.add((f0 + f1 + f2 + f3) / 4f)
+            val f4 = safeFloat(cf4I, c); val f5 = safeFloat(cf5I, c); val f6 = safeFloat(cf6I, c)
+            cf46L.add((f4 + f5 + f6) / 3f)
+            cf7L.add(safeFloat(cf7I, c))
+            val d0 = safeFloat(cc0I, c); val d1 = safeFloat(cc1I, c); val d2 = safeFloat(cc2I, c); val d3 = safeFloat(cc3I, c)
+            cc03L.add((d0 + d1 + d2 + d3) / 4f)
+            val d4 = safeFloat(cc4I, c); val d5 = safeFloat(cc5I, c); val d6 = safeFloat(cc6I, c)
+            cc46L.add((d4 + d5 + d6) / 3f)
+            cc7L.add(safeFloat(cc7I, c))
             tmpL.add(safeFloat(tmpI, c))
         }
         if (fpsL.isEmpty()) return null
@@ -759,6 +821,8 @@ private fun parseCsvFile(file: File, regex: Regex): SessionEntry? {
                 fps = fpsL, temp = tmpL, cpu03 = c03L, cpu46 = c46L, cpu7 = c7L,
                 gpuFreq = gfL, gpuUsage = guL, ddr = ddrL, powerW = pwrL,
                 capacity = capL, frameTime = ftL, jank = jankL, bigJank = bjL,
+                cpuFreq03 = cf03L, cpuFreq46 = cf46L, cpuFreq7 = cf7L,
+                cpuCyc03 = cc03L, cpuCyc46 = cc46L, cpuCyc7 = cc7L,
             )
         )
     } catch (_: Exception) {
