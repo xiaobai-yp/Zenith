@@ -43,6 +43,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.io.File
 import kotlin.math.roundToInt
 
 // ═══════════════════════════════════════════════
@@ -605,31 +606,132 @@ private fun fmtDur(sec: Long): String {
     return if (m > 0) "${m}m${s}s" else "${s}s"
 }
 
-private fun loadSessions(): List<SessionEntry> = listOf(
-    SessionEntry(1, "PUBG MOBILE", "com.tencent.ig", "2026-07-07 16:44:14", "4.4.0", "720×1600",
-        avgFps = 83.28f, maxFps = 90.1f, minFps = 55.0f, variance = 101.3f,
-        smoothPct = 100.0f, low5Pct = 57.5f, peakTemp = 40.9f, avgPowerW = 4.50f, durationSec = 226,
-        chartData = ChartData(
-            fps = listOf(83f, 85f, 60f, 90f, 84f, 78f, 90f, 65f, 88f, 83f, 82f, 86f, 60f, 89f, 83f, 78f, 90f, 85f, 62f, 83f,
-                84f, 88f, 59f, 91f, 82f, 80f, 87f, 66f, 86f, 84f, 81f, 85f, 63f, 87f, 82f, 79f, 89f, 84f, 61f, 82f),
-            temp = listOf(74f, 75f, 77f, 74f, 73f, 76f, 75f, 72f, 68f, 61f, 56f, 53f, 52f, 51f, 53f, 55f, 54f, 53f, 55f, 57f,
-                58f, 56f, 54f, 61f, 68f, 72f, 70f, 66f, 73f, 74f, 75f, 76f, 77f, 78f, 76f, 75f, 73f, 77f, 76f, 77f),
-            cpu03 = listOf(38f, 42f, 35f, 40f, 36f, 38f, 44f, 40f, 36f, 38f, 35f, 39f, 42f, 38f, 36f, 35f, 40f, 38f, 42f, 38f,
-                37f, 41f, 34f, 39f, 35f, 37f, 43f, 39f, 35f, 37f, 34f, 38f, 41f, 37f, 35f, 34f, 39f, 37f, 41f, 37f),
-            cpu46 = listOf(44f, 48f, 40f, 46f, 42f, 44f, 50f, 46f, 42f, 44f, 40f, 45f, 48f, 44f, 42f, 40f, 46f, 44f, 48f, 44f,
-                43f, 47f, 39f, 45f, 41f, 43f, 49f, 45f, 41f, 43f, 39f, 44f, 47f, 43f, 41f, 39f, 45f, 43f, 47f, 43f),
-            cpu7 = listOf(60f, 78f, 55f, 95f, 70f, 65f, 85f, 60f, 70f, 65f, 55f, 75f, 80f, 68f, 60f, 55f, 78f, 65f, 78f, 65f,
-                58f, 80f, 53f, 92f, 72f, 63f, 87f, 58f, 68f, 64f, 52f, 73f, 82f, 67f, 58f, 54f, 76f, 64f, 80f, 63f),
-            gpuFreq = List(24) { 520f },
-            gpuUsage = listOf(82f, 89f, 87f, 88f, 72f, 48f, 41f, 38f, 45f, 52f, 59f, 55f, 67f, 71f, 61f, 63f, 76f, 74f, 70f, 79f,
-                80f, 71f, 87f, 85f, 50f, 55f, 60f, 52f, 48f, 65f, 70f, 58f, 62f, 75f, 68f, 72f, 80f, 66f, 74f, 78f),
-            ddr = listOf(6410f, 6410f, 6410f, 6410f, 3110f, 3110f, 4192f, 4192f, 4192f, 3418f, 4192f, 5490f, 5490f, 6410f, 6410f, 6410f,
-                4192f, 5490f, 6410f, 6410f, 6410f, 6410f, 4192f, 6410f),
-            powerW = listOf(5.2f, 5.4f, 5.5f, 5.2f, 5.4f, 5.6f, 5.5f, 2.7f, 2.4f, 2.8f, 2.6f, 2.9f, 3.1f, 3.3f, 3.0f, 3.2f, 3.5f, 5.4f, 4.0f, 5.5f,
-                5.8f, 5.3f, 5.6f, 6.1f, 5.0f, 5.3f, 5.7f, 5.3f, 5.4f, 5.7f, 5.4f, 5.6f),
-            capacity = listOf(58f, 58f, 58f, 58f, 58f, 58f, 58f, 58f, 58f, 58f, 58f, 58f, 58f, 58f, 58f, 58f, 58f, 58f, 57.5f, 57.5f,
-                57.5f, 57.5f, 57f, 57f),
-            frameTime = listOf(16f, 18f, 207f, 15f, 17f, 16f, 18f, 207f, 15f, 16f, 17f, 16f, 207f, 15f, 16f, 17f, 16f, 18f, 15f, 16f,
-                17f, 19f, 207f, 16f, 18f, 17f, 19f, 207f, 16f, 17f, 18f, 17f, 207f, 16f, 17f, 18f, 17f, 19f, 16f, 17f),
-        )),
-)
+private fun loadSessions(): List<SessionEntry> {
+    val csvSessions = parseCsvSessions()
+    if (csvSessions.isNotEmpty()) return csvSessions
+    // fallback demo when no CSV files found
+    return listOf(
+        SessionEntry(1, "PUBG MOBILE", "com.tencent.ig", "2026-07-07 16:44:14", "4.4.0", "720×1600",
+            avgFps = 83.28f, maxFps = 90.1f, minFps = 55.0f, variance = 101.3f,
+            smoothPct = 100.0f, low5Pct = 57.5f, peakTemp = 40.9f, avgPowerW = 4.50f, durationSec = 226,
+            chartData = ChartData(
+                fps = listOf(83f, 85f, 60f, 90f, 84f, 78f, 90f, 65f, 88f, 83f, 82f, 86f, 60f, 89f, 83f, 78f, 90f, 85f, 62f, 83f,
+                    84f, 88f, 59f, 91f, 82f, 80f, 87f, 66f, 86f, 84f, 81f, 85f, 63f, 87f, 82f, 79f, 89f, 84f, 61f, 82f),
+                temp = listOf(74f, 75f, 77f, 74f, 73f, 76f, 75f, 72f, 68f, 61f, 56f, 53f, 52f, 51f, 53f, 55f, 54f, 53f, 55f, 57f,
+                    58f, 56f, 54f, 61f, 68f, 72f, 70f, 66f, 73f, 74f, 75f, 76f, 77f, 78f, 76f, 75f, 73f, 77f, 76f, 77f),
+                cpu03 = listOf(38f, 42f, 35f, 40f, 36f, 38f, 44f, 40f, 36f, 38f, 35f, 39f, 42f, 38f, 36f, 35f, 40f, 38f, 42f, 38f,
+                    37f, 41f, 34f, 39f, 35f, 37f, 43f, 39f, 35f, 37f, 34f, 38f, 41f, 37f, 35f, 34f, 39f, 37f, 41f, 37f),
+                cpu46 = listOf(44f, 48f, 40f, 46f, 42f, 44f, 50f, 46f, 42f, 44f, 40f, 45f, 48f, 44f, 42f, 40f, 46f, 44f, 48f, 44f,
+                    43f, 47f, 39f, 45f, 41f, 43f, 49f, 45f, 41f, 43f, 39f, 44f, 47f, 43f, 41f, 39f, 45f, 43f, 47f, 43f),
+                cpu7 = listOf(60f, 78f, 55f, 95f, 70f, 65f, 85f, 60f, 70f, 65f, 55f, 75f, 80f, 68f, 60f, 55f, 78f, 65f, 78f, 65f,
+                    58f, 80f, 53f, 92f, 72f, 63f, 87f, 58f, 68f, 64f, 52f, 73f, 82f, 67f, 58f, 54f, 76f, 64f, 80f, 63f),
+                gpuFreq = List(24) { 520f },
+                gpuUsage = listOf(82f, 89f, 87f, 88f, 72f, 48f, 41f, 38f, 45f, 52f, 59f, 55f, 67f, 71f, 61f, 63f, 76f, 74f, 70f, 79f,
+                    80f, 71f, 87f, 85f, 50f, 55f, 60f, 52f, 48f, 65f, 70f, 58f, 62f, 75f, 68f, 72f, 80f, 66f, 74f, 78f),
+                ddr = listOf(6410f, 6410f, 6410f, 6410f, 3110f, 3110f, 4192f, 4192f, 4192f, 3418f, 4192f, 5490f, 5490f, 6410f, 6410f, 6410f,
+                    4192f, 5490f, 6410f, 6410f, 6410f, 6410f, 4192f, 6410f),
+                powerW = listOf(5.2f, 5.4f, 5.5f, 5.2f, 5.4f, 5.6f, 5.5f, 2.7f, 2.4f, 2.8f, 2.6f, 2.9f, 3.1f, 3.3f, 3.0f, 3.2f, 3.5f, 5.4f, 4.0f, 5.5f,
+                    5.8f, 5.3f, 5.6f, 6.1f, 5.0f, 5.3f, 5.7f, 5.3f, 5.4f, 5.7f, 5.4f, 5.6f),
+                capacity = listOf(58f, 58f, 58f, 58f, 58f, 58f, 58f, 58f, 58f, 58f, 58f, 58f, 58f, 58f, 58f, 58f, 58f, 58f, 57.5f, 57.5f,
+                    57.5f, 57.5f, 57f, 57f),
+                frameTime = listOf(16f, 18f, 207f, 15f, 17f, 16f, 18f, 207f, 15f, 16f, 17f, 16f, 207f, 15f, 16f, 17f, 16f, 18f, 15f, 16f,
+                    17f, 19f, 207f, 16f, 18f, 17f, 19f, 207f, 16f, 17f, 18f, 17f, 207f, 16f, 17f, 18f, 17f, 19f, 16f, 17f),
+            )),
+    )
+}
+
+// ── CSV parsing from /sdcard/ ──
+private fun parseCsvSessions(): List<SessionEntry> {
+    val sdcard = File("/sdcard")
+    if (!sdcard.exists()) return emptyList()
+    // AppName YYYY-MM-DD HH-MM-SS.csv
+    val regex = Regex("""^(.+) (\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2})\.csv$""")
+    val csvFiles = sdcard.listFiles { f -> f.isFile && regex.matches(f.name) }
+        ?.sortedByDescending { it.lastModified() }
+        ?: return emptyList()
+    return csvFiles.mapNotNull { parseCsvFile(it, regex) }
+}
+
+private fun parseCsvFile(file: File, regex: Regex): SessionEntry? {
+    val match = regex.find(file.name) ?: return null
+    val appName = match.groupValues[1]
+    // "2026-07-07 16-44-14" → "2026-07-07 16:44:14"
+    val rawDate = match.groupValues[2]
+    val date = rawDate.let {
+        val parts = it.split(" ")
+        if (parts.size == 2) "${parts[0]} ${parts[1].replace('-', ':')}" else it
+    }
+    try {
+        val lines = file.readLines()
+        if (lines.size < 2) return null
+        val header = lines[0]
+        val colMap = header.split(",").mapIndexed { i, name -> name.trim() to i }.toMap()
+        fun col(name: String): Int? = colMap[name]
+        fun safeFloat(idx: Int?, cols: List<String>): Float {
+            if (idx == null || idx >= cols.size) return 0f
+            return cols[idx].trim().toFloatOrNull() ?: 0f
+        }
+        val fpsI = col("FPS") ?: return null
+        val jankI = col("JANK")
+        val bigJankI = col("BigJANK")
+        val ftI = col("Max FrameTime(ms)")
+        val cpu0I = col("CPU0(%)"); val cpu1I = col("CPU1(%)"); val cpu2I = col("CPU2(%)"); val cpu3I = col("CPU3(%)")
+        val cpu4I = col("CPU4(%)"); val cpu5I = col("CPU5(%)"); val cpu6I = col("CPU6(%)"); val cpu7I = col("CPU7(%)")
+        val gpuFI = col("GPU(MHz)"); val gpuUI = col("GPU(%)")
+        val ddrI = col("DDR(Mbps)"); val pwrI = col("Power(mW)")
+        val capI = col("Battery(%)"); val tmpI = col("CPU(℃)")
+
+        val fpsL = mutableListOf<Float>(); val jankL = mutableListOf<Float>(); val bjL = mutableListOf<Float>()
+        val ftL = mutableListOf<Float>(); val c03L = mutableListOf<Float>(); val c46L = mutableListOf<Float>()
+        val c7L = mutableListOf<Float>(); val gfL = mutableListOf<Float>(); val guL = mutableListOf<Float>()
+        val ddrL = mutableListOf<Float>(); val pwrL = mutableListOf<Float>(); val capL = mutableListOf<Float>()
+        val tmpL = mutableListOf<Float>()
+
+        for (i in 1 until lines.size) {
+            val line = lines[i]
+            if (line.isBlank()) continue
+            val c = line.split(",")
+            fpsL.add(safeFloat(fpsI, c))
+            jankL.add(safeFloat(jankI, c))
+            bjL.add(safeFloat(bigJankI, c))
+            ftL.add(safeFloat(ftI, c))
+            val c0 = safeFloat(cpu0I, c); val c1 = safeFloat(cpu1I, c)
+            val c2 = safeFloat(cpu2I, c); val c3 = safeFloat(cpu3I, c)
+            c03L.add((c0 + c1 + c2 + c3) / 4f)
+            val c4 = safeFloat(cpu4I, c); val c5 = safeFloat(cpu5I, c); val c6 = safeFloat(cpu6I, c)
+            c46L.add((c4 + c5 + c6) / 3f)
+            c7L.add(safeFloat(cpu7I, c))
+            gfL.add(safeFloat(gpuFI, c))
+            guL.add(safeFloat(gpuUI, c))
+            ddrL.add(safeFloat(ddrI, c))
+            pwrL.add(safeFloat(pwrI, c) / 1000f) // mW → W
+            capL.add(safeFloat(capI, c))
+            tmpL.add(safeFloat(tmpI, c))
+        }
+        if (fpsL.isEmpty()) return null
+        val n = fpsL.size
+        val avgFps = fpsL.average().toFloat()
+        val maxFps = fpsL.maxOrNull() ?: 0f
+        val minFps = fpsL.filter { it > 0f }.minOrNull() ?: 0f
+        val variance = fpsL.map { (it - avgFps) * (it - avgFps) }.average().toFloat()
+        val smoothPct = fpsL.count { it >= 45f }.toFloat() / n * 100f
+        val sorted = fpsL.sorted()
+        val low5Pct = sorted[(n * 0.05).toInt().coerceIn(0, n - 1)]
+        val peakTemp = tmpL.maxOrNull() ?: 0f
+        val avgPowerW = pwrL.average().toFloat()
+        return SessionEntry(
+            id = file.lastModified(), appName = appName, appPkg = "",
+            date = date, version = "—", crop = "—",
+            avgFps = avgFps, maxFps = maxFps, minFps = minFps,
+            variance = variance, smoothPct = smoothPct, low5Pct = low5Pct,
+            peakTemp = peakTemp, avgPowerW = avgPowerW, durationSec = n.toLong(),
+            chartData = ChartData(
+                fps = fpsL, temp = tmpL, cpu03 = c03L, cpu46 = c46L, cpu7 = c7L,
+                gpuFreq = gfL, gpuUsage = guL, ddr = ddrL, powerW = pwrL,
+                capacity = capL, frameTime = ftL, jank = jankL, bigJank = bjL,
+            )
+        )
+    } catch (_: Exception) {
+        return null
+    }
+}
