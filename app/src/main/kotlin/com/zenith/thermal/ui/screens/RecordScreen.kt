@@ -177,7 +177,9 @@ private fun comma(v: Float, dec: Int = 1): String = String.format("%.${dec}f", v
 @Composable
 private fun SessionListView(sessions: List<SessionEntry>, onSelect: (SessionEntry) -> Unit) {
     Column(Modifier.fillMaxSize().background(Bg)) {
-        TopBar("Record")
+        TopBar("Record", actions = {
+                Box(Modifier.clickable { exportCsv() }) { Icon(Icons.Outlined.Share, "Share CSV", tint = Faint, modifier = Modifier.size(22.dp)) }
+            })
         Column(Modifier.padding(horizontal = 17.dp)) {
             DeviceCard(
                 listOf(
