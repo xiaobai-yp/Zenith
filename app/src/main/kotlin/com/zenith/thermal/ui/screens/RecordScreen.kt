@@ -318,7 +318,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                     series = listOf(s.chartData.fps to S_FPS),
                     rightSeries = listOf(s.chartData.temp to S_TEMP),
                     yMin = 0f, yMax = 90f,
-                    leftTicks = listOf("90", "60", "30", "0"),
+                    leftTicks = listOf("90", "60", "30"),
                     rightTicks = listOf("45", "40"), rightMin = 35f, rightMax = 50f,
                 ))
             Spacer(Modifier.height(14.dp))
@@ -330,7 +330,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                         series = listOf(s.chartData.jank to S_CPU03),
                         rightSeries = listOf(s.chartData.bigJank to S_TEMP2),
                         yMin = 0f, yMax = 5f,
-                        leftTicks = listOf("5", "4", "3", "2", "1", "0"),
+                        leftTicks = listOf("5", "4", "3", "2", "1"),
                         bar = true,
                     ))
             }
@@ -409,7 +409,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                     series = listOf(s.chartData.powerW to S_PWR),
                     rightSeries = listOf(s.chartData.capacity to S_CAP),
                     yMin = 0f, yMax = 7f,
-                    leftTicks = listOf("7W", "6W", "5W", "4W", "3W", "2W", "1W", "0"),
+                    leftTicks = listOf("7W", "6W", "5W", "4W", "3W", "2W", "1W"),
                     rightTicks = listOf("100", "80", "60", "40", "20"), rightMin = 0f, rightMax = 100f,
                 ))
             Spacer(Modifier.height(14.dp))
@@ -502,7 +502,7 @@ private fun ChartCard(
             ChartCanvas(spec)
             if (legend.isNotEmpty()) {
                 Spacer(Modifier.height(10.dp))
-                FlowRow(horizontalArrangement = Arrangement.Center, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     legend.forEach { (name, clr) ->
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 7.dp)) {
                             Box(Modifier.size(9.dp).clip(RoundedCornerShape(2.dp)).background(clr))
