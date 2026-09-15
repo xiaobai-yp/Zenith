@@ -528,7 +528,7 @@ private fun ChartCanvas(spec: ChartSpec) {
     val tm = rememberTextMeasurer()
     val labelStyle = TextStyle(fontSize = 9.sp, color = AxisC)
     val times = listOf("0", "45s", "1m30s", "2m15s", "3m", "3m45s")
-    val maxTicks = maxOf(spec.leftTicks.size, spec.rightTicks?.size ?: 0); val denG = max(1, maxTicks - 1); val denL = max(1, spec.leftTicks.size - 1); val denR = max(1, (spec.rightTicks?.size ?: 1) - 1)
+    val maxTicks = maxOf(spec.leftTicks.size, spec.rightTicks?.size ?: 0); val denG = (maxTicks - 1).coerceAtLeast(1); val denL = (spec.leftTicks.size - 1).coerceAtLeast(1); val denR = ((spec.rightTicks?.size ?: 1) - 1).coerceAtLeast(1)
     Canvas(Modifier.fillMaxWidth().height(220.dp)) {
         val insetL = 22.dp.toPx(); val insetR = if (spec.rightTicks != null) 30.dp.toPx() else 22.dp.toPx()
         val top = 8.dp.toPx(); val bottom = 28.dp.toPx()
