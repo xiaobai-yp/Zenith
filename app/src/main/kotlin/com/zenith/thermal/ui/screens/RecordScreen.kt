@@ -18,6 +18,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -89,6 +90,8 @@ private data class ChartData(
     val gpuFreq: List<Float> = emptyList(), val gpuUsage: List<Float> = emptyList(),
     val ddr: List<Float> = emptyList(), val powerW: List<Float> = emptyList(), val capacity: List<Float> = emptyList(),
     val frameTime: List<Float> = emptyList(),
+    val jank: List<Float> = emptyList(),
+    val bigJank: List<Float> = emptyList(),
 )
 private enum class RecordView { LIST, DETAIL }
 
@@ -237,15 +240,65 @@ private fun DeviceCard(items: List<Pair<@Composable () -> Unit, Pair<String, Str
 // ═══════════════════════════════════════════════
 // DETAIL VIEW
 // ═══════════════════════════════════════════════
+
+@Composable
+private fun FilterDropdown(hidden: Set<String>, onToggle: (Set<String>) -> Unit, onClose: () -> Unit) {
+    val items = listOf("Info", "Jank", "Frame Time", "Power", "DDR", "GPU", "CPU temperature")
+    Box(Modifier.fillMaxWidth().background(Color(0xF50C0C18), RoundedCornerShape(12.dp)).padding(vertical = 6.dp)) {
+        Column {
+            items.forEach { itm ->
+                val isHidden = itm in hidden
+                Row(Modifier.fillMaxWidth().clickable {
+                    onToggle(if (isHidden) hidden - itm else hidden + itm)
+                }.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (isHidden) "☐" else "☑", color = if (isHidden) Faint else StatBlue, fontSize = 15.sp)
+                    Spacer(Modifier.width(10.dp))
+                    Text(itm, color = if (isHidden) Faint else Ink, fontSize = 15.sp)
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
+    val ctx = LocalContext.current
+    var showFilter by remember { mutableStateOf(false) }
+    var hiddenCards by remember { mutableStateOf(setOf<String>()) }
+
+    // ── CSV export ──
+    fun exportCsv() {
+        val fmt = java.text.SimpleDateFormat("yyyy-MM-dd HH-mm-ss", java.util.Locale.US)
+        val ts = fmt.format(java.util.Date())
+        val name = "${s.appName} $ts.csv"
+        val sb = StringBuilder()
+        sb.appendLine("Session,${s.appName},${s.date},${s.version},${s.crop}")
+        sb.appendLine("FPS,AVG=${s.avgFps},MAX=${s.maxFps},MIN=${s.minFps},VAR=${s.variance},Smooth=${s.smoothPct},5%Low=${s.low5Pct}")
+        sb.appendLine("Temp,Peak=${s.peakTemp}")
+        sb.appendLine("Power,AVG=${s.avgPowerW}W")
+        sb.appendLine()
+        sb.appendLine("t,FPS,Temp,FrameTime,Jank,BigJank,Cpu03,Cpu46,Cpu7,GpuFreq,GpuUsage,DDR,Power,Capacity")
+        val n = s.chartData.fps.size
+        for (i in 0 until n) {
+            val d2 = s.chartData
+            sb.appendLine("${i},${d2.fps.getOrElse(i){""}},${d2.temp.getOrElse(i){""}},${d2.frameTime.getOrElse(i){""}},${
+                d2.jank.getOrElse(i){""}},${d2.bigJank.getOrElse(i){""}},${d2.cpu03.getOrElse(i){""}},${d2.cpu46.getOrElse(i){""}},${
+                d2.cpu7.getOrElse(i){""}},${d2.gpuFreq.getOrElse(i){""}},${d2.gpuUsage.getOrElse(i){""}},${d2.ddr.getOrElse(i){""}},${
+                d2.powerW.getOrElse(i){""}},${d2.capacity.getOrElse(i){""}}"
+            }
+        }
+        java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), name).writeText(sb.toString())
+        android.widget.Toast.makeText(ctx, "Saved: $name", android.widget.Toast.LENGTH_SHORT).show()
+    }
+
     Column(Modifier.fillMaxSize().background(Bg)) {
         TopBar(s.appName, onBack = onBack, actions = {
-            Icon(Icons.Outlined.FilterList, "Filter", tint = Faint, modifier = Modifier.size(22.dp))
+            Box(Modifier.clickable { showFilter = !showFilter }) { Icon(Icons.Outlined.FilterList, "Filter", tint = Faint, modifier = Modifier.size(22.dp)) }
+            if (showFilter) { FilterDropdown(hiddenCards, { hiddenCards = it }, { showFilter = false }) }
             Spacer(Modifier.width(18.dp))
             Icon(Icons.Outlined.Share, "Share", tint = Faint, modifier = Modifier.size(22.dp))
             Spacer(Modifier.width(18.dp))
-            Icon(Icons.Outlined.FileDownload, "Export", tint = Faint, modifier = Modifier.size(22.dp))
+            Box(Modifier.clickable { exportCsv() }) { Icon(Icons.Outlined.FileDownload, "Export", tint = Faint, modifier = Modifier.size(22.dp)) }
         })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 17.dp).padding(bottom = 40.dp)) {
             DeviceCard(
@@ -269,7 +322,20 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                     rightTicks = listOf("45", "40"), rightMin = 35f, rightMax = 50f,
                 ))
             Spacer(Modifier.height(14.dp))
-            ChartCard(title = "Frame Time (ms)",
+            if ("Jank" !in hiddenCards) {
+                ChartCard(title = "Jank",
+                    legend = listOf("Jank" to S_CPU03, "Big Jank" to S_TEMP2),
+                    sub = "Jank: 73 | Big Jank: 9",
+                    spec = ChartSpec(
+                        series = listOf(s.chartData.jank to S_CPU03),
+                        rightSeries = listOf(s.chartData.bigJank to S_TEMP2),
+                        yMin = 0f, yMax = 5f,
+                        leftTicks = listOf("5", "4", "3", "2", "1", "0"),
+                        bar = true,
+                    ))
+            }
+            Spacer(Modifier.height(14.dp))
+            if ("Frame Time" !in hiddenCards) ChartCard(title = "Frame Time (ms)",
                 legend = emptyList(), sub = "MAX: 207ms",
                 spec = ChartSpec(
                     series = listOf(s.chartData.frameTime to S_FPS),
@@ -278,7 +344,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                     bar = true,
                 ))
             Spacer(Modifier.height(14.dp))
-            ChartCard(title = "CPU Usage (%)", opts = true,
+            if ("CPU temperature" !in hiddenCards) ChartCard(title = "CPU Usage (%)", opts = true,
                 legend = listOf("Total" to S_FPS, "CPU 0~3" to S_CPU03, "CPU 4~6" to S_CPU46, "CPU 7" to S_CPU7),
                 spec = ChartSpec(
                     series = listOf(
@@ -318,7 +384,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                     rightTicks = (100 downTo 10 step 10).map { "${it}°" }, rightMin = 0f, rightMax = 100f,
                 ))
             Spacer(Modifier.height(14.dp))
-            ChartCard(title = "GPU Frequency (MHz)", titleRight = "Usage (%)",
+            if ("GPU" !in hiddenCards) ChartCard(title = "GPU Frequency (MHz)", titleRight = "Usage (%)",
                 legend = listOf("Frequency (MHz)" to S_GF, "Usage (%)" to S_GU),
                 spec = ChartSpec(
                     series = listOf(s.chartData.gpuFreq to S_GF),
@@ -328,7 +394,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                     rightTicks = listOf("100", "90", "75", "50"), rightMin = 0f, rightMax = 100f,
                 ))
             Spacer(Modifier.height(14.dp))
-            ChartCard(title = "DDR (MHz | Mbps)",
+            if ("DDR" !in hiddenCards) ChartCard(title = "DDR (MHz | Mbps)",
                 legend = emptyList(),
                 spec = ChartSpec(
                     series = listOf(s.chartData.ddr to S_DDR),
@@ -336,7 +402,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                     leftTicks = listOf("6410", "5479", "4192", "3418", "3110"),
                 ))
             Spacer(Modifier.height(14.dp))
-            ChartCard(title = "Power (W)", titleRight = "Capacity %",
+            if ("Power" !in hiddenCards) ChartCard(title = "Power (W)", titleRight = "Capacity %",
                 legend = listOf("Power (W)" to S_PWR, "Capacity (%)" to S_CAP),
                 sub = "MAX: 6,28W | MIN: 2,01W | AVG: 4,50W",
                 spec = ChartSpec(
