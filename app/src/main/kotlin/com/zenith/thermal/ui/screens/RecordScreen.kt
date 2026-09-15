@@ -301,16 +301,18 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
             Box(Modifier.clickable { exportCsv() }) { Icon(Icons.Outlined.FileDownload, "Export", tint = Faint, modifier = Modifier.size(22.dp)) }
         })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 17.dp).padding(bottom = 40.dp)) {
-            DeviceCard(
-                listOf(
-                    Pair<@Composable () -> Unit, Pair<String, String>>({ ChipIcon(Color(0xFF7B6FEF)) }, "Platform" to Build.BOARD),
-                    Pair<@Composable () -> Unit, Pair<String, String>>({ PhoneIcon(Color(0xFF5B9CF6)) }, "Model" to Build.MODEL),
-                    Pair<@Composable () -> Unit, Pair<String, String>>({ AndroidIcon(Color(0xFF76C442)) }, "OS" to "Android ${Build.VERSION.RELEASE}"),
-                    Pair<@Composable () -> Unit, Pair<String, String>>({ Text("◉", color = Orange, fontSize = 32.sp, lineHeight = 40.sp) }, "Profile" to "###"))
-            )
-            Spacer(Modifier.height(12.dp))
-            SessionStatsCard(s)
-            Spacer(Modifier.height(12.dp))
+            if ("Info" !in hiddenCards) {
+                DeviceCard(
+                    listOf(
+                        Pair<@Composable () -> Unit, Pair<String, String>>({ ChipIcon(Color(0xFF7B6FEF)) }, "Platform" to Build.BOARD),
+                        Pair<@Composable () -> Unit, Pair<String, String>>({ PhoneIcon(Color(0xFF5B9CF6)) }, "Model" to Build.MODEL),
+                        Pair<@Composable () -> Unit, Pair<String, String>>({ AndroidIcon(Color(0xFF76C442)) }, "OS" to "Android ${Build.VERSION.RELEASE}"),
+                        Pair<@Composable () -> Unit, Pair<String, String>>({ Text("◉", color = Orange, fontSize = 32.sp, lineHeight = 40.sp) }, "Profile" to "###"))
+                )
+                Spacer(Modifier.height(12.dp))
+                SessionStatsCard(s)
+                Spacer(Modifier.height(12.dp))
+            }
             // ── Charts (Scene order) ──
             ChartCard(title = "FPS", titleRight = "Temperature(°C)", rightColor = S_TEMP,
                 legend = listOf("FPS" to S_FPS, "TEMP(°C)" to S_TEMP, "CPU(%)" to S_CPU_PCT, "GPU(%)" to S_GPU_PCT),
@@ -330,7 +332,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                         series = listOf(s.chartData.jank to S_CPU03),
                         rightSeries = listOf(s.chartData.bigJank to S_TEMP2),
                         yMin = 0f, yMax = 5f,
-                        leftTicks = listOf("5", "4", "3", "2", "1"),
+                        leftTicks = listOf("5"),
                         bar = true,
                     ))
             }
@@ -526,7 +528,7 @@ private fun ChartCanvas(spec: ChartSpec) {
     val tm = rememberTextMeasurer()
     val labelStyle = TextStyle(fontSize = 9.sp, color = AxisC)
     val times = listOf("0", "45s", "1m30s", "2m15s", "3m", "3m45s")
-    val maxTicks = maxOf(spec.leftTicks.size, spec.rightTicks?.size ?: 0)
+    val maxTicks = maxOf(spec.leftTicks.size, spec.rightTicks?.size ?: 0); val denG = max(1, maxTicks - 1); val denL = max(1, spec.leftTicks.size - 1); val denR = max(1, (spec.rightTicks?.size ?: 1) - 1)
     Canvas(Modifier.fillMaxWidth().height(220.dp)) {
         val insetL = 22.dp.toPx(); val insetR = if (spec.rightTicks != null) 30.dp.toPx() else 22.dp.toPx()
         val top = 8.dp.toPx(); val bottom = 28.dp.toPx()
@@ -534,19 +536,19 @@ private fun ChartCanvas(spec: ChartSpec) {
         // grid (dashed)
         val dash = PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 3.dp.toPx()))
         for (i in 0 until maxTicks) {
-            val y = top + h * i / (maxTicks - 1)
+            val y = top + h * i / denG
             drawLine(GridC, Offset(insetL, y), Offset(insetL + w, y), strokeWidth = 0.8.dp.toPx(), pathEffect = dash)
         }
         // left y labels
         spec.leftTicks.forEachIndexed { i, v ->
             val res = tm.measure(AnnotatedString(v), style = labelStyle)
-            val y = top + h * i / (spec.leftTicks.size - 1)
+            val y = top + h * i / denL
             drawText(res, topLeft = Offset(insetL - res.size.width - 6.dp.toPx(), y - res.size.height / 2f))
         }
         // right y labels
         spec.rightTicks?.forEachIndexed { i, v ->
             val res = tm.measure(AnnotatedString(v), style = labelStyle)
-            val y = top + h * i / (spec.rightTicks.size - 1)
+            val y = top + h * i / denR
             drawText(res, topLeft = Offset(size.width - insetR + 6.dp.toPx(), y - res.size.height / 2f))
         }
         // x labels
