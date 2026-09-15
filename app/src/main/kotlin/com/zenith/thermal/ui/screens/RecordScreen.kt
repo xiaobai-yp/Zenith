@@ -177,9 +177,7 @@ private fun comma(v: Float, dec: Int = 1): String = String.format("%.${dec}f", v
 @Composable
 private fun SessionListView(sessions: List<SessionEntry>, onSelect: (SessionEntry) -> Unit) {
     Column(Modifier.fillMaxSize().background(Bg)) {
-        TopBar("FPS Stats", actions = {
-            Icon(Icons.Outlined.CloudUpload, "Refresh", tint = StatBlue, modifier = Modifier.size(32.dp))
-        })
+        TopBar("Record")
         Column(Modifier.padding(horizontal = 17.dp)) {
             DeviceCard(
                 listOf(
@@ -291,8 +289,8 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
             sb.append(g(d2.cpu7, i)).append(',').append(g(d2.gpuFreq, i)).append(',').append(g(d2.gpuUsage, i)).append(',').append(g(d2.ddr, i)).append(',')
             sb.append(g(d2.powerW, i)).append(',').append(g(d2.capacity, i)).appendLine()
         }
-        java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), name).writeText(sb.toString())
-        android.widget.Toast.makeText(ctx, "Saved: $name", android.widget.Toast.LENGTH_SHORT).show()
+        java.io.File("/sdcard", name).writeText(sb.toString())
+        android.widget.Toast.makeText(ctx, "Saved to /sdcard/$name", android.widget.Toast.LENGTH_SHORT).show()
     }
 
     Column(Modifier.fillMaxSize().background(Bg)) {
@@ -300,7 +298,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
             Box(Modifier.clickable { showFilter = !showFilter }) { Icon(Icons.Outlined.FilterList, "Filter", tint = Faint, modifier = Modifier.size(22.dp)) }
             FilterDropdown(hiddenCards, { hiddenCards = it }, expanded = showFilter, onDismiss = { showFilter = false })
             Spacer(Modifier.width(18.dp))
-            Icon(Icons.Outlined.Share, "Share", tint = Faint, modifier = Modifier.size(22.dp))
+            Box(Modifier.clickable { exportCsv() }) { Icon(Icons.Outlined.Share, "Share", tint = Faint, modifier = Modifier.size(22.dp)) }
             Spacer(Modifier.width(18.dp))
             Box(Modifier.clickable { exportCsv() }) { Icon(Icons.Outlined.FileDownload, "Export", tint = Faint, modifier = Modifier.size(22.dp)) }
         })
