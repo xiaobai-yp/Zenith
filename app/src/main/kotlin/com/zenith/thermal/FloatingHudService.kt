@@ -16,12 +16,18 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
 import android.graphics.PixelFormat
 import android.view.WindowManager
+import android.widget.Toast
+import java.io.File
 import java.util.Locale
+import java.text.SimpleDateFormat
+import java.util.Date
+import org.json.JSONObject
 
 /**
  * Foreground overlay service — compact game HUD.
@@ -42,6 +48,10 @@ class FloatingHudService : Service() {
         const val ACTION_START = "com.zenith.thermal.action.HUD_START"
         const val ACTION_STOP = "com.zenith.thermal.action.HUD_STOP"
 
+        // Broadcast for new CSV saved — RecordScreen listens
+        private val _newCsvFlow = kotlinx.coroutines.channels.Channel<String>(capacity = 1)
+        val newCsvFlow: kotlinx.coroutines.channels.Channel<String> = _newCsvFlow
+
         fun start(context: Context) {
             val intent = Intent(context, FloatingHudService::class.java)
             intent.action = ACTION_START
@@ -56,6 +66,13 @@ class FloatingHudService : Service() {
             intent.action = ACTION_STOP
             context.startService(intent)
         }
+
+        fun toggle(context: Context) {
+            if (isRunning) stop(context) else start(context)
+        }
+
+        @Volatile var isRunning: Boolean = false
+            private set
     }
 
     private lateinit var wm: WindowManager
@@ -95,6 +112,7 @@ class FloatingHudService : Service() {
             ACTION_START -> {
                 showHud()
                 handler.post(poll)
+                isRunning = true
             }
         }
         return START_STICKY
@@ -185,6 +203,7 @@ class FloatingHudService : Service() {
 
     override fun onDestroy() {
         destroyed = true
+        isRunning = false
         handler.removeCallbacksAndMessages(null)
         removeHud()
         super.onDestroy()
@@ -209,9 +228,6 @@ class FloatingHudService : Service() {
         private var powerW: Double? = null
         private var maxFrameTimeMs = 0
         private var benchRunning = false
-
-        // display mode: 0=compact  1=full
-        private var displayMode = 0
 
         // paints
         private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -262,6 +278,7 @@ class FloatingHudService : Service() {
         private val lines = mutableListOf<Triple<String, Paint, Boolean>>() // text, paint, isMetric
         private var touchStartX = 0f
         private var touchStartY = 0f
+        private var touchStartTime = 0L
         private var paramX = 0
         private var paramY = 0
         private var dragging = false
@@ -313,42 +330,40 @@ class FloatingHudService : Service() {
                 lines.add(Triple("AVG  %d".format(Locale.US, fpsAvg), dimPaint, false))
             }
 
-            if (displayMode == 1) {
-                // CPU load
-                if (cpuLoadPct > 0f) {
-                    val loadPaint = when {
-                        cpuLoadPct > 80f -> warnPaint
-                        cpuLoadPct > 60f -> accentPaint
-                        else -> valuePaint
-                    }
-                    lines.add(Triple("LOAD  %.0f%%".format(Locale.US, cpuLoadPct), loadPaint, false))
+            // CPU load
+            if (cpuLoadPct > 0f) {
+                val loadPaint = when {
+                    cpuLoadPct > 80f -> warnPaint
+                    cpuLoadPct > 60f -> accentPaint
+                    else -> valuePaint
                 }
+                lines.add(Triple("LOAD  %.0f%%".format(Locale.US, cpuLoadPct), loadPaint, false))
+            }
 
-                // GPU
-                gpu?.let {
-                    val vendorTag = if (it.vendor.isNotEmpty()) it.vendor.uppercase() + " " else ""
-                    lines.add(Triple("GPU  %s%d/%dMHz  %d%%".format(Locale.US, vendorTag, it.curFreqMhz, it.maxFreqMhz, it.busyPct), accentPaint, false))
-                }
-                gpuTemp?.let {
-                    val t = if (it > 80.0) warnPaint else valuePaint
-                    lines.add(Triple("GPUT  %.0f°C".format(Locale.US, it), t, false))
-                }
+            // GPU
+            gpu?.let {
+                val vendorTag = if (it.vendor.isNotEmpty()) it.vendor.uppercase() + " " else ""
+                lines.add(Triple("GPU  %s%d/%dMHz  %d%%".format(Locale.US, vendorTag, it.curFreqMhz, it.maxFreqMhz, it.busyPct), accentPaint, false))
+            }
+            gpuTemp?.let {
+                val t = if (it > 80.0) warnPaint else valuePaint
+                lines.add(Triple("GPUT  %.0f°C".format(Locale.US, it), t, false))
+            }
 
-                // CPU freq
-                cpuP0?.let { p0 ->
-                    val p7 = cpuP7
-                    if (p7 != null) {
-                        lines.add(Triple("CPU  L%d/%dMHz  X%d/%dMHz".format(Locale.US, p0.curFreqMhz, p0.maxFreqMhz, p7.curFreqMhz, p7.maxFreqMhz), valuePaint, false))
-                    } else {
-                        lines.add(Triple("CPU  %d/%dMHz".format(Locale.US, p0.curFreqMhz, p0.maxFreqMhz), valuePaint, false))
-                    }
+            // CPU freq
+            cpuP0?.let { p0 ->
+                val p7 = cpuP7
+                if (p7 != null) {
+                    lines.add(Triple("CPU  L%d/%dMHz  X%d/%dMHz".format(Locale.US, p0.curFreqMhz, p0.maxFreqMhz, p7.curFreqMhz, p7.maxFreqMhz), valuePaint, false))
+                } else {
+                    lines.add(Triple("CPU  %d/%dMHz".format(Locale.US, p0.curFreqMhz, p0.maxFreqMhz), valuePaint, false))
                 }
+            }
 
-                // Temp
-                cpuTemp?.let {
-                    val tempPaint = if (it > 75.0) warnPaint else valuePaint
-                    lines.add(Triple("TMP  %.0f°C".format(Locale.US, it), tempPaint, false))
-                }
+            // Temp
+            cpuTemp?.let {
+                val tempPaint = if (it > 75.0) warnPaint else valuePaint
+                lines.add(Triple("TMP  %.0f°C".format(Locale.US, it), tempPaint, false))
             }
 
             // Battery + Power
@@ -359,7 +374,7 @@ class FloatingHudService : Service() {
 
             // Bench indicator
             if (benchRunning) {
-                lines.add(Triple("● BENCH", benchPaint, false))
+                lines.add(Triple("● RECORDING", warnPaint, false))
             }
 
             val maxW = lines.maxOf { it.second.measureText(it.first) }
@@ -393,6 +408,7 @@ class FloatingHudService : Service() {
                 MotionEvent.ACTION_DOWN -> {
                     touchStartX = ev.rawX
                     touchStartY = ev.rawY
+                    touchStartTime = SystemClock.uptimeMillis()
                     paramX = params.x
                     paramY = params.y
                     dragging = false
@@ -429,9 +445,106 @@ class FloatingHudService : Service() {
                         FloatingHudService@this@FloatingHudService.handler.removeCallbacks(it)
                     }
                     if (!dragging) {
-                        // Tap → cycle display mode
-                        displayMode = (displayMode + 1) % 2
-                        invalidate()
+                        val upTime = SystemClock.uptimeMillis()
+                        val downTime = touchStartTime
+                        val deltaMs = upTime - downTime
+                        // Quick tap (<200ms): toggle bench recording
+                        if (deltaMs < 200) {
+                            Thread {
+                                val bench = ZenithDaemonClient.getBenchmarkData()
+                                val benchRunning = bench?.running == true
+                                if (benchRunning) {
+                                    // Stop bench and collect data
+                                    ZenithDaemonClient.stopBenchmark()
+                                    try {
+                                        // Small delay so daemon stops cleanly
+                                        Thread.sleep(200)
+                                        val data = ZenithDaemonClient.sendCommand("bench_data")
+                                        val arr = data?.optJSONArray("data") ?: org.json.JSONArray()
+                                        val n = arr.length()
+
+                                        // Get foreground app name for CSV filename
+                                        val appName = ZenithDaemonClient.getForegroundApp() ?: "Zenith"
+                                        val shortName = appName.substringAfterLast('.')
+                                        val dateStr = SimpleDateFormat("yyyy-MM-dd HH-mm-ss", Locale.US).format(Date())
+                                        val csvName = "$shortName $dateStr.csv"
+
+                                        // Write CSV content in Scene format (RecordScreen parser compatible)
+                                        val sb = StringBuilder()
+                                        // Scene CSV header — columns RecordScreen.parseCsvSessions() expects
+                                        sb.appendLine("FPS,JANK,BigJANK,Max FrameTime(ms),CPU0(%),CPU1(%),CPU2(%),CPU3(%),CPU4(%),CPU5(%),CPU6(%),CPU7(%),GPU(MHz),GPU(%),DDR(Mbps),Power(mW),Battery(%),CPU(℃),CPU0(MHz),CPU1(MHz),CPU2(MHz),CPU3(MHz),CPU4(MHz),CPU5(MHz),CPU6(MHz),CPU7(MHz),CPU0(M Cycles),CPU1(M Cycles),CPU2(M Cycles),CPU3(M Cycles),CPU4(M Cycles),CPU5(M Cycles),CPU6(M Cycles),CPU7(M Cycles)")
+                                        for (i in 0 until n) {
+                                            val pt = arr.optJSONObject(i) ?: continue
+                                            val fps = pt.optInt("fps", 0)
+                                            val tempM = pt.optLong("temp_milli", 0)
+                                            val battP = pt.optInt("batt_pct", 0)
+                                            val battMa = pt.optLong("current_ma", 0)
+                                            // Daemon provides: fps, temp_milli (battery temp), batt_pct, current_ma (mA)
+                                            // Missing fields → empty string (parser returns 0f)
+                                            val row = StringBuilder()
+                                            row.append(fps)                          // FPS
+                                            row.append(',').append('')               // JANK
+                                            row.append(',').append('')               // BigJANK
+                                            row.append(',').append('')               // FrameTime(ms)
+                                            row.append(',').append('')  // CPU0(%)
+                                            row.append(',').append('')  // CPU1(%)
+                                            row.append(',').append('')  // CPU2(%)
+                                            row.append(',').append('')  // CPU3(%)
+                                            row.append(',').append('')  // CPU4(%)
+                                            row.append(',').append('')  // CPU5(%)
+                                            row.append(',').append('')  // CPU6(%)
+                                            row.append(',').append('')  // CPU7(%)
+                                            row.append(',').append('')               // GPU(MHz)
+                                            row.append(',').append('')               // GPU(%)
+                                            row.append(',').append('')               // DDR(Mbps)
+                                            row.append(',').append((battMa * 38) / 10)   // Power(mW) — current(mA) × 3.8V nominal
+                                            row.append(',').append(battP)            // Battery(%)
+                                            row.append(',').append(tempM / 10.0)    // CPU(℃) — battery temp proxy
+                                            row.append(',').append('')  // CPU0(MHz)
+                                            row.append(',').append('')  // CPU1(MHz)
+                                            row.append(',').append('')  // CPU2(MHz)
+                                            row.append(',').append('')  // CPU3(MHz)
+                                            row.append(',').append('')  // CPU4(MHz)
+                                            row.append(',').append('')  // CPU5(MHz)
+                                            row.append(',').append('')  // CPU6(MHz)
+                                            row.append(',').append('')  // CPU7(MHz)
+                                            row.append(',').append('')  // CPU0(MCycles)
+                                            row.append(',').append('')  // CPU1(MCycles)
+                                            row.append(',').append('')  // CPU2(MCycles)
+                                            row.append(',').append('')  // CPU3(MCycles)
+                                            row.append(',').append('')  // CPU4(MCycles)
+                                            row.append(',').append('')  // CPU5(MCycles)
+                                            row.append(',').append('')  // CPU6(MCycles)
+                                            row.append(',').append('')  // CPU7(MCycles)
+                                            sb.append(row).appendLine()
+                                        }
+
+                                        // Write to /data/local/tmp/ (root-writable temp), then su cp to /sdcard/
+                                        val tmpFile = java.io.File("/data/local/tmp/$csvName")
+                                        tmpFile.writeText(sb.toString())
+
+                                        val cp = Runtime.getRuntime().exec(arrayOf(
+                                            "su", "-c", "cp \"/data/local/tmp/$csvName\" \"/sdcard/$csvName\""
+                                        ))
+                                        cp.waitFor()
+                                        tmpFile.delete()
+
+                                        handler.post {
+                                            Toast.makeText(this@FloatingHudService, "Session saved: $shortName", Toast.LENGTH_SHORT).show()
+                                            // Notify RecordScreen
+                                            _newCsvFlow.trySend(csvName)
+                                        }
+                                    } catch (e: Exception) {
+                                        Log.w(TAG, "CSV save failed: ${e.message}")
+                                        handler.post {
+                                            Toast.makeText(this@FloatingHudService, "Save failed", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                }.start()
+                            } else {
+                                ZenithDaemonClient.startBenchmark()
+                            }
+                        }
                     }
                     return true
                 }

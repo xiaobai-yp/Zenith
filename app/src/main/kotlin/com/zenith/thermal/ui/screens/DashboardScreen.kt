@@ -20,6 +20,7 @@ import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.Smartphone
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Terminal
+import androidx.compose.material.icons.outlined.MonitorActivity
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
@@ -39,6 +40,7 @@ import com.zenith.thermal.R
 import com.zenith.thermal.ZenithDaemonClient
 import com.zenith.thermal.ui.components.*
 import com.zenith.thermal.ui.theme.*
+import com.zenith.thermal.FloatingHudService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -98,6 +100,33 @@ fun DashboardScreen() {
     var isDaemonConnected by remember { mutableStateOf(ZenithDaemonClient.isConnected) }
     var perAppCount by remember { mutableIntStateOf(0) }
     var uptimeMs by remember { mutableLongStateOf(0L) }
+    var isHudRunningCache by remember { mutableStateOf(FloatingHudService.isRunning) }
+
+    // Poll HUD service state
+    LaunchedEffect(Unit) {
+        while (true) {
+            isHudRunningCache = FloatingHudService.isRunning
+            delay(2000)
+        }
+    }
+
+    fun isHudRunning(): Boolean = FloatingHudService.isRunning
+
+    fun startHudWithPermission() {
+        // Check SYSTEM_ALERT_WINDOW permission
+        if (Build.VERSION.SDK_INT >= 23 && !android.provider.Settings.canDrawOverlays(ctx)) {
+            try {
+                val intent = android.content.Intent(
+                    android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    android.net.Uri.parse("package:${ctx.packageName}")
+                )
+                ctx.startActivity(intent)
+            } catch (_: Exception) {}
+        } else {
+            FloatingHudService.start(ctx)
+            isHudRunningCache = true
+        }
+    }
 
     // Device info (read once)
     var deviceInfo by remember { mutableStateOf<DeviceInfo?>(null) }
@@ -212,6 +241,28 @@ fun DashboardScreen() {
                                 Icon(
                                     Icons.Outlined.Info,
                                     contentDescription = "Info",
+                                    tint = Color.White,
+                                    modifier = Modifier.padding(9.dp)
+                                )
+                            }
+                            // Floating HUD toggle
+                            Surface(
+                                modifier = Modifier.size(34.dp),
+                                shape = CircleShape,
+                                color = if (isHudRunningCache) Color(0xFF23ED9DF8) else Color(0x23ED9DF8),
+                                onClick = {
+                                    val running = isHudRunning()
+                                    if (running) {
+                                        FloatingHudService.stop(ctx)
+                                        isHudRunningCache = false
+                                    } else {
+                                        startHudWithPermission()
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    Icons.Outlined.MonitorActivity,
+                                    contentDescription = "Floating HUD",
                                     tint = Color.White,
                                     modifier = Modifier.padding(9.dp)
                                 )

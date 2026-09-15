@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.sp
 import com.zenith.thermal.ui.theme.ZenithBg
 import com.zenith.thermal.ui.theme.ZenithMuted2
 import com.zenith.thermal.ui.theme.ZenithText
+import com.zenith.thermal.FloatingHudService
 import java.io.File
 import kotlin.math.roundToInt
 
@@ -113,6 +114,14 @@ fun RecordScreen() {
     var view by remember { mutableStateOf(RecordView.LIST) }
     var selected by remember { mutableStateOf<SessionEntry?>(null) }
     var sessions by remember { mutableStateOf(loadSessions()) }
+
+    // Periodically refresh sessions (detects new CSV files from bench recordings)
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(3000)
+            sessions = loadSessions()
+        }
+    }
 
     // Scoped storage (API 30+): ask once per install, poll until granted, then reload
     LaunchedEffect(Unit) {
