@@ -542,7 +542,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                 legend = listOf("CPU 0~3" to S_CPU03, "CPU 4~6" to S_CPU46, "CPU 7" to S_CPU7),
                 spec = run {
                     val all = s.chartData.cpuFreq03 + s.chartData.cpuFreq46 + s.chartData.cpuFreq7
-                    val (lo, hi, ticks) = autoAxis(all, minFloor = 0f, niceStep = true)
+                    val (lo, hi, ticks) = cpuFreqAxis(all)
                     ChartSpec(
                         series = listOf(
                             s.chartData.cpuFreq03 to S_CPU03,
@@ -558,7 +558,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                 legend = listOf("CPU 0~3" to S_CPU03, "CPU 4~6" to S_CPU46, "CPU 7" to S_CPU7, "TEMP(°C)" to S_TEMP2),
                 spec = run {
                     val all = s.chartData.cpuCyc03 + s.chartData.cpuCyc46 + s.chartData.cpuCyc7
-                    val (lo, hi, ticks) = autoAxis(all, minFloor = 0f)
+                    val (lo, hi, ticks) = autoAxis(all, minFloor = 0f, maxTicks = 4)
                     val (tLo, tHi, tTicks) = tempAxis(s.chartData.temp)
                     ChartSpec(
                         series = listOf(
@@ -576,20 +576,20 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
             if ("GPU" !in hiddenCards) ChartCard(title = "GPU Frequency (MHz)", titleRight = "Usage (%)",
                 legend = listOf("Frequency (MHz)" to S_GF, "Usage (%)" to S_GU),
                 spec = run {
-                    val (lo, hi, ticks) = autoAxis(s.chartData.gpuFreq, minFloor = 0f)
+                    val (lo, hi, ticks) = autoAxis(s.chartData.gpuFreq, minFloor = 0f, maxTicks = 4)
                     ChartSpec(
                         series = listOf(s.chartData.gpuFreq to S_GF),
                         rightSeries = listOf(s.chartData.gpuUsage to S_GU),
                         yMin = lo, yMax = hi,
                         leftTicks = ticks,
-                        rightTicks = listOf("100", "75", "50", "25"), rightMin = 0f, rightMax = 100f,
+                        rightTicks = listOf("100", "50"), rightMin = 0f, rightMax = 100f,
                     )
                 })
             Spacer(Modifier.height(14.dp))
-            if ("DDR" !in hiddenCards) ChartCard(title = "DDR (MHz | Mbps)",
+            if ("DDR" !in hiddenCards) ChartCard(title = "DDR (Mbps)",
                 legend = emptyList(),
                 spec = run {
-                    val (lo, hi, ticks) = autoAxis(s.chartData.ddr, minFloor = 0f)
+                    val (lo, hi, ticks) = autoAxis(s.chartData.ddr, minFloor = 0f, maxTicks = 4)
                     ChartSpec(
                         series = listOf(s.chartData.ddr to S_DDR),
                         yMin = lo, yMax = hi,
@@ -601,13 +601,13 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                 legend = listOf("Power (W)" to S_PWR, "Capacity (%)" to S_CAP),
                 sub = "MAX: ${comma(pMax, 2)}W | MIN: ${comma(pMin, 2)}W | AVG: ${comma(pAvg.toFloat(), 2)}W",
                 spec = run {
-                    val (lo, hi, ticks) = autoAxis(s.chartData.powerW, minFloor = 0f, maxCeiling = 20f)
+                    val (lo, hi, ticks) = autoAxis(s.chartData.powerW, minFloor = 0f, maxCeiling = 20f, maxTicks = 4)
                     ChartSpec(
                         series = listOf(s.chartData.powerW to S_PWR),
                         rightSeries = listOf(s.chartData.capacity to S_CAP),
                         yMin = lo, yMax = hi,
                         leftTicks = ticks,
-                        rightTicks = listOf("100", "80", "60", "40", "20"), rightMin = 0f, rightMax = 100f,
+                        rightTicks = listOf("100", "50"), rightMin = 0f, rightMax = 100f,
                     )
                 })
             Spacer(Modifier.height(14.dp))
