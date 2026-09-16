@@ -906,13 +906,13 @@ private fun parseCsvFile(file: File, regex: Regex, ctx: android.content.Context?
             in 0..12 -> headerIdx           // FPS-JANK-BigJANK-FrameTime-CPU(%)-CPU0-7(%): no shift
             in 13..20 -> headerIdx + 10     // CPU0-7(MHz): shift +10
             in 21..28 -> headerIdx + 10     // CPU0-7(M Cycles): shift +10
-            29 -> 39                         // CPU(℃)
+            29 -> 45                         // CPU(℃): verified at data[45] (values 37-38°C)
             30 -> 41                         // DDR(Mbps)
             31 -> 42                         // GPU(%)
             32 -> 44                         // GPU(MHz)
-            33 -> 45                         // Battery(%)
-            34 -> 46                         // Battery(℃)
-            35 -> 47                         // Current(mA)
+            33 -> 46                         // Battery(%)
+            34 -> 47                         // Battery(℃)
+            35 -> 48                         // Current(mA)
             36 -> 49                         // Battery(volt)
             37 -> 50                         // Power(mW)
             else -> headerIdx
