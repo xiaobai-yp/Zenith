@@ -490,7 +490,9 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
             ChartCard(title = "FPS", titleRight = "Temperature(°C)", rightColor = S_TEMP,
                 legend = listOf("FPS" to S_FPS, "TEMP(°C)" to S_TEMP, "CPU(%)" to S_CPU_PCT, "GPU(%)" to S_GPU_PCT),
                 spec = run {
-                    val (fLo, fHi, fTicks) = fpsAxis(s.chartData.fps)
+                    val wm = ctx.getSystemService(android.content.Context.WINDOW_SERVICE) as android.view.WindowManager
+                    val rr = wm.defaultDisplay.refreshRate.toInt()
+                    val (fLo, fHi, fTicks) = fpsAxis(s.chartData.fps, rr)
                     val (tLo, tHi, tTicks) = tempAxis(s.chartData.temp)
                     ChartSpec(
                         series = listOf(s.chartData.fps to S_FPS),
