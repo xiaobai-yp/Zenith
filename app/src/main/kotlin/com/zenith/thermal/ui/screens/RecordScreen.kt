@@ -554,24 +554,25 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                     )
                 })
             Spacer(Modifier.height(14.dp))
-            ChartCard(title = "CPU Cycles (M)", titleRight = "CPU Temperature (°C)", rightColor = S_TEMP2,
-                legend = listOf("CPU 0~3" to S_CPU03, "CPU 4~6" to S_CPU46, "CPU 7" to S_CPU7, "TEMP(°C)" to S_TEMP2),
-                spec = run {
-                    val all = s.chartData.cpuCyc03 + s.chartData.cpuCyc46 + s.chartData.cpuCyc7
-                    val (lo, hi, ticks) = autoAxis(all, minFloor = 0f, maxTicks = 4)
-                    val (tLo, tHi, tTicks) = tempAxis(s.chartData.temp)
-                    ChartSpec(
-                        series = listOf(
-                            s.chartData.cpuCyc03 to S_CPU03,
-                            s.chartData.cpuCyc46 to S_CPU46,
-                            s.chartData.cpuCyc7 to S_CPU7,
-                        ),
-                        rightSeries = listOf(s.chartData.temp to S_TEMP2),
-                        yMin = lo, yMax = hi,
-                        leftTicks = ticks,
-                        rightTicks = tTicks, rightMin = tLo, rightMax = tHi,
-                    )
-                })
+            if (s.chartData.cpuCyc03.isNotEmpty() || s.chartData.cpuCyc46.isNotEmpty() || s.chartData.cpuCyc7.isNotEmpty())
+                ChartCard(title = "CPU Cycles (M)", titleRight = "CPU Temperature (°C)", rightColor = S_TEMP2,
+                    legend = listOf("CPU 0~3" to S_CPU03, "CPU 4~6" to S_CPU46, "CPU 7" to S_CPU7, "TEMP(°C)" to S_TEMP2),
+                    spec = run {
+                        val all = s.chartData.cpuCyc03 + s.chartData.cpuCyc46 + s.chartData.cpuCyc7
+                        val (lo, hi, ticks) = autoAxis(all, minFloor = 0f, maxTicks = 4)
+                        val (tLo, tHi, tTicks) = tempAxis(s.chartData.temp)
+                        ChartSpec(
+                            series = listOf(
+                                s.chartData.cpuCyc03 to S_CPU03,
+                                s.chartData.cpuCyc46 to S_CPU46,
+                                s.chartData.cpuCyc7 to S_CPU7,
+                            ),
+                            rightSeries = listOf(s.chartData.temp to S_TEMP2),
+                            yMin = lo, yMax = hi,
+                            leftTicks = ticks,
+                            rightTicks = tTicks, rightMin = tLo, rightMax = tHi,
+                        )
+                    })
             Spacer(Modifier.height(14.dp))
             if ("GPU" !in hiddenCards) ChartCard(title = "GPU Frequency (MHz)", titleRight = "Usage (%)",
                 legend = listOf("Frequency (MHz)" to S_GF, "Usage (%)" to S_GU),
@@ -644,8 +645,8 @@ private fun SessionStatsCard(s: SessionEntry) {
             Row(Modifier.fillMaxWidth()) {
                 StatCell("MAX", comma(s.maxFps), "FPS", Modifier.weight(1f))
                 StatCell("MIN", comma(s.minFps), "FPS", Modifier.weight(1f))
-                StatCell("AVG", comma(s.avgFps, 2), "FPS", Modifier.weight(1f))
-                StatCell("VARIANCE", comma(s.variance), "FPS", Modifier.weight(1f))
+                StatCell("AVG", comma(s.avgFps), "FPS", Modifier.weight(1f))
+                StatCell("VAR", comma(s.variance), "FPS", Modifier.weight(1f))
             }
             Spacer(Modifier.height(6.dp))
             Row(Modifier.fillMaxWidth().background(Divider, RoundedCornerShape(2.dp)).height(1.dp)) {}
@@ -758,10 +759,12 @@ private fun ChartCanvas(spec: ChartSpec) {
             val y = top + h * i / denL
             drawText(res, topLeft = Offset(insetL - res.size.width - 6.dp.toPx(), y - res.size.height / 2f))
         }
-        // right y labels
+        // right y labels — positioned by value mapping (rightMin..rightMax) to same Y space
         spec.rightTicks?.forEachIndexed { i, v ->
             val res = tm.measure(AnnotatedString(v), style = labelStyle)
-            val y = top + h * i / denR
+            val tickVal = v.replace(',', '.').toFloatOrNull() ?: 0f
+            val yFrac = if (spec.rightMax > spec.rightMin) (1f - (tickVal - spec.rightMin) / (spec.rightMax - spec.rightMin)) else (i.toFloat() / denR)
+            val y = top + h * yFrac.coerceIn(0f, 1f)
             drawText(res, topLeft = Offset(size.width - insetR + 6.dp.toPx(), y - res.size.height / 2f))
         }
         // x labels
