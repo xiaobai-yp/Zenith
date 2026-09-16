@@ -684,6 +684,7 @@ private data class ChartSpec(
     val bar: Boolean = false,
     val dashed: Set<Int> = emptySet(),
     val height: Int = 220,
+    val xLabels: List<String> = emptyList(), // adaptive X-axis labels
 )
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -729,7 +730,11 @@ private fun ChartCard(
 private fun ChartCanvas(spec: ChartSpec) {
     val tm = rememberTextMeasurer()
     val labelStyle = TextStyle(fontSize = 9.sp, color = AxisC)
-    val times = listOf("0", "45s", "1m30s", "2m15s", "3m", "3m45s")
+    // Adaptive X-axis: use spec.xLabels or fallback
+    val times = spec.xLabels.ifEmpty {
+        val n = spec.series.firstOrNull()?.first?.size ?: 0
+        if (n == 0) listOf("0") else generateAdaptiveXLabels(n)
+    }
     val maxTicks = maxOf(spec.leftTicks.size, spec.rightTicks?.size ?: 0); val denG = (maxTicks - 1).coerceAtLeast(1); val denL = (spec.leftTicks.size - 1).coerceAtLeast(1); val denR = ((spec.rightTicks?.size ?: 1) - 1).coerceAtLeast(1)
     Canvas(Modifier.fillMaxWidth().height(spec.height.dp)) {
         val insetL = 22.dp.toPx(); val insetR = if (spec.rightTicks != null) 30.dp.toPx() else 22.dp.toPx()
@@ -846,7 +851,6 @@ private fun parseCsvSessions(ctx: android.content.Context? = null): List<Session
 private fun parseCsvFile(file: File, regex: Regex, ctx: android.content.Context? = null): SessionEntry? {
     val match = regex.find(file.name) ?: return null
     val appName = match.groupValues[1]
-    // "2026-07-07 16-44-14" → "2026-07-07 16:44:14"
     val rawDate = match.groupValues[2]
     val date = rawDate.let {
         val parts = it.split(" ")
@@ -855,13 +859,24 @@ private fun parseCsvFile(file: File, regex: Regex, ctx: android.content.Context?
     try {
         val lines = file.readLines()
         if (lines.size < 2) return null
-        // Parse #PACKAGE: metadata line
+        // Find header row: scan for line starting with known column names
+        var headerIdx = -1
         var appPkg = ""
-        var startLine = 0
-        if (lines[0].startsWith("#PACKAGE:")) {
-            appPkg = lines[0].removePrefix("#PACKAGE:").trim()
-            startLine = 1
+        for (i in lines.indices) {
+            val l = lines[i].trim()
+            if (l.startsWith("#PACKAGE:")) {
+                appPkg = l.removePrefix("#PACKAGE:").trim()
+                continue
+            }
+            // Scene format: starts with "FPS,JANK,..."
+            // Zenith old format: starts with "t,FPS,..."
+            if (l.startsWith("FPS,JANK") || l.startsWith("t,FPS")) {
+                headerIdx = i
+                break
+            }
         }
+        if (headerIdx < 0) return null
+        val startLine = headerIdx
         // Resolve version + crop from PackageManager / display
         val version = if (ctx != null && appPkg.isNotEmpty()) {
             try {
@@ -875,20 +890,20 @@ private fun parseCsvFile(file: File, regex: Regex, ctx: android.content.Context?
         } else "—"
         val header = lines[startLine]
         val colMap = header.split(",").mapIndexed { i, name -> name.trim() to i }.toMap()
-        fun col(name: String): Int? = colMap[name]
+        fun col(vararg names: String): Int? { for (n in names) { colMap[n]?.let { return it }; colMap[n.lowercase()]?.let { return it } }; return null }
         fun safeFloat(idx: Int?, cols: List<String>): Float {
             if (idx == null || idx >= cols.size) return 0f
             return cols[idx].trim().toFloatOrNull() ?: 0f
         }
         val fpsI = col("FPS") ?: return null
-        val jankI = col("JANK")
-        val bigJankI = col("BigJANK")
-        val ftI = col("Max FrameTime(ms)")
-        val cpu0I = col("CPU0(%)"); val cpu1I = col("CPU1(%)"); val cpu2I = col("CPU2(%)"); val cpu3I = col("CPU3(%)")
-        val cpu4I = col("CPU4(%)"); val cpu5I = col("CPU5(%)"); val cpu6I = col("CPU6(%)"); val cpu7I = col("CPU7(%)")
-        val gpuFI = col("GPU(MHz)"); val gpuUI = col("GPU(%)")
-        val ddrI = col("DDR(Mbps)"); val pwrI = col("Power(mW)")
-        val capI = col("Battery(%)"); val tmpI = col("CPU(℃)")
+        val jankI = col("JANK", "Jank")
+        val bigJankI = col("BigJANK", "Big Jank", "BigJank")
+        val ftI = col("Max FrameTime(ms)", "FrameTime")
+        val cpu0I = col("CPU0(%)", "Cpu03"); val cpu1I = col("CPU1(%)"); val cpu2I = col("CPU2(%)"); val cpu3I = col("CPU3(%)")
+        val cpu4I = col("CPU4(%)", "Cpu46"); val cpu5I = col("CPU5(%)"); val cpu6I = col("CPU6(%)"); val cpu7I = col("CPU7(%)", "Cpu7")
+        val gpuFI = col("GPU(MHz)", "GpuFreq"); val gpuUI = col("GPU(%)", "GpuUsage")
+        val ddrI = col("DDR(Mbps)", "DDR"); val pwrI = col("Power(mW)", "Power")
+        val capI = col("Battery(%)", "Capacity"); val tmpI = col("CPU(℃)", "Temp")
         val cf0I = col("CPU0(MHz)"); val cf1I = col("CPU1(MHz)"); val cf2I = col("CPU2(MHz)"); val cf3I = col("CPU3(MHz)")
         val cf4I = col("CPU4(MHz)"); val cf5I = col("CPU5(MHz)"); val cf6I = col("CPU6(MHz)"); val cf7I = col("CPU7(MHz)")
         val cc0I = col("CPU0(M Cycles)"); val cc1I = col("CPU1(M Cycles)"); val cc2I = col("CPU2(M Cycles)"); val cc3I = col("CPU3(M Cycles)")
@@ -902,6 +917,9 @@ private fun parseCsvFile(file: File, regex: Regex, ctx: android.content.Context?
         val cf03L = mutableListOf<Float>(); val cf46L = mutableListOf<Float>(); val cf7L = mutableListOf<Float>()
         val cc03L = mutableListOf<Float>(); val cc46L = mutableListOf<Float>(); val cc7L = mutableListOf<Float>()
 
+        // Zenith old format: Cpu03/Cpu46/Cpu7 are pre-aggregated (no CPU0-7 individual cols)
+        val hasPreAggCpu = colMap.containsKey("Cpu03")
+
         for (i in (startLine + 1) until lines.size) {
             val line = lines[i]
             if (line.isBlank()) continue
@@ -910,12 +928,19 @@ private fun parseCsvFile(file: File, regex: Regex, ctx: android.content.Context?
             jankL.add(safeFloat(jankI, c))
             bjL.add(safeFloat(bigJankI, c))
             ftL.add(safeFloat(ftI, c))
-            val c0 = safeFloat(cpu0I, c); val c1 = safeFloat(cpu1I, c)
-            val c2 = safeFloat(cpu2I, c); val c3 = safeFloat(cpu3I, c)
-            c03L.add((c0 + c1 + c2 + c3) / 4f)
-            val c4 = safeFloat(cpu4I, c); val c5 = safeFloat(cpu5I, c); val c6 = safeFloat(cpu6I, c)
-            c46L.add((c4 + c5 + c6) / 3f)
-            c7L.add(safeFloat(cpu7I, c))
+            if (hasPreAggCpu) {
+                // Zenith format: use pre-aggregated columns directly
+                c03L.add(safeFloat(col("Cpu03"), c))
+                c46L.add(safeFloat(col("Cpu46"), c))
+                c7L.add(safeFloat(col("Cpu7"), c))
+            } else {
+                val c0 = safeFloat(cpu0I, c); val c1 = safeFloat(cpu1I, c)
+                val c2 = safeFloat(cpu2I, c); val c3 = safeFloat(cpu3I, c)
+                c03L.add((c0 + c1 + c2 + c3) / 4f)
+                val c4 = safeFloat(cpu4I, c); val c5 = safeFloat(cpu5I, c); val c6 = safeFloat(cpu6I, c)
+                c46L.add((c4 + c5 + c6) / 3f)
+                c7L.add(safeFloat(cpu7I, c))
+            }
             gfL.add(safeFloat(gpuFI, c))
             guL.add(safeFloat(gpuUI, c))
             ddrL.add(safeFloat(ddrI, c))
