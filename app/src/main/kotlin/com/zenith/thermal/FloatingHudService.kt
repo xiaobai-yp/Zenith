@@ -236,8 +236,7 @@ class FloatingHudService : Service() {
         private var maxFrameTimeMs = 0
         private var benchRunning = false
 
-        // display mode: 0=compact  1=full
-        private var displayMode = 0
+        // display mode: always compact (tap cycling removed)
 
         // paints
         private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -288,7 +287,6 @@ class FloatingHudService : Service() {
         private val lines = mutableListOf<Triple<String, Paint, Boolean>>() // text, paint, isMetric
         private var touchStartX = 0f
         private var touchStartY = 0f
-        private var touchStartTime = 0L
         private var paramX = 0
         private var paramY = 0
         private var dragging = false
@@ -326,31 +324,6 @@ class FloatingHudService : Service() {
         override fun onMeasure(widthSpec: Int, heightSpec: Int) {
             lines.clear()
             lines.add(Triple("FPS  %d / %d".format(Locale.US, fpsShort, fpsLong), fpsPaint, true))
-            if (displayMode == 1) {
-                if (maxFrameTimeMs > 100) lines.add(Triple("FRT  %dms ⚠".format(Locale.US, maxFrameTimeMs), warnPaint, true))
-                else if (maxFrameTimeMs > 0) lines.add(Triple("FRT  %dms".format(Locale.US, maxFrameTimeMs), dimPaint, false))
-                if (fpsAvg > 0) lines.add(Triple("AVG  %d".format(Locale.US, fpsAvg), dimPaint, false))
-                if (cpuLoadPct > 0f) {
-                    val lp = when { cpuLoadPct > 80f -> warnPaint; cpuLoadPct > 60f -> accentPaint; else -> valuePaint }
-                    lines.add(Triple("LOAD  %.0f%%".format(Locale.US, cpuLoadPct), lp, false))
-                }
-                gpu?.let {
-                    val v = if (it.vendor.isNotEmpty()) it.vendor.uppercase() + " " else ""
-                    lines.add(Triple("GPU  %s%d/%dMHz  %d%%".format(Locale.US, v, it.curFreqMhz, it.maxFreqMhz, it.busyPct), accentPaint, false))
-                }
-                gpuTemp?.let { lines.add(Triple("GPUT  %.0f°C".format(Locale.US, it), if (it > 80.0) warnPaint else valuePaint, false)) }
-                cpuP0?.let { p0 ->
-                    val p7 = cpuP7
-                    if (p7 != null) lines.add(Triple("CPU  L%d/%dMHz  X%d/%dMHz".format(Locale.US, p0.curFreqMhz, p0.maxFreqMhz, p7.curFreqMhz, p7.maxFreqMhz), valuePaint, false))
-                    else lines.add(Triple("CPU  %d/%dMHz".format(Locale.US, p0.curFreqMhz, p0.maxFreqMhz), valuePaint, false))
-                }
-                cpuTemp?.let { lines.add(Triple("TMP  %.0f°C".format(Locale.US, it), if (it > 75.0) warnPaint else valuePaint, false)) }
-                batteryPct?.let { b ->
-                    val pStr = powerW?.let { "%.1fW".format(Locale.US, it) } ?: "—"
-                    lines.add(Triple("BAT  %d%%  %s".format(Locale.US, b.toInt(), pStr), valuePaint, false))
-                }
-                if (benchRunning) lines.add(Triple("● RECORDING", warnPaint, false))
-            }
             val maxW = lines.maxOf { it.second.measureText(it.first) }
             val lineH = headerPaint.textSize + lineGap
             val w = maxW + padH * 2
@@ -395,7 +368,6 @@ class FloatingHudService : Service() {
                 MotionEvent.ACTION_DOWN -> {
                     touchStartX = ev.rawX
                     touchStartY = ev.rawY
-                    touchStartTime = SystemClock.uptimeMillis()
                     paramX = params.x
                     paramY = params.y
                     dragging = false
@@ -430,15 +402,6 @@ class FloatingHudService : Service() {
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     longPressRunnable?.let {
                         FloatingHudService@this@FloatingHudService.handler.removeCallbacks(it)
-                    }
-                    if (!dragging) {
-                        displayMode = (displayMode + 1) % 2
-                        // Force re-layout via WindowManager (requestLayout alone may not work for overlay views)
-                        try {
-                            val p = layoutParams as? WindowManager.LayoutParams
-                            if (p != null) FloatingHudService@this@FloatingHudService.wm.updateViewLayout(this, p)
-                        } catch (_: Exception) {}
-                        invalidate()
                     }
                     return true
                 }

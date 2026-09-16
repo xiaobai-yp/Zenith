@@ -27,6 +27,7 @@ class BenchmarkTileService : TileService() {
     companion object {
         @Volatile var isBenchActive: Boolean = false
         @Volatile var capturedPkg: String = ""
+        @Volatile var benchStartTime: Long = 0L
     }
 
     override fun onStartListening() {
@@ -71,11 +72,11 @@ class BenchmarkTileService : TileService() {
             Toast.makeText(this, "Recording...", Toast.LENGTH_SHORT).show()
             // Use cached fg app from HUD — detect_fg won't work here (QS panel is foreground)
             Thread {
-                val cached = ZenithDaemonClient.lastFgApp
                 val fresh = ZenithDaemonClient.detectForegroundApp(this@BenchmarkTileService)
-                val pkg = cached.ifEmpty { fresh ?: "Unknown" }
+                val pkg = fresh ?: "Unknown"
                 capturedPkg = pkg
-                tileLog("START (cached=$cached, fresh=$fresh, pkg=$pkg)")
+                tileLog("START (pkg=$pkg)")
+                benchStartTime = System.currentTimeMillis()
                 val ok = ZenithDaemonClient.startBenchmark()
                 tileLog("bench_start: ok=$ok")
                 if (!ok) {
@@ -83,6 +84,24 @@ class BenchmarkTileService : TileService() {
                     mainThread {
                         qsTile?.let { it.state = Tile.STATE_INACTIVE; it.updateTile() }
                         Toast.makeText(this@BenchmarkTileService, "bench_start gagal", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    // Monitor fg app — auto-stop if changed (min 3s to avoid switch animation)
+                    while (isBenchActive) {
+                        Thread.sleep(2000)
+                        if (!isBenchActive) break
+                        if (System.currentTimeMillis() - benchStartTime < 3000) continue
+                        val curFg = ZenithDaemonClient.detectForegroundApp(this@BenchmarkTileService)
+                        if (!curFg.isNullOrEmpty() && curFg != pkg) {
+                            tileLog("FG_CHANGED: $pkg → $curFg")
+                            isBenchActive = false
+                            mainThread {
+                                qsTile?.let { it.state = Tile.STATE_INACTIVE; it.updateTile() }
+                                Toast.makeText(this@BenchmarkTileService, "Auto-stopped: fg changed", Toast.LENGTH_SHORT).show()
+                            }
+                            doExport()
+                            return@Thread
+                        }
                     }
                 }
             }.start()
@@ -104,7 +123,7 @@ class BenchmarkTileService : TileService() {
                 return
             }
 
-            ZenithDaemonClient.stopBenchmark()
+            ZenithDaemonClient.stopBenchmark(capturedPkg, benchStartTime)
             tileLog("bench_stop sent")
             Thread.sleep(1500)
 

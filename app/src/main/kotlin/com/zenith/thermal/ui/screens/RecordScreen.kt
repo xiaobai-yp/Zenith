@@ -71,7 +71,7 @@ private val Green = Color(0xFF76C442)
 private val Orange = Color(0xFFFF7756)
 private val TitleC = Color(0xFFAAAAAA)
 private val LegendC = Color(0xFFAAAAAA)
-private val GridC = Color(0xFF222222)
+private val GridC = Color(0xFF333333)
 // series
 private val S_FPS = Color(0xFF5B9CF6)
 private val S_TEMP = Color(0xFFE58C3A)          // battery temp (battery stats line)
@@ -113,8 +113,19 @@ private enum class RecordView { LIST, DETAIL }
 // Root
 // ═══════════════════════════════════════════════
 
-/** Filenames deleted this session — loadSessions() skips these even if file still exists */
-private val deletedFiles = mutableSetOf<String>()
+/** Filenames deleted — persisted to SharedPreferences so they survive process death */
+private fun getDeletedPrefs(ctx: android.content.Context): MutableSet<String> =
+    ctx.getSharedPreferences("zenith_record", 0).getStringSet("deleted_files", emptySet())!!.toMutableSet()
+
+private fun markDeleted(ctx: android.content.Context, vararg names: String) {
+    val prefs = ctx.getSharedPreferences("zenith_record", 0)
+    val set = prefs.getStringSet("deleted_files", emptySet())!!.toMutableSet()
+    set.addAll(names)
+    prefs.edit().putStringSet("deleted_files", set).apply()
+}
+
+private fun isDeleted(ctx: android.content.Context, name: String): Boolean =
+    ctx.getSharedPreferences("zenith_record", 0).getStringSet("deleted_files", emptySet())?.contains(name) == true
 
 @Composable
 fun RecordScreen() {
@@ -192,7 +203,7 @@ private fun TopBar(title: String, onBack: (() -> Unit)? = null, subtitle: String
     }
     Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 18.dp, top = 16.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(40.dp).clip(RoundedCornerShape(22.dp)).clickable(enabled = onBack != null) { onBack?.invoke() }, contentAlignment = Alignment.Center) {
-            Text("‹", color = Color.White, fontSize = 30.sp, textAlign = TextAlign.Center)
+            Text("←", color = Color.White, fontSize = 24.sp, textAlign = TextAlign.Center)
         }
         Spacer(Modifier.width(14.dp))
         Text(title, color = ZenithText, fontSize = 24.sp, fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
@@ -290,37 +301,52 @@ private fun exportCsv(s: SessionEntry?, ctx: android.content.Context) {
 }
 
 private fun deleteAllSessions(ctx: android.content.Context): Int {
-    val regex = Regex(""""^(.+) (\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2})\.csv$""")
+    val regex = Regex("""^(.+) (\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2})\.csv$""")
     var count = 0
-    // Delete from /sdcard/
+    val names = mutableListOf<String>()
+    val toDelete = mutableListOf<String>()
+    // Collect from /sdcard/
     val sdcard = File("/sdcard")
     if (sdcard.exists()) {
         val files = sdcard.listFiles { f -> f.isFile && regex.matches(f.name) }
-        files?.forEach { deletedFiles.add(it.name); if (it.delete()) count++ }
+        files?.forEach { names.add(it.name); toDelete.add(it.absolutePath); if (it.delete()) count++ }
     }
-    // Delete from filesDir/bench_sessions/
+    // Collect from filesDir/bench_sessions/
     val benchDir = File(ctx.filesDir, "bench_sessions")
     if (benchDir.exists()) {
         val files = benchDir.listFiles { f -> f.isFile && regex.matches(f.name) }
-        files?.forEach { deletedFiles.add(it.name); if (it.delete()) count++ }
+        files?.forEach { names.add(it.name); toDelete.add(it.absolutePath); if (it.delete()) count++ }
     }
+    // Fallback: su -c rm for files that couldn't be deleted
+    val remaining = toDelete.filter { File(it).exists() }
+    if (remaining.isNotEmpty()) {
+        try {
+            val cmd = remaining.joinToString(" && ") { "rm -f \"$it\"" }
+            Runtime.getRuntime().exec(arrayOf("su", "-c", cmd)).waitFor()
+            count = names.size
+        } catch (_: Exception) {}
+    }
+    // Persist ALL names (even if physical delete failed) so scan skips them
+    markDeleted(ctx, *names.toTypedArray())
     android.widget.Toast.makeText(ctx, "Deleted $count session(s)", android.widget.Toast.LENGTH_SHORT).show()
     return count
 }
 
 private fun deleteSessionFile(s: SessionEntry, ctx: android.content.Context) {
     val fileName = "${s.appName} ${s.date.replace(':', '-')}.csv"
-    deletedFiles.add(fileName)
-    var deleted = false
-    // Delete from /sdcard/
+    markDeleted(ctx, fileName)
+    val paths = mutableListOf<String>()
     val f1 = File("/sdcard", fileName)
-    if (f1.exists()) { f1.delete(); deleted = true }
-    // Delete from filesDir/bench_sessions/
+    if (f1.exists()) paths.add(f1.absolutePath)
     val f2 = File(ctx.filesDir, "bench_sessions/$fileName")
-    if (f2.exists()) { f2.delete(); deleted = true }
-    if (deleted) {
-        android.widget.Toast.makeText(ctx, "Deleted ${s.appName} session", android.widget.Toast.LENGTH_SHORT).show()
+    if (f2.exists()) paths.add(f2.absolutePath)
+    if (paths.isNotEmpty()) {
+        try {
+            val cmd = paths.joinToString(" && ") { "rm -f \"$it\"" }
+            Runtime.getRuntime().exec(arrayOf("su", "-c", cmd)).waitFor()
+        } catch (_: Exception) {}
     }
+    android.widget.Toast.makeText(ctx, "Deleted ${s.appName} session", android.widget.Toast.LENGTH_SHORT).show()
 }
 
 // ═══════════════════════════════════════════════
@@ -348,25 +374,25 @@ private fun SessionListView(sessions: List<SessionEntry>, onSelect: (SessionEntr
             }
         } else LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 17.dp, end = 17.dp, bottom = 30.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             items(sessions) { s ->
-                Surface(shape = RoundedCornerShape(16.dp), color = Panel, modifier = Modifier.fillMaxWidth().clickable { onSelect(s) }) {
-                    Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        GameIcon(s.appName, s.appPkg, size = 52, fontSize = 8, radius = 12)
-                        Spacer(Modifier.width(14.dp))
+                Surface(shape = RoundedCornerShape(14.dp), color = Panel, modifier = Modifier.fillMaxWidth().clickable { onSelect(s) }) {
+                    Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        GameIcon(s.appName, s.appPkg, size = 42, fontSize = 7, radius = 10)
+                        Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(resolveAppLabel(ctx, s.appPkg).ifEmpty { s.appName }, color = Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Spacer(Modifier.height(4.dp))
+                            Text(resolveAppLabel(ctx, s.appPkg).ifEmpty { s.appName }, color = Ink, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Spacer(Modifier.height(3.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(s.date.take(10), color = Dim, fontSize = 12.sp)
-                                Spacer(Modifier.width(10.dp))
-                                Text(comma(s.avgFps, 2), color = StatBlue, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                                Spacer(Modifier.width(10.dp))
-                                Text("${comma(s.avgPowerW, 2)}W", color = Dim, fontSize = 12.sp)
+                                Text(s.date.take(10), color = Dim, fontSize = 11.sp)
+                                Spacer(Modifier.width(8.dp))
+                                Text(comma(s.avgFps, 2), color = StatBlue, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                Spacer(Modifier.width(8.dp))
+                                Text("${comma(s.avgPowerW, 2)}W", color = Dim, fontSize = 11.sp)
                             }
                         }
                         Spacer(Modifier.width(10.dp))
-                        Text(fmtDur(s.durationSec), color = Muted, fontSize = 13.sp)
-                        Spacer(Modifier.width(10.dp))
-                        Box(Modifier.clip(RoundedCornerShape(8.dp)).clickable { onDeleteSession(s) }) { Icon(Icons.Outlined.Delete, "Delete", tint = Color(0xFFEF4444), modifier = Modifier.size(20.dp)) }
+                        Text(fmtDur(s.durationSec), color = Muted, fontSize = 12.sp)
+                        Spacer(Modifier.width(8.dp))
+                        Box(Modifier.clip(RoundedCornerShape(8.dp)).clickable { onDeleteSession(s) }) { Icon(Icons.Outlined.Delete, "Delete", tint = Color(0xFFEF4444), modifier = Modifier.size(18.dp)) }
                     }
                 }
             }
@@ -572,28 +598,28 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
 @Composable
 private fun SessionStatsCard(s: SessionEntry) {
     val ctx = LocalContext.current
-    Surface(shape = RoundedCornerShape(16.dp), color = Panel, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
+    Surface(shape = RoundedCornerShape(14.dp), color = Panel, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                GameIcon(s.appName, s.appPkg, size = 40, fontSize = 6, radius = 10)
-                Spacer(Modifier.width(12.dp))
+                GameIcon(s.appName, s.appPkg, size = 34, fontSize = 5, radius = 8)
+                Spacer(Modifier.width(10.dp))
                 Column {
-                    Text(s.date, color = Ink, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(3.dp))
+                    Text(s.date, color = Ink, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(2.dp))
                     val label = resolveAppLabel(ctx, s.appPkg).ifEmpty { s.appName }
-                    Text("$label (${s.version}) · ${s.crop}", color = Dim, fontSize = 11.sp)
+                    Text("$label (${s.version}) · ${s.crop}", color = Dim, fontSize = 10.sp)
                 }
             }
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(10.dp))
             Row(Modifier.fillMaxWidth()) {
                 StatCell("MAX", comma(s.maxFps), "FPS", Modifier.weight(1f))
                 StatCell("MIN", comma(s.minFps), "FPS", Modifier.weight(1f))
                 StatCell("AVG", comma(s.avgFps, 2), "FPS", Modifier.weight(1f))
                 StatCell("VARIANCE", comma(s.variance), "FPS", Modifier.weight(1f))
             }
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(6.dp))
             Row(Modifier.fillMaxWidth().background(Divider, RoundedCornerShape(2.dp)).height(1.dp)) {}
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(6.dp))
             Row(Modifier.fillMaxWidth()) {
                 StatCell("≥45FPS", comma(s.smoothPct, 1) + "%", "Smoothness", Modifier.weight(1f), valueColor = Green)
                 StatCell("5% Low", comma(s.low5Pct), "FPS", Modifier.weight(1f))
@@ -606,12 +632,12 @@ private fun SessionStatsCard(s: SessionEntry) {
 
 @Composable
 private fun StatCell(label: String, value: String, unit: String, modifier: Modifier = Modifier, valueColor: Color = StatBlue) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier.padding(vertical = 6.dp)) {
-        Text(label, color = Dim, fontSize = 10.sp)
-        Spacer(Modifier.height(4.dp))
-        Text(value, color = valueColor, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier.padding(vertical = 4.dp)) {
+        Text(label, color = Dim, fontSize = 9.sp)
+        Spacer(Modifier.height(3.dp))
+        Text(value, color = valueColor, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         Spacer(Modifier.height(2.dp))
-        Text(unit, color = Faint, fontSize = 10.sp)
+        Text(unit, color = Faint, fontSize = 9.sp)
     }
 }
 
@@ -679,11 +705,17 @@ private fun ChartCanvas(spec: ChartSpec) {
         val insetL = 22.dp.toPx(); val insetR = if (spec.rightTicks != null) 30.dp.toPx() else 22.dp.toPx()
         val top = 8.dp.toPx(); val bottom = 28.dp.toPx()
         val w = size.width - insetL - insetR; val h = size.height - top - bottom
-        // grid (dashed)
-        val dash = PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 3.dp.toPx()))
+        // grid (dashed) — horizontal + vertical
+        val dash = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))
+        // Horizontal grid lines (Y-axis)
         for (i in 0 until maxTicks) {
             val y = top + h * i / denG
-            drawLine(GridC, Offset(insetL, y), Offset(insetL + w, y), strokeWidth = 0.8.dp.toPx(), pathEffect = dash)
+            drawLine(GridC, Offset(insetL, y), Offset(insetL + w, y), strokeWidth = 1.2.dp.toPx(), pathEffect = dash)
+        }
+        // Vertical grid lines (X-axis) — one per x tick
+        for (i in 0 until times.size) {
+            val x = insetL + w * i / (times.size - 1)
+            drawLine(GridC, Offset(x, top), Offset(x, top + h), strokeWidth = 1.2.dp.toPx(), pathEffect = dash)
         }
         // left y labels
         spec.leftTicks.forEachIndexed { i, v ->
@@ -787,7 +819,7 @@ private fun parseCsvSessions(ctx: android.content.Context? = null): List<Session
     // Scan /sdcard/
     val sdcard = java.io.File("/sdcard")
     if (sdcard.exists()) {
-        sdcard.listFiles { f -> f.isFile && regex.matches(f.name) && f.name !in deletedFiles }
+        sdcard.listFiles { f -> f.isFile && regex.matches(f.name) && (ctx == null || !isDeleted(ctx, f.name)) }
             ?.sortedByDescending { it.lastModified() }
             ?.mapNotNullTo(allSessions) { parseCsvFile(it, regex, ctx) }
         }
@@ -796,7 +828,7 @@ private fun parseCsvSessions(ctx: android.content.Context? = null): List<Session
         ctx?.let {
             val benchDir = java.io.File(it.filesDir, "bench_sessions")
             if (benchDir.exists()) {
-                benchDir.listFiles { f -> f.isFile && regex.matches(f.name) && f.name !in deletedFiles }
+                benchDir.listFiles { f -> f.isFile && regex.matches(f.name) && !isDeleted(it, f.name) }
                     ?.sortedByDescending { it.lastModified() }
                     ?.mapNotNullTo(allSessions) { f -> parseCsvFile(f, regex, ctx) }
         }

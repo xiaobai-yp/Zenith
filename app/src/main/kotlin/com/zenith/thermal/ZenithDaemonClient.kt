@@ -43,19 +43,19 @@ object ZenithDaemonClient {
      * Falls back to detect_fg from /proc scan.
      */
     fun detectForegroundApp(ctx: android.content.Context): String? {
-        // Method 1: daemon cached fg app (updated every 2s by monitor loop dumpsys)
+        // Method 1: direct dumpsys via daemon (daemon runs as root, most reliable)
         try {
-            val cached = sendCommand("last_fg")
-            val pkg = cached?.optString("package")
+            val data = sendCommand("top_activity")
+            val pkg = data?.optString("package")
             if (!pkg.isNullOrEmpty()) {
                 lastFgApp = pkg
                 return pkg
             }
         } catch (_: Exception) {}
-        // Method 2: daemon top_activity (direct dumpsys via root)
+        // Method 2: daemon cached fg app (updated every 2s by monitor loop)
         try {
-            val data = sendCommand("top_activity")
-            val pkg = data?.optString("package")
+            val cached = sendCommand("last_fg")
+            val pkg = cached?.optString("package")
             if (!pkg.isNullOrEmpty()) {
                 lastFgApp = pkg
                 return pkg
@@ -376,7 +376,14 @@ object ZenithDaemonClient {
     }
 
     fun startBenchmark(): Boolean = sendCommand("bench_start") != null
-    fun stopBenchmark(): Boolean = sendCommand("bench_stop") != null
+    fun stopBenchmark(packageName: String = "", startedAt: Long = 0): Boolean {
+        val args = JSONObject().apply {
+            put("package", packageName)
+            put("started_at", startedAt)
+        }
+        val result = sendCommand("bench_stop", args)
+        return result != null
+    }
 
     data class BenchmarkData(val running: Boolean, val elapsedMs: Long, val frames: Long, val fps: FpsResponse?)
 

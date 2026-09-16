@@ -3,6 +3,7 @@
 // sysfs/app/fps/benchmark monitoring. stderr for logging.
 
 mod app_monitor;
+mod bench_store;
 mod benchmark;
 mod battery_monitor;
 mod fps_monitor;
@@ -394,8 +395,23 @@ async fn handle_cmd(req: Request) -> Response {
         }
 
         "bench_stop" => {
+            let pkg = req.args.get("package")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+            let start_ms = req.args.get("started_at")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
             benchmark::stop();
-            Response::ok(json!({ "stopped": true }))
+            // Persist to disk
+            let points = benchmark::get_last_points(300);
+            let id = match bench_store::save_session(pkg, start_ms, &points) {
+                Ok(id) => id,
+                Err(e) => {
+                    crate::log!("[bench_store] save failed: {e}");
+                    String::new()
+                }
+            };
+            Response::ok(json!({ "stopped": true, "session_id": id }))
         }
 
         "bench_data" => {
@@ -407,6 +423,31 @@ async fn handle_cmd(req: Request) -> Response {
                 "elapsed_ms": benchmark::elapsed_ms(),
                 "frames": benchmark::frame_count(),
             }))
+        }
+
+        // ── Session management ──
+        "list_sessions" => {
+            let sessions = bench_store::list_sessions();
+            Response::ok(json!({ "sessions": sessions }))
+        }
+
+        "get_session" => {
+            let id = req.args.get("id").and_then(|v| v.as_str()).unwrap_or("");
+            match bench_store::get_session(id) {
+                Some(data) => Response::ok(json!(data)),
+                None => Response::err("session not found"),
+            }
+        }
+
+        "delete_session" => {
+            let id = req.args.get("id").and_then(|v| v.as_str()).unwrap_or("");
+            let ok = bench_store::delete_session(id);
+            Response::ok(json!({ "deleted": ok }))
+        }
+
+        "delete_all_sessions" => {
+            let count = bench_store::delete_all();
+            Response::ok(json!({ "deleted": count }))
         }
 
         "read_sysfs" => {
@@ -473,6 +514,7 @@ async fn main() {
     battery_monitor::init().await;
     fps_monitor::init();
     benchmark::init();
+    bench_store::init();
 
     let _ = LAST_SNAPSHOT.set(RwLock::new(sysfs_monitor::SysfsSnapshot::default()));
     let _ = GLOBAL_PROFILE_ID.set(RwLock::new(String::from("0")));
