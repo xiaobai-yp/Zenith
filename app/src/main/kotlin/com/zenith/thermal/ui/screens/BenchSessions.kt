@@ -112,6 +112,11 @@ private fun daemonSessionToEntry(meta: JSONObject, points: JSONArray): SessionEn
     val dateStr = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US)
         .format(java.util.Date(startedAt))
 
+    // Calculate stats from fpsList
+    val smoothPct = if (n > 0) fpsList.count { it >= 45f }.toFloat() / n * 100f else 0f
+    val sortedFps = fpsList.sorted()
+    val low5Pct = if (n > 0) sortedFps[(n * 0.05).toInt().coerceIn(0, n - 1)] else 0f
+
     return SessionEntry(
         id = startedAt,
         appName = pkg.substringAfterLast('.'),
@@ -123,8 +128,8 @@ private fun daemonSessionToEntry(meta: JSONObject, points: JSONArray): SessionEn
         maxFps = fpsMax,
         minFps = if (fpsMin == 999f) 0f else fpsMin,
         variance = 0f,
-        smoothPct = 0f,
-        low5Pct = 0f,
+        smoothPct = smoothPct,
+        low5Pct = low5Pct,
         peakTemp = peakTemp,
         avgPowerW = avgPower,
         durationSec = durationSec,
