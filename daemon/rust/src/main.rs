@@ -584,7 +584,16 @@ async fn main() {
                             .map(|p| p.trim().to_string())
                             .filter(|p| !p.is_empty())
                         {
-                            cache_fg(&pkg);
+                            // Only cache real user apps, skip system/launcher/QS
+                            let dominated = pkg.starts_with("com.android.")
+                                || pkg.starts_with("com.heytap.")
+                                || pkg.starts_with("com.coloros.")
+                                || pkg.starts_with("com.oplus.")
+                                || pkg == "com.miui.home"
+                                || pkg == "com.miui.securitycenter";
+                            if !dominated {
+                                cache_fg(&pkg);
+                            }
                         }
                     }
                 }
