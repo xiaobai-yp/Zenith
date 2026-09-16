@@ -113,9 +113,11 @@ private fun daemonSessionToEntry(meta: JSONObject, points: JSONArray): SessionEn
         .format(java.util.Date(startedAt))
 
     // Calculate stats from fpsList
+    val avgFpsCalc = if (n > 0) fpsList.average().toFloat() else 0f
     val smoothPct = if (n > 0) fpsList.count { it >= 45f }.toFloat() / n * 100f else 0f
     val sortedFps = fpsList.sorted()
     val low5Pct = if (n > 0) sortedFps[(n * 0.05).toInt().coerceIn(0, n - 1)] else 0f
+    val variance = if (n > 1) fpsList.map { (it - avgFpsCalc) * (it - avgFpsCalc) }.average().toFloat() else 0f
 
     return SessionEntry(
         id = startedAt,
@@ -127,7 +129,7 @@ private fun daemonSessionToEntry(meta: JSONObject, points: JSONArray): SessionEn
         avgFps = avgFps,
         maxFps = fpsMax,
         minFps = if (fpsMin == 999f) 0f else fpsMin,
-        variance = 0f,
+        variance = variance,
         smoothPct = smoothPct,
         low5Pct = low5Pct,
         peakTemp = peakTemp,
