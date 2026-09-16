@@ -41,6 +41,12 @@ pub struct GpuInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Default)]
+pub struct DdrInfo {
+    pub cur_freq: u32,    // kHz
+    pub max_freq: u32,    // kHz
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
 pub struct SysfsSnapshot {
     pub thermal_zones: Vec<ThermalZone>,
     pub battery: BatteryInfo,
@@ -49,6 +55,7 @@ pub struct SysfsSnapshot {
     pub cpu_policy7: Option<CpuInfo>,
     pub cpu_load_pct: f64,
     pub gpu: Option<GpuInfo>,
+    pub ddr: Option<DdrInfo>,
     pub screen_on: bool,
 }
 
@@ -371,6 +378,20 @@ pub async fn read() -> SysfsSnapshot {
         g.gpu_temp_c = gpu_temp_from_zones(&thermal_zones);
     }
 
+    // DDR — Qualcomm bus_dcvs
+    let ddr_base = zen_path!("/sys/devices/system/cpu/bus_dcvs/DDR");
+    let ddr = {
+        let cur = read_u32(&format!("{ddr_base}/soc:qcom,memlat:ddr:silver/cur_freq")).await
+            .or_else(|| {
+                // fallback: try bwmon path (sync read in async context)
+                let path = format!("{ddr_base}/19091000.qcom,bwmon-ddr/cur_freq");
+                std::fs::read_to_string(&path).ok().and_then(|s| s.trim().parse().ok())
+            });
+        let max_silver = read_u32(&format!("{ddr_base}/soc:qcom,memlat:ddr:silver/max_freq")).await.unwrap_or(0);
+        let max_prime = read_u32(&format!("{ddr_base}/soc:qcom,memlat:ddr:prime/max_freq")).await.unwrap_or(0);
+        cur.map(|c| DdrInfo { cur_freq: c, max_freq: max_silver.max(max_prime) })
+    };
+
     SysfsSnapshot {
         thermal_zones,
         battery,
@@ -379,6 +400,7 @@ pub async fn read() -> SysfsSnapshot {
         cpu_policy7,
         cpu_load_pct: load,
         gpu,
+        ddr,
         screen_on,
     }
 }

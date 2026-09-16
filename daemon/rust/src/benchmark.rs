@@ -33,6 +33,9 @@ pub struct BenchPoint {
     pub batt_temp: f64,       // battery temp °C
     pub current_ma: i64,      // current mA
     pub power_mw: i64,        // power mW
+    // DDR
+    pub ddr_freq: u32,        // DDR current freq kHz
+    pub ddr_max: u32,         // DDR max freq kHz
     // Thermal
     pub temp_milli: i64,      // primary thermal zone temp (milli°C)
 }
@@ -129,6 +132,9 @@ pub fn record(snapshot: &SysfsSnapshot, fps: i32, fps_short: i32, fps_avg: i32) 
         batt_temp: snapshot.battery.temp_centi as f64 / 10.0,
         current_ma: snapshot.battery.current_ua / 1000,
         power_mw: snapshot.battery.power_mw,
+        // DDR
+        ddr_freq: snapshot.ddr.as_ref().map(|d| d.cur_freq).unwrap_or(0),
+        ddr_max: snapshot.ddr.as_ref().map(|d| d.max_freq).unwrap_or(0),
         // Thermal
         temp_milli: temp,
     };

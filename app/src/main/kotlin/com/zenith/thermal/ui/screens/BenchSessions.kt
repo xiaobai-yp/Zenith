@@ -54,6 +54,7 @@ private fun daemonSessionToEntry(meta: JSONObject, points: JSONArray): SessionEn
     val gpuUsageList = mutableListOf<Float>()
     val gpuTempList = mutableListOf<Float>()
     val battTempList = mutableListOf<Float>()
+    val ddrFreqList = mutableListOf<Float>()
 
     var fpsSum = 0f; var fpsMax = 0f; var fpsMin = 999f
     var peakTemp = 0f; var powerSum = 0f
@@ -73,6 +74,7 @@ private fun daemonSessionToEntry(meta: JSONObject, points: JSONArray): SessionEn
         val gpuFreq = pt.optLong("gpu_freq", 0) / 1000000f  // Hz → MHz
         val gpuBusy = pt.optInt("gpu_busy", 0)
         val gpuTemp = pt.optDouble("gpu_temp", 0.0).toFloat()
+        val ddrFreq = pt.optInt("ddr_freq", 0) / 1000f  // kHz → MHz
 
         fpsList.add(fps)
         val tempC = (tempMilli / 10f)
@@ -89,6 +91,7 @@ private fun daemonSessionToEntry(meta: JSONObject, points: JSONArray): SessionEn
         gpuUsageList.add(gpuBusy.toFloat())
         gpuTempList.add(gpuTemp)
         battTempList.add(battTemp)
+        ddrFreqList.add(ddrFreq)
 
         fpsSum += fps
         if (fps > fpsMax) fpsMax = fps
@@ -137,6 +140,7 @@ private fun daemonSessionToEntry(meta: JSONObject, points: JSONArray): SessionEn
             cpuFreq7 = cpu7FreqList,    // CPU freq MHz (big)
             gpuFreq = gpuFreqList,      // GPU freq MHz
             gpuUsage = gpuUsageList,    // GPU busy %
+            ddr = ddrFreqList,          // DDR freq MHz
             cpu46 = gpuTempList,        // reuse for GPU temp (if needed)
             cpu7 = battTempList,        // reuse for battery temp (if needed)
         )
