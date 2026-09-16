@@ -43,14 +43,15 @@ internal fun autoAxis(
     return Triple(lo, hi, ticks)
 }
 
-/** Auto axis for FPS: snaps max to nearest 30 (30/60/90/120). */
-internal fun fpsAxis(values: List<Float>): Triple<Float, Float, List<String>> {
-    if (values.isEmpty()) return Triple(0f, 120f, listOf("120", "90", "60", "30"))
+/** Auto axis for FPS: snaps max to display refresh rate (120/90/60/30). */
+internal fun fpsAxis(values: List<Float>, refreshRate: Int = 120): Triple<Float, Float, List<String>> {
+    if (values.isEmpty()) return Triple(0f, refreshRate.toFloat(), listOf("120", "90", "60", "30"))
     val dataMax = values.max()
+    // Snap to refresh rate tiers — use display refresh rate as ceiling
     val max = when {
-        dataMax > 90f -> 120f
-        dataMax > 60f -> 90f
-        dataMax > 30f -> 60f
+        refreshRate >= 120 -> 120f
+        refreshRate >= 90 -> 90f
+        refreshRate >= 60 -> 60f
         else -> 30f
     }
     val ticks = when (max) {
