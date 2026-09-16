@@ -889,25 +889,52 @@ private fun parseCsvFile(file: File, regex: Regex, ctx: android.content.Context?
             "${dm.widthPixels}x${dm.heightPixels}"
         } else "—"
         val header = lines[startLine]
-        val colMap = header.split(",").mapIndexed { i, name -> name.trim() to i }.toMap()
+        val headerCols = header.split(",").map { it.trim() }
+        val colMap = headerCols.mapIndexed { i, name -> name to i }.toMap()
         fun col(vararg names: String): Int? { for (n in names) { colMap[n]?.let { return it }; colMap[n.lowercase()]?.let { return it } }; return null }
         fun safeFloat(idx: Int?, cols: List<String>): Float {
             if (idx == null || idx >= cols.size) return 0f
             return cols[idx].trim().toFloatOrNull() ?: 0f
         }
+        // Detect Scene CSV format: header has 48 cols but data has 61 cols (13 extra columns shift indices)
+        val firstDataCols = lines.getOrNull(startLine + 1)?.split(",")?.size ?: headerCols.size
+        val isSceneFormat = firstDataCols > headerCols.size + 5
+        // Scene CSV exact data indices (verified from actual data):
+        // CPU MHz: 23-30, CPU M Cycles: 31-38, CPU℃: 39, DDR: 41, GPU%: 42, GPUMHz: 44,
+        // Battery%: 45, Battery℃: 46, Current: 47, Volt: 49, Power: 50
+        fun adjIdx(headerIdx: Int): Int = if (!isSceneFormat) headerIdx else when (headerIdx) {
+            in 0..12 -> headerIdx           // FPS-JANK-BigJANK-FrameTime-CPU(%)-CPU0-7(%): no shift
+            in 13..20 -> headerIdx + 10     // CPU0-7(MHz): shift +10
+            in 21..28 -> headerIdx + 10     // CPU0-7(M Cycles): shift +10
+            29 -> 39                         // CPU(℃)
+            30 -> 41                         // DDR(Mbps)
+            31 -> 42                         // GPU(%)
+            32 -> 44                         // GPU(MHz)
+            33 -> 45                         // Battery(%)
+            34 -> 46                         // Battery(℃)
+            35 -> 47                         // Current(mA)
+            36 -> 49                         // Battery(volt)
+            37 -> 50                         // Power(mW)
+            else -> headerIdx
+        }
+
         val fpsI = col("FPS") ?: return null
         val jankI = col("JANK", "Jank")
         val bigJankI = col("BigJANK", "Big Jank", "BigJank")
         val ftI = col("Max FrameTime(ms)", "FrameTime")
         val cpu0I = col("CPU0(%)", "Cpu03"); val cpu1I = col("CPU1(%)"); val cpu2I = col("CPU2(%)"); val cpu3I = col("CPU3(%)")
         val cpu4I = col("CPU4(%)", "Cpu46"); val cpu5I = col("CPU5(%)"); val cpu6I = col("CPU6(%)"); val cpu7I = col("CPU7(%)", "Cpu7")
-        val gpuFI = col("GPU(MHz)", "GpuFreq"); val gpuUI = col("GPU(%)", "GpuUsage")
-        val ddrI = col("DDR(Mbps)", "DDR"); val pwrI = col("Power(mW)", "Power")
-        val capI = col("Battery(%)", "Capacity"); val tmpI = col("CPU(℃)", "Temp")
-        val cf0I = col("CPU0(MHz)"); val cf1I = col("CPU1(MHz)"); val cf2I = col("CPU2(MHz)"); val cf3I = col("CPU3(MHz)")
-        val cf4I = col("CPU4(MHz)"); val cf5I = col("CPU5(MHz)"); val cf6I = col("CPU6(MHz)"); val cf7I = col("CPU7(MHz)")
-        val cc0I = col("CPU0(M Cycles)"); val cc1I = col("CPU1(M Cycles)"); val cc2I = col("CPU2(M Cycles)"); val cc3I = col("CPU3(M Cycles)")
-        val cc4I = col("CPU4(M Cycles)"); val cc5I = col("CPU5(M Cycles)"); val cc6I = col("CPU6(M Cycles)"); val cc7I = col("CPU7(M Cycles)")
+        val gpuFI = adjIdx(col("GPU(MHz)") ?: 32); val gpuUI = adjIdx(col("GPU(%)") ?: 31)
+        val ddrI = adjIdx(col("DDR(Mbps)") ?: 30); val pwrI = adjIdx(col("Power(mW)") ?: 37)
+        val capI = adjIdx(col("Battery(%)") ?: 33); val tmpI = adjIdx(col("CPU(℃)") ?: 29)
+        val cf0I = adjIdx(col("CPU0(MHz)") ?: 13); val cf1I = adjIdx(col("CPU1(MHz)") ?: 14)
+        val cf2I = adjIdx(col("CPU2(MHz)") ?: 15); val cf3I = adjIdx(col("CPU3(MHz)") ?: 16)
+        val cf4I = adjIdx(col("CPU4(MHz)") ?: 17); val cf5I = adjIdx(col("CPU5(MHz)") ?: 18)
+        val cf6I = adjIdx(col("CPU6(MHz)") ?: 19); val cf7I = adjIdx(col("CPU7(MHz)") ?: 20)
+        val cc0I = adjIdx(col("CPU0(M Cycles)") ?: 21); val cc1I = adjIdx(col("CPU1(M Cycles)") ?: 22)
+        val cc2I = adjIdx(col("CPU2(M Cycles)") ?: 23); val cc3I = adjIdx(col("CPU3(M Cycles)") ?: 24)
+        val cc4I = adjIdx(col("CPU4(M Cycles)") ?: 25); val cc5I = adjIdx(col("CPU5(M Cycles)") ?: 26)
+        val cc6I = adjIdx(col("CPU6(M Cycles)") ?: 27); val cc7I = adjIdx(col("CPU7(M Cycles)") ?: 28)
 
         val fpsL = mutableListOf<Float>(); val jankL = mutableListOf<Float>(); val bjL = mutableListOf<Float>()
         val ftL = mutableListOf<Float>(); val c03L = mutableListOf<Float>(); val c46L = mutableListOf<Float>()
