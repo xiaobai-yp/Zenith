@@ -2,7 +2,7 @@
 use std::io::Write;
 
 use crate::sysfs_monitor::SysfsSnapshot;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::sync::{OnceLock, RwLock};
 
