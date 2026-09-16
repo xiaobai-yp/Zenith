@@ -35,6 +35,46 @@ object ZenithDaemonClient {
     @Volatile var isConnected: Boolean = false
         private set
 
+    /** Cached foreground app from HUD polling — tile reads this instead of re-querying (QS hides game) */
+    @Volatile var lastFgApp: String = ""
+
+    /**
+     * Detect foreground app — daemon's top_activity (most reliable, runs as root).
+     * Falls back to detect_fg from /proc scan.
+     */
+    fun detectForegroundApp(ctx: android.content.Context): String? {
+        // Method 1: daemon cached fg app (updated every 2s by monitor loop dumpsys)
+        try {
+            val cached = sendCommand("last_fg")
+            val pkg = cached?.optString("package")
+            if (!pkg.isNullOrEmpty()) {
+                lastFgApp = pkg
+                return pkg
+            }
+        } catch (_: Exception) {}
+        // Method 2: daemon top_activity (direct dumpsys via root)
+        try {
+            val data = sendCommand("top_activity")
+            val pkg = data?.optString("package")
+            if (!pkg.isNullOrEmpty()) {
+                lastFgApp = pkg
+                return pkg
+            }
+        } catch (_: Exception) {}
+        // Fallback to daemon detect_fg (proc scan)
+        return getForegroundApp()
+    }
+
+    /** Filter: must be a real user app, not system/launcher/QS */
+    private fun isRealApp(pkg: String?): Boolean {
+        if (pkg.isNullOrEmpty()) return false
+        if (pkg.startsWith("com.android.") || pkg.startsWith("com.android.systemui")) return false
+        if (pkg.startsWith("com.miui.") || pkg.startsWith("com.coloros.") || pkg.startsWith("com.oplus.")) return false
+        if (pkg.startsWith("com.google.android.") && !pkg.contains("youtube")) return false
+        val dots = pkg.count { it == '.' }
+        return dots >= 2
+    }
+
     private val listeners = java.util.concurrent.CopyOnWriteArrayList<(Boolean) -> Unit>()
 
     fun addConnectionListener(l: (Boolean) -> Unit) { listeners.add(l) }
@@ -140,7 +180,10 @@ object ZenithDaemonClient {
         if (!ok) { Log.w(TAG, "Command '$cmd' timed out"); return null }
         if (w.failed.get()) return null
         @Suppress("UNCHECKED_CAST")
-        return w.result[0] as? JSONObject
+        val resp = w.result[0] as? JSONObject ?: return null
+        // Unwrap daemon Response envelope: {"ok":true,"data":{...}} → inner data
+        return if (resp.has("data") && !resp.has("ok")) resp
+               else resp.optJSONObject("data") ?: resp
     }
 
     fun sendRequest(cmd: String, args: JSONObject? = null): String? {

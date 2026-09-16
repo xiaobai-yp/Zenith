@@ -44,10 +44,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.activity.compose.BackHandler
 import com.zenith.thermal.ui.theme.ZenithBg
 import com.zenith.thermal.ui.theme.ZenithMuted2
 import com.zenith.thermal.ui.theme.ZenithText
 import com.zenith.thermal.FloatingHudService
+import androidx.core.graphics.drawable.toBitmap
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import java.io.File
 import kotlin.math.roundToInt
 
@@ -108,18 +112,28 @@ private enum class RecordView { LIST, DETAIL }
 // ═══════════════════════════════════════════════
 // Root
 // ═══════════════════════════════════════════════
+
+/** Filenames deleted this session — loadSessions() skips these even if file still exists */
+private val deletedFiles = mutableSetOf<String>()
+
 @Composable
 fun RecordScreen() {
     val ctx = LocalContext.current
     var view by remember { mutableStateOf(RecordView.LIST) }
     var selected by remember { mutableStateOf<SessionEntry?>(null) }
-    var sessions by remember { mutableStateOf(loadSessions()) }
+    var sessions by remember { mutableStateOf(loadSessions(ctx)) }
+
+    // Back gesture: DETAIL → LIST instead of leaving RecordScreen
+    BackHandler(enabled = view == RecordView.DETAIL) {
+        view = RecordView.LIST
+        selected = null
+    }
 
     // Periodically refresh sessions (detects new CSV files from bench recordings)
     LaunchedEffect(Unit) {
         while (true) {
             kotlinx.coroutines.delay(3000)
-            sessions = loadSessions()
+            sessions = loadSessions(ctx)
         }
     }
 
@@ -147,7 +161,7 @@ fun RecordScreen() {
             kotlinx.coroutines.delay(2000)
         }
         if (Build.VERSION.SDK_INT < 30 || android.os.Environment.isExternalStorageManager()) {
-            sessions = loadSessions()
+            sessions = loadSessions(ctx)
         }
     }
     AnimatedContent(view, label = "rt") { cur ->
@@ -216,12 +230,35 @@ private fun AndroidIcon(tint: Color, side: Int = 46) {
     Icon(Icons.Outlined.Android, null, tint = tint, modifier = Modifier.size(side.dp))
 }
 
+private fun resolveAppLabel(ctx: android.content.Context?, pkg: String): String {
+    if (ctx == null || pkg.isEmpty()) return pkg
+    return try {
+        val appInfo = ctx.packageManager.getApplicationInfo(pkg, 0)
+        ctx.packageManager.getApplicationLabel(appInfo).toString()
+    } catch (_: Exception) { pkg }
+}
+
 @Composable
-private fun GameIcon(name: String, size: Int = 88, fontSize: Int = 14, radius: Int = 20) {
-    Box(Modifier.size(size.dp).clip(RoundedCornerShape(radius.dp)).background(Brush.linearGradient(listOf(Color(0xFF7D8C9F), Color(0xFF243C53)))),
-        contentAlignment = Alignment.Center) {
-        Text(name.take(4), color = Color.White, fontSize = fontSize.sp, fontWeight = FontWeight.Black,
-            modifier = Modifier.background(Color(0x11111111)).padding(horizontal = 3.dp, vertical = 1.dp))
+private fun GameIcon(name: String, pkg: String = "", size: Int = 88, fontSize: Int = 14, radius: Int = 20) {
+    val ctx = LocalContext.current
+    val icon = remember(pkg) {
+        if (pkg.isNotEmpty()) {
+            try { ctx.packageManager.getApplicationIcon(pkg) } catch (_: Exception) { null }
+        } else null
+    }
+    if (icon != null) {
+        androidx.compose.foundation.Image(
+            painter = androidx.compose.ui.graphics.painter.BitmapPainter(
+                icon.toBitmap().asImageBitmap()
+            ), contentDescription = name,
+            modifier = Modifier.size(size.dp).clip(RoundedCornerShape(radius.dp))
+        )
+    } else {
+        Box(Modifier.size(size.dp).clip(RoundedCornerShape(radius.dp)).background(Brush.linearGradient(listOf(Color(0xFF7D8C9F), Color(0xFF243C53)))),
+            contentAlignment = Alignment.Center) {
+            Text(name.take(4), color = Color.White, fontSize = fontSize.sp, fontWeight = FontWeight.Black,
+                modifier = Modifier.background(Color(0x11111111)).padding(horizontal = 3.dp, vertical = 1.dp))
+        }
     }
 }
 
@@ -253,21 +290,35 @@ private fun exportCsv(s: SessionEntry?, ctx: android.content.Context) {
 }
 
 private fun deleteAllSessions(ctx: android.content.Context): Int {
-    val sdcard = File("/sdcard")
-    if (!sdcard.exists()) return 0
-    val regex = Regex("""^(.+) (\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2})\.csv$""")
-    val files = sdcard.listFiles { f -> f.isFile && regex.matches(f.name) } ?: return 0
+    val regex = Regex(""""^(.+) (\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2})\.csv$""")
     var count = 0
-    files.forEach { if (it.delete()) count++ }
+    // Delete from /sdcard/
+    val sdcard = File("/sdcard")
+    if (sdcard.exists()) {
+        val files = sdcard.listFiles { f -> f.isFile && regex.matches(f.name) }
+        files?.forEach { deletedFiles.add(it.name); if (it.delete()) count++ }
+    }
+    // Delete from filesDir/bench_sessions/
+    val benchDir = File(ctx.filesDir, "bench_sessions")
+    if (benchDir.exists()) {
+        val files = benchDir.listFiles { f -> f.isFile && regex.matches(f.name) }
+        files?.forEach { deletedFiles.add(it.name); if (it.delete()) count++ }
+    }
     android.widget.Toast.makeText(ctx, "Deleted $count session(s)", android.widget.Toast.LENGTH_SHORT).show()
     return count
 }
 
 private fun deleteSessionFile(s: SessionEntry, ctx: android.content.Context) {
     val fileName = "${s.appName} ${s.date.replace(':', '-')}.csv"
-    val file = File("/sdcard", fileName)
-    if (file.exists()) {
-        file.delete()
+    deletedFiles.add(fileName)
+    var deleted = false
+    // Delete from /sdcard/
+    val f1 = File("/sdcard", fileName)
+    if (f1.exists()) { f1.delete(); deleted = true }
+    // Delete from filesDir/bench_sessions/
+    val f2 = File(ctx.filesDir, "bench_sessions/$fileName")
+    if (f2.exists()) { f2.delete(); deleted = true }
+    if (deleted) {
         android.widget.Toast.makeText(ctx, "Deleted ${s.appName} session", android.widget.Toast.LENGTH_SHORT).show()
     }
 }
@@ -299,10 +350,10 @@ private fun SessionListView(sessions: List<SessionEntry>, onSelect: (SessionEntr
             items(sessions) { s ->
                 Surface(shape = RoundedCornerShape(16.dp), color = Panel, modifier = Modifier.fillMaxWidth().clickable { onSelect(s) }) {
                     Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        GameIcon(s.appName, size = 52, fontSize = 8, radius = 12)
+                        GameIcon(s.appName, s.appPkg, size = 52, fontSize = 8, radius = 12)
                         Spacer(Modifier.width(14.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(s.appName, color = Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(resolveAppLabel(ctx, s.appPkg).ifEmpty { s.appName }, color = Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Spacer(Modifier.height(4.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(s.date.take(10), color = Dim, fontSize = 12.sp)
@@ -385,7 +436,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
     val tAvg = if (s.chartData.temp.isNotEmpty()) s.chartData.temp.average() else 0.0
 
     Column(Modifier.fillMaxSize().background(Bg)) {
-        TopBar(s.appName, onBack = onBack, actions = {
+        TopBar(resolveAppLabel(ctx, s.appPkg).ifEmpty { s.appName }, onBack = onBack, actions = {
             Box(Modifier.clickable { showFilter = !showFilter }) { Icon(Icons.Outlined.FilterList, "Filter", tint = Faint, modifier = Modifier.size(22.dp)) }
             FilterDropdown(hiddenCards, { hiddenCards = it }, expanded = showFilter, onDismiss = { showFilter = false })
             Spacer(Modifier.width(18.dp))
@@ -520,15 +571,17 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
 
 @Composable
 private fun SessionStatsCard(s: SessionEntry) {
+    val ctx = LocalContext.current
     Surface(shape = RoundedCornerShape(16.dp), color = Panel, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                GameIcon(s.appName, size = 40, fontSize = 6, radius = 10)
+                GameIcon(s.appName, s.appPkg, size = 40, fontSize = 6, radius = 10)
                 Spacer(Modifier.width(12.dp))
                 Column {
                     Text(s.date, color = Ink, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(3.dp))
-                    Text("${s.appName} (${s.version}) · crop: ${s.crop}", color = Dim, fontSize = 11.sp)
+                    val label = resolveAppLabel(ctx, s.appPkg).ifEmpty { s.appName }
+                    Text("$label (${s.version}) · ${s.crop}", color = Dim, fontSize = 11.sp)
                 }
             }
             Spacer(Modifier.height(14.dp))
@@ -692,8 +745,8 @@ private fun fmtDur(sec: Long): String {
     return if (m > 0) "${m}m${s}s" else "${s}s"
 }
 
-private fun loadSessions(): List<SessionEntry> {
-    val csvSessions = parseCsvSessions()
+private fun loadSessions(ctx: android.content.Context? = null): List<SessionEntry> {
+    val csvSessions = parseCsvSessions(ctx)
     if (csvSessions.isNotEmpty()) return csvSessions
     // fallback demo when no CSV files found
     return listOf(
@@ -727,18 +780,32 @@ private fun loadSessions(): List<SessionEntry> {
 }
 
 // ── CSV parsing from /sdcard/ ──
-private fun parseCsvSessions(): List<SessionEntry> {
-    val sdcard = File("/sdcard")
-    if (!sdcard.exists()) return emptyList()
-    // AppName YYYY-MM-DD HH-MM-SS.csv
+private fun parseCsvSessions(ctx: android.content.Context? = null): List<SessionEntry> {
     val regex = Regex("""^(.+) (\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2})\.csv$""")
-    val csvFiles = sdcard.listFiles { f -> f.isFile && regex.matches(f.name) }
-        ?.sortedByDescending { it.lastModified() }
-        ?: return emptyList()
-    return csvFiles.mapNotNull { parseCsvFile(it, regex) }
+    val allSessions = mutableListOf<SessionEntry>()
+
+    // Scan /sdcard/
+    val sdcard = java.io.File("/sdcard")
+    if (sdcard.exists()) {
+        sdcard.listFiles { f -> f.isFile && regex.matches(f.name) && f.name !in deletedFiles }
+            ?.sortedByDescending { it.lastModified() }
+            ?.mapNotNullTo(allSessions) { parseCsvFile(it, regex, ctx) }
+        }
+
+        // Scan app filesDir/bench_sessions/
+        ctx?.let {
+            val benchDir = java.io.File(it.filesDir, "bench_sessions")
+            if (benchDir.exists()) {
+                benchDir.listFiles { f -> f.isFile && regex.matches(f.name) && f.name !in deletedFiles }
+                    ?.sortedByDescending { it.lastModified() }
+                    ?.mapNotNullTo(allSessions) { f -> parseCsvFile(f, regex, ctx) }
+        }
+    }
+
+    return allSessions.sortedByDescending { it.date }
 }
 
-private fun parseCsvFile(file: File, regex: Regex): SessionEntry? {
+private fun parseCsvFile(file: File, regex: Regex, ctx: android.content.Context? = null): SessionEntry? {
     val match = regex.find(file.name) ?: return null
     val appName = match.groupValues[1]
     // "2026-07-07 16-44-14" → "2026-07-07 16:44:14"
@@ -750,7 +817,25 @@ private fun parseCsvFile(file: File, regex: Regex): SessionEntry? {
     try {
         val lines = file.readLines()
         if (lines.size < 2) return null
-        val header = lines[0]
+        // Parse #PACKAGE: metadata line
+        var appPkg = ""
+        var startLine = 0
+        if (lines[0].startsWith("#PACKAGE:")) {
+            appPkg = lines[0].removePrefix("#PACKAGE:").trim()
+            startLine = 1
+        }
+        // Resolve version + crop from PackageManager / display
+        val version = if (ctx != null && appPkg.isNotEmpty()) {
+            try {
+                val pi = ctx.packageManager.getPackageInfo(appPkg, 0)
+                @Suppress("DEPRECATION") pi.versionName ?: "—"
+            } catch (_: Exception) { "—" }
+        } else "—"
+        val crop = if (ctx != null) {
+            val dm = ctx.resources.displayMetrics
+            "${dm.widthPixels}x${dm.heightPixels}"
+        } else "—"
+        val header = lines[startLine]
         val colMap = header.split(",").mapIndexed { i, name -> name.trim() to i }.toMap()
         fun col(name: String): Int? = colMap[name]
         fun safeFloat(idx: Int?, cols: List<String>): Float {
@@ -779,7 +864,7 @@ private fun parseCsvFile(file: File, regex: Regex): SessionEntry? {
         val cf03L = mutableListOf<Float>(); val cf46L = mutableListOf<Float>(); val cf7L = mutableListOf<Float>()
         val cc03L = mutableListOf<Float>(); val cc46L = mutableListOf<Float>(); val cc7L = mutableListOf<Float>()
 
-        for (i in 1 until lines.size) {
+        for (i in (startLine + 1) until lines.size) {
             val line = lines[i]
             if (line.isBlank()) continue
             val c = line.split(",")
@@ -822,8 +907,8 @@ private fun parseCsvFile(file: File, regex: Regex): SessionEntry? {
         val peakTemp = tmpL.maxOrNull() ?: 0f
         val avgPowerW = pwrL.average().toFloat()
         return SessionEntry(
-            id = file.lastModified(), appName = appName, appPkg = "",
-            date = date, version = "—", crop = "—",
+            id = file.lastModified(), appName = appName, appPkg = appPkg,
+            date = date, version = version, crop = crop,
             avgFps = avgFps, maxFps = maxFps, minFps = minFps,
             variance = variance, smoothPct = smoothPct, low5Pct = low5Pct,
             peakTemp = peakTemp, avgPowerW = avgPowerW, durationSec = n.toLong(),

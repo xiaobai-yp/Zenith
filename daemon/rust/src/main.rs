@@ -72,6 +72,19 @@ static LAST_SNAPSHOT: OnceLock<RwLock<sysfs_monitor::SysfsSnapshot>> =
 // property persist.sys.zenith.thermal can be clobbered by per-app setprop.
 // This tracks the TRUE global profile ID set by setglobalprofile.
 static GLOBAL_PROFILE_ID: OnceLock<RwLock<String>> = OnceLock::new();
+
+// Cached foreground app — updated by monitor loop, queried by tile via IPC
+static LAST_FG_APP: OnceLock<RwLock<String>> = OnceLock::new();
+fn cache_fg(pkg: &str) {
+    if let Some(lock) = LAST_FG_APP.get() {
+        *lock.write().unwrap() = pkg.to_string();
+    }
+}
+fn get_cached_fg() -> String {
+    LAST_FG_APP.get()
+        .map(|l| l.read().unwrap().clone())
+        .unwrap_or_default()
+}
 fn set_global_profile_id(id: &str) {
     if let Some(lock) = GLOBAL_PROFILE_ID.get() {
         *lock.write().unwrap() = id.to_string();
@@ -335,6 +348,12 @@ async fn handle_cmd(req: Request) -> Response {
             }
         }
 
+        // Get cached foreground app (updated by monitor loop every 2s)
+        "last_fg" => {
+            let pkg = get_cached_fg();
+            Response::ok(json!({ "package": pkg }))
+        }
+
         "list_profiles" => {
             let ids = profile_engine::list_profiles();
             let map = profile_engine::export_map();
@@ -457,6 +476,7 @@ async fn main() {
 
     let _ = LAST_SNAPSHOT.set(RwLock::new(sysfs_monitor::SysfsSnapshot::default()));
     let _ = GLOBAL_PROFILE_ID.set(RwLock::new(String::from("0")));
+    let _ = LAST_FG_APP.set(RwLock::new(String::new()));
 
     // Periodic monitoring tasks (no shutdown channel needed — exits when
     // the tokio runtime drops, which happens when main returns).
@@ -549,6 +569,23 @@ async fn main() {
                         let snap = get_snapshot();
                         let (avg, _min, _max) = fps_monitor::get_avg();
                         benchmark::record(&snap, short, short, avg);
+                    }
+                }
+
+                // Detect foreground app via dumpsys (every 2s)
+                if tick % 2 == 0 {
+                    if let Ok(o) = std::process::Command::new("sh")
+                        .args(["-c", "dumpsys activity activities 2>/dev/null | grep -m1 topResumedActivity"])
+                        .output()
+                    {
+                        let s = String::from_utf8_lossy(&o.stdout);
+                        if let Some(pkg) = s.split("u0 ").nth(1)
+                            .and_then(|rest| rest.split('/').next())
+                            .map(|p| p.trim().to_string())
+                            .filter(|p| !p.is_empty())
+                        {
+                            cache_fg(&pkg);
+                        }
                     }
                 }
 

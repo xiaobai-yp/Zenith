@@ -20,7 +20,6 @@ import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.Smartphone
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Terminal
-import androidx.compose.material.icons.outlined.MonitorActivity
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
@@ -261,7 +260,7 @@ fun DashboardScreen() {
                                 }
                             ) {
                                 Icon(
-                                    Icons.Outlined.MonitorActivity,
+                                    Icons.Outlined.Games,
                                     contentDescription = "Floating HUD",
                                     tint = Color.White,
                                     modifier = Modifier.padding(9.dp)

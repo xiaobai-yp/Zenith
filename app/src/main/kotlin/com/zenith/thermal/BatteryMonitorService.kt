@@ -126,10 +126,9 @@ class BatteryMonitorService : Service() {
             return
         }
         try {
-            val data = response.optJSONObject("data")
-            val body = data?.optString("body", "No data") ?: "No data"
+            val body = response.optString("body", "No data")
             notificationManager.notify(NOTIFICATION_ID, buildNotification(body))
-            checkIdleDrainWarning(data)
+            checkIdleDrainWarning(response)
         } catch (_: Exception) {
             notificationManager.notify(NOTIFICATION_ID, buildNotification("Parse error"))
         }
