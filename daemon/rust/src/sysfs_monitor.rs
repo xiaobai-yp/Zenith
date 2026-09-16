@@ -381,10 +381,10 @@ pub async fn read() -> SysfsSnapshot {
     // DDR — Qualcomm bus_dcvs
     let ddr_base = zen_path!("/sys/devices/system/cpu/bus_dcvs/DDR");
     let ddr = {
-        let cur = read_u32(&format!("{ddr_base}/soc:qcom,memlat:ddr:silver/cur_freq")).await
+        let cur = read_u32(&format!("{ddr_base}/cur_freq")).await  // Scene-style: root DDR path
             .or_else(|| {
-                // fallback: try bwmon path (sync read in async context)
-                let path = format!("{ddr_base}/19091000.qcom,bwmon-ddr/cur_freq");
+                // fallback: try silver memlat
+                let path = format!("{ddr_base}/soc:qcom,memlat:ddr:silver/cur_freq");
                 std::fs::read_to_string(&path).ok().and_then(|s| s.trim().parse().ok())
             });
         let max_silver = read_u32(&format!("{ddr_base}/soc:qcom,memlat:ddr:silver/max_freq")).await.unwrap_or(0);
