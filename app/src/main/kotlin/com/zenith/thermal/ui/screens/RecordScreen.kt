@@ -49,6 +49,7 @@ import com.zenith.thermal.ui.theme.ZenithBg
 import com.zenith.thermal.ui.theme.ZenithMuted2
 import com.zenith.thermal.ui.theme.ZenithText
 import com.zenith.thermal.FloatingHudService
+import com.zenith.thermal.ZenithDaemonClient
 import androidx.core.graphics.drawable.toBitmap
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -88,7 +89,7 @@ private val S_CAP = Color(0xFFB0B0B0)
 private val S_TEMPL = Color(0xFF5B9CF6)         // CPU temperature line
 private val S_TEMP2 = Color(0xFF8DC9E8)         // temp on cycles chart
 
-private data class SessionEntry(
+internal data class SessionEntry(
     val id: Long, val appName: String, val appPkg: String,
     val date: String, val version: String, val crop: String,
     val avgFps: Float, val maxFps: Float, val minFps: Float,
@@ -96,7 +97,7 @@ private data class SessionEntry(
     val peakTemp: Float, val avgPowerW: Float, val durationSec: Long,
     val chartData: ChartData = ChartData()
 )
-private data class ChartData(
+internal data class ChartData(
     val fps: List<Float> = emptyList(), val temp: List<Float> = emptyList(),
     val cpu03: List<Float> = emptyList(), val cpu46: List<Float> = emptyList(), val cpu7: List<Float> = emptyList(),
     val gpuFreq: List<Float> = emptyList(), val gpuUsage: List<Float> = emptyList(),
@@ -301,6 +302,10 @@ private fun exportCsv(s: SessionEntry?, ctx: android.content.Context) {
 }
 
 private fun deleteAllSessions(ctx: android.content.Context): Int {
+    // Also delete daemon sessions
+    if (ZenithDaemonClient.isConnected) {
+        ZenithDaemonClient.sendCommand("delete_all_sessions")
+    }
     val regex = Regex("""^(.+) (\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2})\.csv$""")
     var count = 0
     val names = mutableListOf<String>()
@@ -489,7 +494,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                     rightSeries = listOf(s.chartData.temp to S_TEMP),
                     yMin = 0f, yMax = 90f,
                     leftTicks = listOf("90", "60", "30"),
-                    rightTicks = listOf("45", "40"), rightMin = 35f, rightMax = 50f,
+                    rightTicks = listOf("50", "45", "40"), rightMin = 35f, rightMax = 50f,
                 ))
             Spacer(Modifier.height(14.dp))
             if ("Jank" !in hiddenCards) {
@@ -778,37 +783,13 @@ private fun fmtDur(sec: Long): String {
 }
 
 private fun loadSessions(ctx: android.content.Context? = null): List<SessionEntry> {
+    val daemonSessions = loadDaemonSessions()
     val csvSessions = parseCsvSessions(ctx)
-    if (csvSessions.isNotEmpty()) return csvSessions
-    // fallback demo when no CSV files found
-    return listOf(
-        SessionEntry(1, "PUBG MOBILE", "com.tencent.ig", "2026-07-07 16:44:14", "4.4.0", "720×1600",
-            avgFps = 83.28f, maxFps = 90.1f, minFps = 55.0f, variance = 101.3f,
-            smoothPct = 100.0f, low5Pct = 57.5f, peakTemp = 40.9f, avgPowerW = 4.50f, durationSec = 226,
-            chartData = ChartData(
-                fps = listOf(83f, 85f, 60f, 90f, 84f, 78f, 90f, 65f, 88f, 83f, 82f, 86f, 60f, 89f, 83f, 78f, 90f, 85f, 62f, 83f,
-                    84f, 88f, 59f, 91f, 82f, 80f, 87f, 66f, 86f, 84f, 81f, 85f, 63f, 87f, 82f, 79f, 89f, 84f, 61f, 82f),
-                temp = listOf(74f, 75f, 77f, 74f, 73f, 76f, 75f, 72f, 68f, 61f, 56f, 53f, 52f, 51f, 53f, 55f, 54f, 53f, 55f, 57f,
-                    58f, 56f, 54f, 61f, 68f, 72f, 70f, 66f, 73f, 74f, 75f, 76f, 77f, 78f, 76f, 75f, 73f, 77f, 76f, 77f),
-                cpu03 = listOf(38f, 42f, 35f, 40f, 36f, 38f, 44f, 40f, 36f, 38f, 35f, 39f, 42f, 38f, 36f, 35f, 40f, 38f, 42f, 38f,
-                    37f, 41f, 34f, 39f, 35f, 37f, 43f, 39f, 35f, 37f, 34f, 38f, 41f, 37f, 35f, 34f, 39f, 37f, 41f, 37f),
-                cpu46 = listOf(44f, 48f, 40f, 46f, 42f, 44f, 50f, 46f, 42f, 44f, 40f, 45f, 48f, 44f, 42f, 40f, 46f, 44f, 48f, 44f,
-                    43f, 47f, 39f, 45f, 41f, 43f, 49f, 45f, 41f, 43f, 39f, 44f, 47f, 43f, 41f, 39f, 45f, 43f, 47f, 43f),
-                cpu7 = listOf(60f, 78f, 55f, 95f, 70f, 65f, 85f, 60f, 70f, 65f, 55f, 75f, 80f, 68f, 60f, 55f, 78f, 65f, 78f, 65f,
-                    58f, 80f, 53f, 92f, 72f, 63f, 87f, 58f, 68f, 64f, 52f, 73f, 82f, 67f, 58f, 54f, 76f, 64f, 80f, 63f),
-                gpuFreq = List(24) { 520f },
-                gpuUsage = listOf(82f, 89f, 87f, 88f, 72f, 48f, 41f, 38f, 45f, 52f, 59f, 55f, 67f, 71f, 61f, 63f, 76f, 74f, 70f, 79f,
-                    80f, 71f, 87f, 85f, 50f, 55f, 60f, 52f, 48f, 65f, 70f, 58f, 62f, 75f, 68f, 72f, 80f, 66f, 74f, 78f),
-                ddr = listOf(6410f, 6410f, 6410f, 6410f, 3110f, 3110f, 4192f, 4192f, 4192f, 3418f, 4192f, 5490f, 5490f, 6410f, 6410f, 6410f,
-                    4192f, 5490f, 6410f, 6410f, 6410f, 6410f, 4192f, 6410f),
-                powerW = listOf(5.2f, 5.4f, 5.5f, 5.2f, 5.4f, 5.6f, 5.5f, 2.7f, 2.4f, 2.8f, 2.6f, 2.9f, 3.1f, 3.3f, 3.0f, 3.2f, 3.5f, 5.4f, 4.0f, 5.5f,
-                    5.8f, 5.3f, 5.6f, 6.1f, 5.0f, 5.3f, 5.7f, 5.3f, 5.4f, 5.7f, 5.4f, 5.6f),
-                capacity = listOf(58f, 58f, 58f, 58f, 58f, 58f, 58f, 58f, 58f, 58f, 58f, 58f, 58f, 58f, 58f, 58f, 58f, 58f, 57.5f, 57.5f,
-                    57.5f, 57.5f, 57f, 57f),
-                frameTime = listOf(16f, 18f, 207f, 15f, 17f, 16f, 18f, 207f, 15f, 16f, 17f, 16f, 207f, 15f, 16f, 17f, 16f, 18f, 15f, 16f,
-                    17f, 19f, 207f, 16f, 18f, 17f, 19f, 207f, 16f, 17f, 18f, 17f, 207f, 16f, 17f, 18f, 17f, 19f, 16f, 17f),
-            )),
-    )
+    // Merge: daemon sessions first (authoritative), then CSV (legacy)
+    val combined = (daemonSessions + csvSessions)
+        .distinctBy { "${it.appPkg}_${it.date}" }
+        .sortedByDescending { it.date }
+    return combined
 }
 
 // ── CSV parsing from /sdcard/ ──
