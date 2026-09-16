@@ -8,7 +8,7 @@ use std::sync::{OnceLock, RwLock};
 
 const MAX_POINTS: usize = 300;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BenchPoint {
     pub timestamp_ms: u64,
     pub fps: i32,

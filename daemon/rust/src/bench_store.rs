@@ -3,6 +3,7 @@
 use crate::benchmark::BenchPoint;
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::io::Write;
 use std::path::PathBuf;
 
 const SESSIONS_DIR: &str = "/data/zenith/sessions";
