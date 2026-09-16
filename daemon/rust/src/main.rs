@@ -316,6 +316,25 @@ async fn handle_cmd(req: Request) -> Response {
             }
         }
 
+        // Reliable foreground app detection via dumpsys (daemon runs as root)
+        "top_activity" => {
+            let out = std::process::Command::new("sh")
+                .args(["-c", "dumpsys activity activities 2>/dev/null | grep -m1 topResumedActivity"])
+                .output();
+            match out {
+                Ok(o) => {
+                    let s = String::from_utf8_lossy(&o.stdout);
+                    // topResumedActivity=ActivityRecord{... com.pkg/.Activity ...}
+                    let pkg = s.split("u0 ").nth(1)
+                        .and_then(|rest| rest.split('/').next())
+                        .map(|p| p.trim().to_string())
+                        .filter(|p| !p.is_empty());
+                    Response::ok(json!({ "package": pkg }))
+                }
+                Err(e) => Response::err(&format!("dumpsys: {e}"))
+            }
+        }
+
         "list_profiles" => {
             let ids = profile_engine::list_profiles();
             let map = profile_engine::export_map();
