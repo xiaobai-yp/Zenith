@@ -489,13 +489,17 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
             // ── Charts (Scene order) ──
             ChartCard(title = "FPS", titleRight = "Temperature(°C)", rightColor = S_TEMP,
                 legend = listOf("FPS" to S_FPS, "TEMP(°C)" to S_TEMP, "CPU(%)" to S_CPU_PCT, "GPU(%)" to S_GPU_PCT),
-                spec = ChartSpec(
-                    series = listOf(s.chartData.fps to S_FPS),
-                    rightSeries = listOf(s.chartData.temp to S_TEMP),
-                    yMin = 0f, yMax = 90f,
-                    leftTicks = listOf("90", "60", "30"),
-                    rightTicks = listOf("50", "45", "40"), rightMin = 35f, rightMax = 50f,
-                ))
+                spec = run {
+                    val (fLo, fHi, fTicks) = fpsAxis(s.chartData.fps)
+                    val (tLo, tHi, tTicks) = tempAxis(s.chartData.temp)
+                    ChartSpec(
+                        series = listOf(s.chartData.fps to S_FPS),
+                        rightSeries = listOf(s.chartData.temp to S_TEMP),
+                        yMin = fLo, yMax = fHi,
+                        leftTicks = fTicks,
+                        rightTicks = tTicks, rightMin = tLo, rightMax = tHi,
+                    )
+                })
             Spacer(Modifier.height(14.dp))
             if ("Jank" !in hiddenCards) {
                 ChartCard(title = "Jank",
@@ -536,66 +540,87 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
             Spacer(Modifier.height(14.dp))
             ChartCard(title = "CPU Frequency (MHz)", opts = true,
                 legend = listOf("CPU 0~3" to S_CPU03, "CPU 4~6" to S_CPU46, "CPU 7" to S_CPU7),
-                spec = ChartSpec(
-                    series = listOf(
-                        s.chartData.cpuFreq03 to S_CPU03,
-                        s.chartData.cpuFreq46 to S_CPU46,
-                        s.chartData.cpuFreq7 to S_CPU7,
-                    ),
-                    yMin = 0f, yMax = 3000f,
-                    leftTicks = listOf("2918", "2700", "2400", "2100", "1800", "1500", "1200", "900", "600", "300"),
-                ))
+                spec = run {
+                    val all = s.chartData.cpuFreq03 + s.chartData.cpuFreq46 + s.chartData.cpuFreq7
+                    val (lo, hi, ticks) = autoAxis(all, minFloor = 0f, niceStep = true)
+                    ChartSpec(
+                        series = listOf(
+                            s.chartData.cpuFreq03 to S_CPU03,
+                            s.chartData.cpuFreq46 to S_CPU46,
+                            s.chartData.cpuFreq7 to S_CPU7,
+                        ),
+                        yMin = lo, yMax = hi,
+                        leftTicks = ticks,
+                    )
+                })
             Spacer(Modifier.height(14.dp))
             ChartCard(title = "CPU Cycles (M)", titleRight = "CPU Temperature (°C)", rightColor = S_TEMP2,
                 legend = listOf("CPU 0~3" to S_CPU03, "CPU 4~6" to S_CPU46, "CPU 7" to S_CPU7, "TEMP(°C)" to S_TEMP2),
-                spec = ChartSpec(
-                    series = listOf(
-                        s.chartData.cpuCyc03 to S_CPU03,
-                        s.chartData.cpuCyc46 to S_CPU46,
-                        s.chartData.cpuCyc7 to S_CPU7,
-                    ),
-                    rightSeries = listOf(s.chartData.temp to S_TEMP2),
-                    yMin = 0f, yMax = 3000f,
-                    leftTicks = listOf("2890", "2700", "2400", "2100", "1800", "1500", "1200", "900", "600", "300"),
-                    rightTicks = (100 downTo 10 step 10).map { "${it}°" }, rightMin = 0f, rightMax = 100f,
-                ))
+                spec = run {
+                    val all = s.chartData.cpuCyc03 + s.chartData.cpuCyc46 + s.chartData.cpuCyc7
+                    val (lo, hi, ticks) = autoAxis(all, minFloor = 0f)
+                    val (tLo, tHi, tTicks) = tempAxis(s.chartData.temp)
+                    ChartSpec(
+                        series = listOf(
+                            s.chartData.cpuCyc03 to S_CPU03,
+                            s.chartData.cpuCyc46 to S_CPU46,
+                            s.chartData.cpuCyc7 to S_CPU7,
+                        ),
+                        rightSeries = listOf(s.chartData.temp to S_TEMP2),
+                        yMin = lo, yMax = hi,
+                        leftTicks = ticks,
+                        rightTicks = tTicks, rightMin = tLo, rightMax = tHi,
+                    )
+                })
             Spacer(Modifier.height(14.dp))
             if ("GPU" !in hiddenCards) ChartCard(title = "GPU Frequency (MHz)", titleRight = "Usage (%)",
                 legend = listOf("Frequency (MHz)" to S_GF, "Usage (%)" to S_GU),
-                spec = ChartSpec(
-                    series = listOf(s.chartData.gpuFreq to S_GF),
-                    rightSeries = listOf(s.chartData.gpuUsage to S_GU),
-                    yMin = 0f, yMax = 600f,
-                    leftTicks = listOf("600", "500", "400", "300", "200", "100"),
-                    rightTicks = listOf("100", "90", "75", "50"), rightMin = 0f, rightMax = 100f,
-                ))
+                spec = run {
+                    val (lo, hi, ticks) = autoAxis(s.chartData.gpuFreq, minFloor = 0f)
+                    ChartSpec(
+                        series = listOf(s.chartData.gpuFreq to S_GF),
+                        rightSeries = listOf(s.chartData.gpuUsage to S_GU),
+                        yMin = lo, yMax = hi,
+                        leftTicks = ticks,
+                        rightTicks = listOf("100", "75", "50", "25"), rightMin = 0f, rightMax = 100f,
+                    )
+                })
             Spacer(Modifier.height(14.dp))
             if ("DDR" !in hiddenCards) ChartCard(title = "DDR (MHz | Mbps)",
                 legend = emptyList(),
-                spec = ChartSpec(
-                    series = listOf(s.chartData.ddr to S_DDR),
-                    yMin = 3000f, yMax = 6500f,
-                    leftTicks = listOf("6410", "5479", "4192", "3418", "3110"),
-                ))
+                spec = run {
+                    val (lo, hi, ticks) = autoAxis(s.chartData.ddr, minFloor = 0f)
+                    ChartSpec(
+                        series = listOf(s.chartData.ddr to S_DDR),
+                        yMin = lo, yMax = hi,
+                        leftTicks = ticks,
+                    )
+                })
             Spacer(Modifier.height(14.dp))
             if ("Power" !in hiddenCards) ChartCard(title = "Power (W)", titleRight = "Capacity %",
                 legend = listOf("Power (W)" to S_PWR, "Capacity (%)" to S_CAP),
                 sub = "MAX: ${comma(pMax, 2)}W | MIN: ${comma(pMin, 2)}W | AVG: ${comma(pAvg.toFloat(), 2)}W",
-                spec = ChartSpec(
-                    series = listOf(s.chartData.powerW to S_PWR),
-                    rightSeries = listOf(s.chartData.capacity to S_CAP),
-                    yMin = 0f, yMax = 7f,
-                    leftTicks = listOf("7W", "6W", "5W", "4W", "3W", "2W", "1W"),
-                    rightTicks = listOf("100", "80", "60", "40", "20"), rightMin = 0f, rightMax = 100f,
-                ))
+                spec = run {
+                    val (lo, hi, ticks) = autoAxis(s.chartData.powerW, minFloor = 0f, maxCeiling = 20f)
+                    ChartSpec(
+                        series = listOf(s.chartData.powerW to S_PWR),
+                        rightSeries = listOf(s.chartData.capacity to S_CAP),
+                        yMin = lo, yMax = hi,
+                        leftTicks = ticks,
+                        rightTicks = listOf("100", "80", "60", "40", "20"), rightMin = 0f, rightMax = 100f,
+                    )
+                })
             Spacer(Modifier.height(14.dp))
             ChartCard(title = "CPU Temperature (°C)",
                 legend = emptyList(), sub = "MAX: ${comma(tMax)}°C | MIN: ${comma(tMin)}°C | AVG: ${comma(tAvg.toFloat())}°C",
-                spec = ChartSpec(
-                    series = listOf(s.chartData.temp to S_TEMPL),
-                    yMin = 0f, yMax = 100f,
-                    leftTicks = (100 downTo 10 step 10).map { "${it}°C" },
-                ))
+                spec = run {
+                    val (lo, hi, ticks) = tempAxis(s.chartData.temp)
+                    ChartSpec(
+                        series = listOf(s.chartData.temp to S_TEMPL),
+                        yMin = lo, yMax = hi,
+                        leftTicks = ticks,
+                    )
+                })
         }
     }
 }
