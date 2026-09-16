@@ -125,55 +125,14 @@ class BenchmarkTileService : TileService() {
 
             ZenithDaemonClient.stopBenchmark(capturedPkg, benchStartTime)
             tileLog("bench_stop sent")
-            Thread.sleep(1500)
+            Thread.sleep(1000)
 
-            val data = ZenithDaemonClient.sendCommand("bench_data")
-            val arr = data?.optJSONArray("data")
-            val n = arr?.length() ?: 0
-            val elapsedMs = data?.optLong("elapsed_ms", 0) ?: 0
-            tileLog("bench_data: n=$n, elapsed=$elapsedMs")
-
-            if (n == 0) {
-                mainThread { Toast.makeText(this, "No data (${elapsedMs}ms)", Toast.LENGTH_SHORT).show() }
-                return
-            }
-
-            // Use captured pkg from START time, not fg now (QS panel is foreground at STOP)
-            val appName = capturedPkg.ifEmpty { ZenithDaemonClient.getForegroundApp() ?: "Unknown" }
-            val shortName = appName.substringAfterLast('.')
-            val dateStr = SimpleDateFormat("yyyy-MM-dd HH-mm-ss", Locale.US).format(Date())
-            val csvName = "$shortName $dateStr.csv"
-
-            val header = "#PACKAGE:$appName\n" +
-                "FPS,JANK,BigJANK,Max FrameTime(ms)," +
-                "CPU0(%),CPU1(%),CPU2(%),CPU3(%),CPU4(%),CPU5(%),CPU6(%),CPU7(%)," +
-                "GPU(MHz),GPU(%),DDR(Mbps),Power(mW),Battery(%),CPU(\u2103)," +
-                "CPU0(MHz),CPU1(MHz),CPU2(MHz),CPU3(MHz),CPU4(MHz),CPU5(MHz),CPU6(MHz),CPU7(MHz)," +
-                "CPU0(M Cycles),CPU1(M Cycles),CPU2(M Cycles),CPU3(M Cycles),CPU4(M Cycles),CPU5(M Cycles),CPU6(M Cycles),CPU7(M Cycles)"
-
-            val sb = StringBuilder()
-            sb.appendLine(header)
-            for (i in 0 until n) {
-                val pt = arr?.optJSONObject(i) ?: continue
-                val fps = pt.optInt("fps", 0)
-                val tempM = pt.optLong("temp_milli", 0)
-                val battP = pt.optInt("batt_pct", 0)
-                val battMa = pt.optLong("current_ma", 0)
-                val powerMw = if (battMa > 0) (battMa * 38) / 10 else 0
-                sb.append("$fps,,,,,,,,,,,,,$powerMw,$battP,${tempM / 10.0},,,,,,,,,,,,,,,,")
-                sb.appendLine()
-            }
-
-            val dir = File(filesDir, "bench_sessions")
-            dir.mkdirs()
-            val csvFile = File(dir, csvName)
-            csvFile.writeText(sb.toString())
-            tileLog("CSV: ${csvFile.absolutePath} ($n pts, pkg=$appName)")
-
+            // Daemon bench_stop already persisted to /data/zenith/sessions/ — no CSV needed
+            val elapsedMs = ZenithDaemonClient.getBenchmarkData()?.elapsedMs ?: 0
+            val shortName = capturedPkg.substringAfterLast('.')
             val dur = elapsedMs / 1000
             mainThread {
                 Toast.makeText(this, "Session saved: $shortName (${dur}s)", Toast.LENGTH_SHORT).show()
-                FloatingHudService.newCsvFlow.trySend(csvName)
             }
         } catch (e: Exception) {
             tileLog("ERROR: ${e.message}")

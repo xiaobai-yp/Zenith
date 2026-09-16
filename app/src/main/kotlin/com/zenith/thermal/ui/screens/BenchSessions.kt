@@ -77,7 +77,7 @@ private fun daemonSessionToEntry(meta: JSONObject, points: JSONArray): SessionEn
         val ddrFreq = pt.optInt("ddr_freq", 0) / 1000f  // kHz → MHz
 
         fpsList.add(fps)
-        val tempC = (tempMilli / 10f)
+        val tempC = (tempMilli / 1000f)
         tempList.add(tempC)
         powerList.add(powerMw / 1000f)  // mW → W
         capList.add(battPct.toFloat())
