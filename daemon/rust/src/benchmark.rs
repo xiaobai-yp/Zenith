@@ -143,7 +143,7 @@ pub fn record(snapshot: &SysfsSnapshot, fps: i32, fps_short: i32, fps_avg: i32) 
         .unwrap_or(0);
 
     // Read jank/frame timing from fps_monitor
-    let (_, jank, big_jank, max_frame_time_ms) = fps_monitor::read_jank();
+    let (_, jank, big_jank, max_frame_time_ms) = crate::fps_monitor::read_jank();
 
     // Read per-core frequencies from sysfs (policy0=0-3, policy4=4-6, policy7=7)
     let cpu1_freq = read_cpu_freq(1);
