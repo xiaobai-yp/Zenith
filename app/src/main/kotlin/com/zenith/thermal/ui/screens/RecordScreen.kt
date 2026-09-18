@@ -100,13 +100,20 @@ internal data class SessionEntry(
 internal data class ChartData(
     val fps: List<Float> = emptyList(), val temp: List<Float> = emptyList(),
     val cpu03: List<Float> = emptyList(), val cpu46: List<Float> = emptyList(), val cpu7: List<Float> = emptyList(),
+    val cpu0: List<Float> = emptyList(), val cpu1: List<Float> = emptyList(), val cpu2: List<Float> = emptyList(), val cpu3: List<Float> = emptyList(),
+    val cpu4: List<Float> = emptyList(), val cpu5: List<Float> = emptyList(), val cpu6: List<Float> = emptyList(), val cpu7b: List<Float> = emptyList(),
     val gpuFreq: List<Float> = emptyList(), val gpuUsage: List<Float> = emptyList(),
     val ddr: List<Float> = emptyList(), val powerW: List<Float> = emptyList(), val capacity: List<Float> = emptyList(),
     val frameTime: List<Float> = emptyList(),
     val jank: List<Float> = emptyList(),
     val bigJank: List<Float> = emptyList(),
-    val cpuFreq03: List<Float> = emptyList(), val cpuFreq46: List<Float> = emptyList(), val cpuFreq7: List<Float> = emptyList(),
-    val cpuCyc03: List<Float> = emptyList(), val cpuCyc46: List<Float> = emptyList(), val cpuCyc7: List<Float> = emptyList(),
+    val maxFrameTime: List<Float> = emptyList(),
+    val cpuFreq0: List<Float> = emptyList(), val cpuFreq1: List<Float> = emptyList(), val cpuFreq2: List<Float> = emptyList(), val cpuFreq3: List<Float> = emptyList(),
+    val cpuFreq4: List<Float> = emptyList(), val cpuFreq5: List<Float> = emptyList(), val cpuFreq6: List<Float> = emptyList(), val cpuFreq7: List<Float> = emptyList(),
+    val cpuCyc0: List<Float> = emptyList(), val cpuCyc1: List<Float> = emptyList(), val cpuCyc2: List<Float> = emptyList(), val cpuCyc3: List<Float> = emptyList(),
+    val cpuCyc4: List<Float> = emptyList(), val cpuCyc5: List<Float> = emptyList(), val cpuCyc6: List<Float> = emptyList(), val cpuCyc7: List<Float> = emptyList(),
+    val voltage: List<Float> = emptyList(), val current: List<Float> = emptyList(), val battTemp: List<Float> = emptyList(),
+    val threadPercent: List<Float> = emptyList(),
 )
 private enum class RecordView { LIST, DETAIL }
 
@@ -282,23 +289,72 @@ private fun exportCsv(s: SessionEntry?, ctx: android.content.Context) {
     val ts = fmt.format(java.util.Date())
     val name = "${s.appName} $ts.csv"
     val sb = StringBuilder()
-    sb.appendLine("Session,${s.appName},${s.date},${s.version},${s.crop}")
-    sb.appendLine("FPS,AVG=${s.avgFps},MAX=${s.maxFps},MIN=${s.minFps},VAR=${s.variance},Smooth=${s.smoothPct},5%Low=${s.low5Pct}")
-    sb.appendLine("Temp,Peak=${s.peakTemp}")
-    sb.appendLine("Power,AVG=${s.avgPowerW}W")
-    sb.appendLine()
-    sb.appendLine("t,FPS,Temp,FrameTime,Jank,BigJank,Cpu03,Cpu46,Cpu7,GpuFreq,GpuUsage,DDR,Power,Capacity")
+    
+    // Scene-style header (48 columns)
+    sb.appendLine("FPS,JANK,BigJANK,Max FrameTime(ms),CPU(%),CPU0(%),CPU1(%),CPU2(%),CPU3(%),CPU4(%),CPU5(%),CPU6(%),CPU7(%),CPU0(MHz),CPU1(MHz),CPU2(MHz),CPU3(MHz),CPU4(MHz),CPU5(MHz),CPU6(MHz),CPU7(MHz),CPU0(M Cycles),CPU1(M Cycles),CPU2(M Cycles),CPU3(M Cycles),CPU4(M Cycles),CPU5(M Cycles),CPU6(M Cycles),CPU7(M Cycles),CPU(℃),DDR(Mbps),GPU(%),GPU(MHz),Battery(%),Battery(℃),Current(mA),Battery(volt),Power(mW),Thread-80(%),Thread-80(cpus),Thread-77(%),Thread-77(cpus),Thread-85(%),Thread-85(cpus),Thread-79(%),Thread-79(cpus),Thread-90(%),Thread-90(cpus)")
+    
     val n = s.chartData.fps.size
     val d2 = s.chartData
-    fun g(l: List<Float>, i: Int): String = if (i < l.size) l[i].toString() else ""
+    fun g(l: List<Float>, i: Int): String = if (i < l.size) comma(l[i]) else "0"
+    fun gi(l: List<Float>, i: Int): String = if (i < l.size) l[i].toInt().toString() else "0"
+    
     for (i in 0 until n) {
-        sb.append(i).append(',').append(g(d2.fps, i)).append(',').append(g(d2.temp, i)).append(',').append(g(d2.frameTime, i)).append(',')
-        sb.append(g(d2.jank, i)).append(',').append(g(d2.bigJank, i)).append(',').append(g(d2.cpu03, i)).append(',').append(g(d2.cpu46, i)).append(',')
-        sb.append(g(d2.cpu7, i)).append(',').append(g(d2.gpuFreq, i)).append(',').append(g(d2.gpuUsage, i)).append(',').append(g(d2.ddr, i)).append(',')
-        sb.append(g(d2.powerW, i)).append(',').append(g(d2.capacity, i)).appendLine()
+        // FPS
+        sb.append(gi(d2.fps, i)).append(',')
+        // JANK, BigJANK, Max FrameTime
+        sb.append(gi(d2.jank, i)).append(',')
+        sb.append(gi(d2.bigJank, i)).append(',')
+        sb.append(gi(d2.maxFrameTime, i)).append(',')
+        // CPU total (use cpu03 as total)
+        sb.append(g(d2.cpu03, i)).append(',')
+        // CPU per-core
+        sb.append(g(d2.cpu0, i)).append(',')
+        sb.append(g(d2.cpu1, i)).append(',')
+        sb.append(g(d2.cpu2, i)).append(',')
+        sb.append(g(d2.cpu3, i)).append(',')
+        sb.append(g(d2.cpu4, i)).append(',')
+        sb.append(g(d2.cpu5, i)).append(',')
+        sb.append(g(d2.cpu6, i)).append(',')
+        sb.append(g(d2.cpu7b, i)).append(',')
+        // CPU freq per-core
+        sb.append(g(d2.cpuFreq0, i)).append(',')
+        sb.append(g(d2.cpuFreq1, i)).append(',')
+        sb.append(g(d2.cpuFreq2, i)).append(',')
+        sb.append(g(d2.cpuFreq3, i)).append(',')
+        sb.append(g(d2.cpuFreq4, i)).append(',')
+        sb.append(g(d2.cpuFreq5, i)).append(',')
+        sb.append(g(d2.cpuFreq6, i)).append(',')
+        sb.append(g(d2.cpuFreq7, i)).append(',')
+        // CPU cycles per-core
+        sb.append(gi(d2.cpuCyc0, i)).append(',')
+        sb.append(gi(d2.cpuCyc1, i)).append(',')
+        sb.append(gi(d2.cpuCyc2, i)).append(',')
+        sb.append(gi(d2.cpuCyc3, i)).append(',')
+        sb.append(gi(d2.cpuCyc4, i)).append(',')
+        sb.append(gi(d2.cpuCyc5, i)).append(',')
+        sb.append(gi(d2.cpuCyc6, i)).append(',')
+        sb.append(gi(d2.cpuCyc7, i)).append(',')
+        // CPU temp
+        sb.append(g(d2.temp, i)).append(',')
+        // DDR
+        sb.append(g(d2.ddr, i)).append(',')
+        // GPU
+        sb.append(g(d2.gpuUsage, i)).append(',')
+        sb.append(g(d2.gpuFreq, i)).append(',')
+        // Battery
+        sb.append(g(d2.capacity, i)).append(',')
+        sb.append(g(d2.battTemp, i)).append(',')
+        sb.append(g(d2.current, i)).append(',')
+        sb.append(g(d2.voltage, i)).append(',')
+        // Power
+        sb.append(g(d2.powerW, i)).append(',')
+        // Thread stats (placeholder)
+        sb.append("0,0,0,0,0,0,0,0,0,0")
+        sb.appendLine()
     }
+    
     java.io.File("/sdcard", name).writeText(sb.toString())
-    android.widget.Toast.makeText(ctx, "Saved to /sdcard/$name", android.widget.Toast.LENGTH_SHORT).show()
+    android.widget.Toast.makeText(ctx, "Saved to /sdcard/$name (Scene format)", android.widget.Toast.LENGTH_SHORT).show()
 }
 
 private fun deleteAllSessions(ctx: android.content.Context): Int {
@@ -518,37 +574,52 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
             }
             Spacer(Modifier.height(14.dp))
             if ("Frame Time" !in hiddenCards) ChartCard(title = "Frame Time (ms)",
-                legend = emptyList(), sub = "MAX: ${maxFt}ms",
+                legend = listOf("Frame Time" to S_FPS, "Max FrameTime" to S_TEMP2),
+                sub = "MAX: ${maxFt}ms",
                 spec = ChartSpec(
                     series = listOf(s.chartData.frameTime to S_FPS),
+                    rightSeries = listOf(s.chartData.maxFrameTime to S_TEMP2),
                     yMin = 8f, yMax = 100f,
                     leftTicks = listOf("100", "91", "83", "75", "66", "58", "50", "41", "33", "25", "16", "8"),
                     bar = true,
                 ))
             Spacer(Modifier.height(14.dp))
             if ("CPU temperature" !in hiddenCards) ChartCard(title = "CPU Usage (%)", opts = true,
-                legend = listOf("Total" to S_FPS, "CPU 0~3" to S_CPU03, "CPU 4~6" to S_CPU46, "CPU 7" to S_CPU7),
+                legend = listOf("Total" to S_FPS, "CPU 0" to S_CPU03, "CPU 1" to S_CPU03, "CPU 2" to S_CPU03, "CPU 3" to S_CPU03,
+                    "CPU 4" to S_CPU46, "CPU 5" to S_CPU46, "CPU 6" to S_CPU46, "CPU 7" to S_CPU7),
                 spec = ChartSpec(
                     series = listOf(
-                        s.chartData.cpu03 to S_CPU03,
-                        s.chartData.cpu46 to S_CPU46,
-                        s.chartData.cpu7 to S_CPU7,
+                        s.chartData.cpu0 to S_CPU03,
+                        s.chartData.cpu1 to S_CPU03,
+                        s.chartData.cpu2 to S_CPU03,
+                        s.chartData.cpu3 to S_CPU03,
+                        s.chartData.cpu4 to S_CPU46,
+                        s.chartData.cpu5 to S_CPU46,
+                        s.chartData.cpu6 to S_CPU46,
+                        s.chartData.cpu7b to S_CPU7,
                         s.chartData.cpu03.mapIndexed { i, v -> (v + (s.chartData.cpu46.getOrElse(i) { v }) * 0.6f + (s.chartData.cpu7.getOrElse(i) { v }) * 0.3f).coerceAtMost(100f) } to S_FPS,
                     ),
-                    dashed = setOf(3),
+                    dashed = setOf(8),
                     yMin = 0f, yMax = 100f,
                     leftTicks = (100 downTo 10 step 10).map { it.toString() },
                 ))
             Spacer(Modifier.height(14.dp))
             ChartCard(title = "CPU Frequency (MHz)", opts = true,
-                legend = listOf("CPU 0~3" to S_CPU03, "CPU 4~6" to S_CPU46, "CPU 7" to S_CPU7),
+                legend = listOf("CPU 0" to S_CPU03, "CPU 1" to S_CPU03, "CPU 2" to S_CPU03, "CPU 3" to S_CPU03,
+                    "CPU 4" to S_CPU46, "CPU 5" to S_CPU46, "CPU 6" to S_CPU46, "CPU 7" to S_CPU7),
                 spec = run {
-                    val all = s.chartData.cpuFreq03 + s.chartData.cpuFreq46 + s.chartData.cpuFreq7
+                    val all = s.chartData.cpuFreq0 + s.chartData.cpuFreq1 + s.chartData.cpuFreq2 + s.chartData.cpuFreq3 +
+                        s.chartData.cpuFreq4 + s.chartData.cpuFreq5 + s.chartData.cpuFreq6 + s.chartData.cpuFreq7
                     val (lo, hi, ticks) = cpuFreqAxis(all)
                     ChartSpec(
                         series = listOf(
-                            s.chartData.cpuFreq03 to S_CPU03,
-                            s.chartData.cpuFreq46 to S_CPU46,
+                            s.chartData.cpuFreq0 to S_CPU03,
+                            s.chartData.cpuFreq1 to S_CPU03,
+                            s.chartData.cpuFreq2 to S_CPU03,
+                            s.chartData.cpuFreq3 to S_CPU03,
+                            s.chartData.cpuFreq4 to S_CPU46,
+                            s.chartData.cpuFreq5 to S_CPU46,
+                            s.chartData.cpuFreq6 to S_CPU46,
                             s.chartData.cpuFreq7 to S_CPU7,
                         ),
                         yMin = lo, yMax = hi,
@@ -556,17 +627,25 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                     )
                 })
             Spacer(Modifier.height(14.dp))
-            if (s.chartData.cpuCyc03.isNotEmpty() || s.chartData.cpuCyc46.isNotEmpty() || s.chartData.cpuCyc7.isNotEmpty())
+            if (s.chartData.cpuCyc0.isNotEmpty() || s.chartData.cpuCyc1.isNotEmpty() || s.chartData.cpuCyc2.isNotEmpty() || s.chartData.cpuCyc3.isNotEmpty() ||
+                s.chartData.cpuCyc4.isNotEmpty() || s.chartData.cpuCyc5.isNotEmpty() || s.chartData.cpuCyc6.isNotEmpty() || s.chartData.cpuCyc7.isNotEmpty())
                 ChartCard(title = "CPU Cycles (M)", titleRight = "CPU Temperature (°C)", rightColor = S_TEMP2,
-                    legend = listOf("CPU 0~3" to S_CPU03, "CPU 4~6" to S_CPU46, "CPU 7" to S_CPU7, "TEMP(°C)" to S_TEMP2),
+                    legend = listOf("CPU 0" to S_CPU03, "CPU 1" to S_CPU03, "CPU 2" to S_CPU03, "CPU 3" to S_CPU03,
+                        "CPU 4" to S_CPU46, "CPU 5" to S_CPU46, "CPU 6" to S_CPU46, "CPU 7" to S_CPU7, "TEMP(°C)" to S_TEMP2),
                     spec = run {
-                        val all = s.chartData.cpuCyc03 + s.chartData.cpuCyc46 + s.chartData.cpuCyc7
+                        val all = s.chartData.cpuCyc0 + s.chartData.cpuCyc1 + s.chartData.cpuCyc2 + s.chartData.cpuCyc3 +
+                            s.chartData.cpuCyc4 + s.chartData.cpuCyc5 + s.chartData.cpuCyc6 + s.chartData.cpuCyc7
                         val (lo, hi, ticks) = autoAxis(all, minFloor = 0f, maxTicks = 4)
                         val (tLo, tHi, tTicks) = tempAxis(s.chartData.temp)
                         ChartSpec(
                             series = listOf(
-                                s.chartData.cpuCyc03 to S_CPU03,
-                                s.chartData.cpuCyc46 to S_CPU46,
+                                s.chartData.cpuCyc0 to S_CPU03,
+                                s.chartData.cpuCyc1 to S_CPU03,
+                                s.chartData.cpuCyc2 to S_CPU03,
+                                s.chartData.cpuCyc3 to S_CPU03,
+                                s.chartData.cpuCyc4 to S_CPU46,
+                                s.chartData.cpuCyc5 to S_CPU46,
+                                s.chartData.cpuCyc6 to S_CPU46,
                                 s.chartData.cpuCyc7 to S_CPU7,
                             ),
                             rightSeries = listOf(s.chartData.temp to S_TEMP2),
@@ -1009,10 +1088,17 @@ private fun parseCsvFile(file: File, regex: Regex, ctx: android.content.Context?
             peakTemp = peakTemp, avgPowerW = avgPowerW, durationSec = n.toLong(),
             chartData = ChartData(
                 fps = fpsL, temp = tmpL, cpu03 = c03L, cpu46 = c46L, cpu7 = c7L,
+                cpu0 = c03L, cpu1 = c03L, cpu2 = c03L, cpu3 = c03L,
+                cpu4 = c46L, cpu5 = c46L, cpu6 = c46L, cpu7b = c7L,
                 gpuFreq = gfL, gpuUsage = guL, ddr = ddrL, powerW = pwrL,
                 capacity = capL, frameTime = ftL, jank = jankL, bigJank = bjL,
-                cpuFreq03 = cf03L, cpuFreq46 = cf46L, cpuFreq7 = cf7L,
-                cpuCyc03 = cc03L, cpuCyc46 = cc46L, cpuCyc7 = cc7L,
+                maxFrameTime = ftL,  // use frameTime as placeholder
+                cpuFreq0 = cf03L, cpuFreq1 = cf03L, cpuFreq2 = cf03L, cpuFreq3 = cf03L,
+                cpuFreq4 = cf46L, cpuFreq5 = cf46L, cpuFreq6 = cf46L, cpuFreq7 = cf7L,
+                cpuCyc0 = cc03L, cpuCyc1 = cc03L, cpuCyc2 = cc03L, cpuCyc3 = cc03L,
+                cpuCyc4 = cc46L, cpuCyc5 = cc46L, cpuCyc6 = cc46L, cpuCyc7 = cc7L,
+                voltage = capL, current = capL, battTemp = capL,
+                threadPercent = mutableListOf(),
             )
         )
     } catch (_: Exception) {

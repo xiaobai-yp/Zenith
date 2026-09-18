@@ -146,3 +146,12 @@ pub fn reset_session() {
 pub fn max_frame_time_ms() -> u64 {
     state().read().unwrap().max_frame_time_ms
 }
+
+/// Read jank stats from gfxinfo (returns (fps, jank, big_jank, max_frame_time_ms))
+pub fn read_jank() -> (i32, i32, i32, i32) {
+    // Try to get frame stats from gfxinfo for the current foreground app
+    // This is a simplified version - in production you'd parse dumpsys gfxinfo output
+    // For now return placeholder values
+    let max_ft = max_frame_time_ms() as i32;
+    (0, 0, 0, max_ft)
+}

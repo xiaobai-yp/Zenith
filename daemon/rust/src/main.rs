@@ -597,20 +597,14 @@ async fn main() {
                 // Battery state update every 1s
                 run_async(battery_monitor::update(screen_on));
 
-                // Full sysfs snapshot every 5 ticks
-                tick += 1;
-                if tick % 5 == 0 {
-                    let snap = run_async(sysfs_monitor::read());
-                    update_snapshot(snap);
-                }
-
-                // fps + benchmark (1s tick)
+                // fps + benchmark (1s tick) — take fresh sysfs snapshot on every benchmark sample
                 {
                     let (short, _long) = fps_monitor::read();
                     if benchmark::is_active() {
-                        let snap = get_snapshot();
+                        let snap = run_async(sysfs_monitor::read());
+                        update_snapshot(snap);
                         let (avg, _min, _max) = fps_monitor::get_avg();
-                        benchmark::record(&snap, short, short, avg);
+                        benchmark::record(&get_snapshot(), short, short, avg);
                     }
                 }
 
