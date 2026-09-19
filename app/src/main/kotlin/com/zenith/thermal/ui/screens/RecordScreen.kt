@@ -34,6 +34,8 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
@@ -59,35 +61,37 @@ import kotlin.math.roundToInt
 // ═══════════════════════════════════════════════
 // Palette v15 — user-approved (Scene order, full ticks)
 // ═══════════════════════════════════════════════
-private val Bg = ZenithBg
-private val Panel = Color(0xFF1C1C1E)
-private val Divider = Color(0xFF2A2A2E)
-private val Ink = Color(0xFFE8E8E8)
-private val Muted = Color(0xFF888888)
-private val Dim = Color(0xFF666666)
-private val Faint = Color(0xFF555555)
-private val AxisC = Color(0xFF444444)
-private val StatBlue = Color(0xFF5B9CF6)
-private val Green = Color(0xFF76C442)
-private val Orange = Color(0xFFFF7756)
-private val TitleC = Color(0xFFAAAAAA)
-private val LegendC = Color(0xFFAAAAAA)
-private val GridC = Color(0xFF333333)
-// series
-private val S_FPS = Color(0xFF5B9CF6)
-private val S_TEMP = Color(0xFFE58C3A)          // battery temp (battery stats line)
-private val S_CPU_PCT = Color(0xFFCC79C8)       // pink: CPU(%) placeholder line
-private val S_GPU_PCT = Color(0xFF4CC9D8)       // cyan: GPU(%) placeholder line
-private val S_CPU03 = Color(0xFFCC79C8)
-private val S_CPU46 = Color(0xFF4CC9D8)
-private val S_CPU7 = Color(0xFFE58C3A)
-private val S_GF = Color(0xFF5B9CF6)
-private val S_GU = Color(0xFF5B9CF6)
-private val S_DDR = Color(0xFF5B9CF6)
-private val S_PWR = Color(0xFF5B9CF6)
-private val S_CAP = Color(0xFFB0B0B0)
-private val S_TEMPL = Color(0xFF5B9CF6)         // CPU temperature line
-private val S_TEMP2 = Color(0xFF8DC9E8)         // temp on cycles chart
+private val Bg = Color(0xFF171717)          // scene body bg
+private val Panel = Color(0xFF090909)       // scene card bg
+private val Divider = Color(0xFF383838)     // scene grid bg (reuse for divider)
+private val Ink = Color(0xFFf4f4f4)         // scene text
+private val Muted = Color(0xFF8e8e93)       // scene muted (stats app text)
+private val Dim = Color(0xFF969696)         // scene dim (label text)
+private val Faint = Color(0xFF777777)       // scene faint (axis labels)
+private val AxisC = Color(0xFF777777)       // scene axis label color
+private val StatBlue = Color(0xFF3180FF)    // scene stat value (biru)
+private val Green = Color(0xFF76C442)       // smoothness (tetap)
+private val Orange = Color(0xFFFF7756)      // profile icon (scene)
+private val TitleC = Color(0xFFf4f4f4)      // scene title text
+private val LegendC = Color(0xFF8d8d8d)     // scene legend text
+// FPS chart legend colors (scene exact — ini warna DOT di legend, bukan line color)
+private val S_CPU_PCT = Color(0xFFA35AA2)   // CPU(%) dot legend — ungu muda
+private val S_GPU_PCT = Color(0xFF6BC9EA)   // GPU(%) dot legend — biru muda
+private val S_FT = Color(0xFF87CBED)        // FrameTime line+fill — biru muda (scene exact)
+private val GridC = Color(0xFF383838)       // scene grid line
+// Series colors (scene exact)
+private val S_FPS = Color(0xFF828282)       // FPS line, abu-abu
+private val S_TEMP = Color(0xFFB06B2C)      // Temperature (FPS chart), oranye cokelat
+private val S_TEMP2 = Color(0xFF78C94A)     // Temperature (CPU cycles chart), hijau
+private val S_CPU03 = Color(0xFF8E62C7)     // CPU 0~3, ungu
+private val S_CPU46 = Color(0xFF36C6C4)     // CPU 4~6, cyan
+private val S_CPU7 = Color(0xFFEE923E)      // CPU 7, oranye lembayung
+private val S_GF = Color(0xFF8DC9E8)        // GPU Freq, biru muda
+private val S_GU = Color(0xFF2D6FFF)        // GPU Usage, biru
+private val S_DDR = Color(0xFF90D4F3)       // DDR, biru langit
+private val S_PWR = Color(0xFF2D6FFF)       // Power, biru
+private val S_CAP = Color(0xFF8DC9E8)       // Capacity, biru muda
+private val S_TEMPL = Color(0xFF8DC9E8)     // CPU Temperature chart, biru muda
 
 internal data class SessionEntry(
     val id: Long, val appName: String, val appPkg: String,
@@ -543,166 +547,123 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                 Spacer(Modifier.height(12.dp))
             }
             // ── Charts (Scene order) ──
-            ChartCard(title = "FPS", titleRight = "Temperature(°C)", rightColor = S_TEMP,
-                legend = listOf("FPS" to S_FPS, "TEMP(°C)" to S_TEMP, "CPU(%)" to S_CPU_PCT, "GPU(%)" to S_GPU_PCT),
-                spec = run {
-                    val wm = ctx.getSystemService(android.content.Context.WINDOW_SERVICE) as android.view.WindowManager
-                    val rr = wm.defaultDisplay.refreshRate.toInt()
-                    val (fLo, fHi, fTicks) = fpsAxis(s.chartData.fps, rr)
-                    val (tLo, tHi, tTicks) = tempAxis(s.chartData.temp)
-                    ChartSpec(
-                        series = listOf(s.chartData.fps to S_FPS),
-                        rightSeries = listOf(s.chartData.temp to S_TEMP),
-                        yMin = fLo, yMax = fHi,
-                        leftTicks = fTicks,
-                        rightTicks = tTicks, rightMin = tLo, rightMax = tHi,
-                    )
-                })
-            Spacer(Modifier.height(14.dp))
-            if ("Jank" !in hiddenCards) {
-                ChartCard(title = "Jank",
-                    legend = listOf("Jank" to S_CPU03, "Big Jank" to S_TEMP2),
-                    sub = "Jank: $totalJank | Big Jank: $totalBig",
-                    spec = ChartSpec(
-                        series = listOf(s.chartData.jank to S_CPU03),
-                        rightSeries = listOf(s.chartData.bigJank to S_TEMP2),
-                        yMin = 0f, yMax = 5f,
-                        leftTicks = listOf("5"),
-                        height = 120,
-                        bar = true,
-                    ))
-            }
+            if ("FPS" !in hiddenCards) ChartCard(title = "FPS", opts = true,
+                legend = listOf(
+                    "FPS" to S_FPS,
+                    "TEMP(°C)" to S_TEMP,
+                    "CPU(%)" to S_CPU_PCT,
+                    "GPU(%)" to S_GPU_PCT
+                ),
+                spec = ChartSpec(
+                    series = listOf(s.chartData.fps to S_FPS),
+                    rightSeries = listOf(s.chartData.temp to S_TEMP),
+                    yMin = 0f, yMax = 90f,
+                    leftTicks = listOf("90", "60", "30", "0"),
+                    rightTicks = listOf("45", "40"), rightMin = 35f, rightMax = 50f,
+                    fillArea = true,
+                    fillColor = S_FPS.copy(alpha = 0.15f),
+                ))
             Spacer(Modifier.height(14.dp))
             if ("Frame Time" !in hiddenCards) ChartCard(title = "Frame Time (ms)",
-                legend = listOf("Frame Time" to S_FPS, "Max FrameTime" to S_TEMP2),
+                legend = emptyList(),
                 sub = "MAX: ${maxFt}ms",
                 spec = ChartSpec(
-                    series = listOf(s.chartData.frameTime to S_FPS),
-                    rightSeries = listOf(s.chartData.maxFrameTime to S_TEMP2),
+                    series = listOf(s.chartData.frameTime to S_FT),
                     yMin = 8f, yMax = 100f,
                     leftTicks = listOf("100", "91", "83", "75", "66", "58", "50", "41", "33", "25", "16", "8"),
-                    bar = true,
+                    fillArea = true,
+                    fillColor = S_FT.copy(alpha = 0.15f),
+                    lineWidth = 1.5.dp,
                 ))
             Spacer(Modifier.height(14.dp))
             if ("CPU temperature" !in hiddenCards) ChartCard(title = "CPU Usage (%)", opts = true,
-                legend = listOf("Total" to S_FPS, "CPU 0" to S_CPU03, "CPU 1" to S_CPU03, "CPU 2" to S_CPU03, "CPU 3" to S_CPU03,
-                    "CPU 4" to S_CPU46, "CPU 5" to S_CPU46, "CPU 6" to S_CPU46, "CPU 7" to S_CPU7),
+                legend = listOf("CPU 0~3" to S_CPU03, "CPU 4~6" to S_CPU46, "CPU 7" to S_CPU7),
                 spec = ChartSpec(
                     series = listOf(
-                        s.chartData.cpu0 to S_CPU03,
-                        s.chartData.cpu1 to S_CPU03,
-                        s.chartData.cpu2 to S_CPU03,
-                        s.chartData.cpu3 to S_CPU03,
-                        s.chartData.cpu4 to S_CPU46,
-                        s.chartData.cpu5 to S_CPU46,
-                        s.chartData.cpu6 to S_CPU46,
-                        s.chartData.cpu7b to S_CPU7,
-                        s.chartData.cpu03.mapIndexed { i, v -> (v + (s.chartData.cpu46.getOrElse(i) { v }) * 0.6f + (s.chartData.cpu7.getOrElse(i) { v }) * 0.3f).coerceAtMost(100f) } to S_FPS,
+                        s.chartData.cpu03 to S_CPU03,
+                        s.chartData.cpu46 to S_CPU46,
+                        s.chartData.cpu7 to S_CPU7,
                     ),
-                    dashed = setOf(8),
                     yMin = 0f, yMax = 100f,
-                    leftTicks = (100 downTo 10 step 10).map { it.toString() },
+                    leftTicks = listOf("100", "90", "80", "70", "60", "50", "40", "30", "20", "10"),
+                    fillArea = true,
+                    fillColor = S_CPU03.copy(alpha = 0.15f),
                 ))
             Spacer(Modifier.height(14.dp))
             ChartCard(title = "CPU Frequency (MHz)", opts = true,
-                legend = listOf("CPU 0" to S_CPU03, "CPU 1" to S_CPU03, "CPU 2" to S_CPU03, "CPU 3" to S_CPU03,
-                    "CPU 4" to S_CPU46, "CPU 5" to S_CPU46, "CPU 6" to S_CPU46, "CPU 7" to S_CPU7),
-                spec = run {
-                    val all = s.chartData.cpuFreq0 + s.chartData.cpuFreq1 + s.chartData.cpuFreq2 + s.chartData.cpuFreq3 +
-                        s.chartData.cpuFreq4 + s.chartData.cpuFreq5 + s.chartData.cpuFreq6 + s.chartData.cpuFreq7
-                    val (lo, hi, ticks) = cpuFreqAxis(all)
-                    ChartSpec(
-                        series = listOf(
-                            s.chartData.cpuFreq0 to S_CPU03,
-                            s.chartData.cpuFreq1 to S_CPU03,
-                            s.chartData.cpuFreq2 to S_CPU03,
-                            s.chartData.cpuFreq3 to S_CPU03,
-                            s.chartData.cpuFreq4 to S_CPU46,
-                            s.chartData.cpuFreq5 to S_CPU46,
-                            s.chartData.cpuFreq6 to S_CPU46,
-                            s.chartData.cpuFreq7 to S_CPU7,
-                        ),
-                        yMin = lo, yMax = hi,
-                        leftTicks = ticks,
-                    )
-                })
+                legend = listOf("CPU 0~3" to S_CPU03, "CPU 4~6" to S_CPU46, "CPU 7" to S_CPU7),
+                spec = ChartSpec(
+                    series = listOf(
+                        s.chartData.cpuFreq0 to S_CPU03,
+                        s.chartData.cpuFreq4 to S_CPU46,
+                        s.chartData.cpuFreq7 to S_CPU7,
+                    ),
+                    yMin = 0f, yMax = 3000f,
+                    leftTicks = listOf("2918", "2700", "2400", "2100", "1800", "1500", "1200", "900", "600", "300"),
+                    fillArea = true,
+                    fillColor = S_CPU03.copy(alpha = 0.15f),
+                ))
             Spacer(Modifier.height(14.dp))
-            if (s.chartData.cpuCyc0.isNotEmpty() || s.chartData.cpuCyc1.isNotEmpty() || s.chartData.cpuCyc2.isNotEmpty() || s.chartData.cpuCyc3.isNotEmpty() ||
-                s.chartData.cpuCyc4.isNotEmpty() || s.chartData.cpuCyc5.isNotEmpty() || s.chartData.cpuCyc6.isNotEmpty() || s.chartData.cpuCyc7.isNotEmpty())
-                ChartCard(title = "CPU Cycles (M)", titleRight = "CPU Temperature (°C)", rightColor = S_TEMP2,
-                    legend = listOf("CPU 0" to S_CPU03, "CPU 1" to S_CPU03, "CPU 2" to S_CPU03, "CPU 3" to S_CPU03,
-                        "CPU 4" to S_CPU46, "CPU 5" to S_CPU46, "CPU 6" to S_CPU46, "CPU 7" to S_CPU7, "TEMP(°C)" to S_TEMP2),
-                    spec = run {
-                        val all = s.chartData.cpuCyc0 + s.chartData.cpuCyc1 + s.chartData.cpuCyc2 + s.chartData.cpuCyc3 +
-                            s.chartData.cpuCyc4 + s.chartData.cpuCyc5 + s.chartData.cpuCyc6 + s.chartData.cpuCyc7
-                        val (lo, hi, ticks) = autoAxis(all, minFloor = 0f, maxTicks = 4)
-                        val (tLo, tHi, tTicks) = tempAxis(s.chartData.temp)
-                        ChartSpec(
-                            series = listOf(
-                                s.chartData.cpuCyc0 to S_CPU03,
-                                s.chartData.cpuCyc1 to S_CPU03,
-                                s.chartData.cpuCyc2 to S_CPU03,
-                                s.chartData.cpuCyc3 to S_CPU03,
-                                s.chartData.cpuCyc4 to S_CPU46,
-                                s.chartData.cpuCyc5 to S_CPU46,
-                                s.chartData.cpuCyc6 to S_CPU46,
-                                s.chartData.cpuCyc7 to S_CPU7,
-                            ),
-                            rightSeries = listOf(s.chartData.temp to S_TEMP2),
-                            yMin = lo, yMax = hi,
-                            leftTicks = ticks,
-                            rightTicks = tTicks, rightMin = tLo, rightMax = tHi,
-                        )
-                    })
+            if (s.chartData.cpuCyc0.isNotEmpty())
+                ChartCard(title = "CPU Cycles (M) / CPU Temperature (°C)", titleRight = "CPU Temperature (°C)", rightColor = S_TEMP2,
+                    legend = listOf("CPU 0~3" to S_CPU03, "CPU 4~6" to S_CPU46, "CPU 7" to S_CPU7, "TEMP(°C)" to S_TEMP2),
+                    spec = ChartSpec(
+                        series = listOf(
+                            s.chartData.cpuCyc0 to S_CPU03,
+                            s.chartData.cpuCyc4 to S_CPU46,
+                        ),
+                        rightSeries = listOf(s.chartData.temp to S_TEMP2),
+                        yMin = 0f, yMax = 3000f,
+                        leftTicks = listOf("2890", "2700", "2400", "2100", "1800", "1500", "1200", "900", "600", "300"),
+                        rightTicks = listOf("100", "90", "80", "70", "60", "50", "40", "30", "20", "10"),
+                        rightMin = 0f, rightMax = 100f,
+                        fillArea = true,
+                        fillColor = S_CPU03.copy(alpha = 0.15f),
+                    ))
             Spacer(Modifier.height(14.dp))
             if ("GPU" !in hiddenCards) ChartCard(title = "GPU Frequency (MHz)", titleRight = "Usage (%)",
-                legend = listOf("Frequency (MHz)" to S_GF, "Usage (%)" to S_GU),
-                spec = run {
-                    val (lo, hi, ticks) = autoAxis(s.chartData.gpuFreq, minFloor = 0f, maxTicks = 4)
-                    ChartSpec(
-                        series = listOf(s.chartData.gpuFreq to S_GF),
-                        rightSeries = listOf(s.chartData.gpuUsage to S_GU),
-                        yMin = lo, yMax = hi,
-                        leftTicks = ticks,
-                        rightTicks = listOf("100", "50"), rightMin = 0f, rightMax = 100f,
-                    )
-                })
+                legend = listOf("GPU" to S_GF, "Usage (%)" to S_GU),
+                spec = ChartSpec(
+                    series = listOf(s.chartData.gpuFreq to S_GF),
+                    rightSeries = listOf(s.chartData.gpuUsage to S_GU),
+                    yMin = 0f, yMax = 600f,
+                    leftTicks = listOf("600", "500", "400", "300", "200", "100"),
+                    rightTicks = listOf("100", "90", "75", "50"), rightMin = 0f, rightMax = 100f,
+                ))
             Spacer(Modifier.height(14.dp))
-            if ("DDR" !in hiddenCards) ChartCard(title = "DDR (Mbps)",
-                legend = emptyList(),
-                spec = run {
-                    val (lo, hi, ticks) = autoAxis(s.chartData.ddr, minFloor = 0f, maxTicks = 4)
-                    ChartSpec(
-                        series = listOf(s.chartData.ddr to S_DDR),
-                        yMin = lo, yMax = hi,
-                        leftTicks = ticks,
-                    )
-                })
+            if ("DDR" !in hiddenCards) ChartCard(title = "DDR (MHz | Mbps)",
+                legend = listOf("DDR" to S_DDR),
+                spec = ChartSpec(
+                    series = listOf(s.chartData.ddr to S_DDR),
+                    yMin = 0f, yMax = 6500f,
+                    leftTicks = listOf("6410", "5479", "4192", "3418", "3110"),
+                    fillArea = true,
+                    fillColor = S_DDR.copy(alpha = 0.15f),
+                ))
             Spacer(Modifier.height(14.dp))
             if ("Power" !in hiddenCards) ChartCard(title = "Power (W)", titleRight = "Capacity %",
                 legend = listOf("Power (W)" to S_PWR, "Capacity (%)" to S_CAP),
                 sub = "MAX: ${comma(pMax, 2)}W | MIN: ${comma(pMin, 2)}W | AVG: ${comma(pAvg.toFloat(), 2)}W",
-                spec = run {
-                    val (lo, hi, ticks) = autoAxis(s.chartData.powerW, minFloor = 0f, maxCeiling = 20f, maxTicks = 4)
-                    ChartSpec(
-                        series = listOf(s.chartData.powerW to S_PWR),
-                        rightSeries = listOf(s.chartData.capacity to S_CAP),
-                        yMin = lo, yMax = hi,
-                        leftTicks = ticks,
-                        rightTicks = listOf("100", "50"), rightMin = 0f, rightMax = 100f,
-                    )
-                })
+                spec = ChartSpec(
+                    series = listOf(s.chartData.powerW to S_PWR),
+                    rightSeries = listOf(s.chartData.capacity to S_CAP),
+                    yMin = 0f, yMax = 7f,
+                    leftTicks = listOf("7", "6", "5", "4", "3", "2", "1", "0"),
+                    rightTicks = listOf("100", "80", "60", "40", "20"), rightMin = 0f, rightMax = 100f,
+                    fillArea = true,
+                    fillColor = S_PWR.copy(alpha = 0.15f),
+                ))
             Spacer(Modifier.height(14.dp))
-            ChartCard(title = "CPU Temperature (°C)",
-                legend = emptyList(), sub = "MAX: ${comma(tMax)}°C | MIN: ${comma(tMin)}°C | AVG: ${comma(tAvg.toFloat())}°C",
-                spec = run {
-                    val (lo, hi, ticks) = tempAxis(s.chartData.temp)
-                    ChartSpec(
-                        series = listOf(s.chartData.temp to S_TEMPL),
-                        yMin = lo, yMax = hi,
-                        leftTicks = ticks,
-                    )
-                })
+            if ("CPU Temperature" !in hiddenCards) ChartCard(title = "CPU Temperature (°C)",
+                legend = listOf("Temperature" to S_TEMPL),
+                sub = "MAX: ${comma(tMax)}°C | MIN: ${comma(tMin)}°C | AVG: ${comma(tAvg.toFloat())}°C",
+                spec = ChartSpec(
+                    series = listOf(s.chartData.temp to S_TEMPL),
+                    yMin = 0f, yMax = 100f,
+                    leftTicks = listOf("100", "90", "80", "70", "60", "50", "40", "30", "20", "10"),
+                    fillArea = true,
+                    fillColor = S_TEMPL.copy(alpha = 0.15f),
+                ))
         }
     }
 }
@@ -766,7 +727,10 @@ private data class ChartSpec(
     val bar: Boolean = false,
     val dashed: Set<Int> = emptySet(),
     val height: Int = 220,
-    val xLabels: List<String> = emptyList(), // adaptive X-axis labels
+    val xLabels: List<String> = emptyList(),
+    val fillArea: Boolean = false,
+    val fillColor: Color? = null,
+    val lineWidth: Dp = 1.8.dp
 )
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -778,30 +742,46 @@ private fun ChartCard(
     sub: String? = null,
     spec: ChartSpec,
 ) {
-    Surface(shape = RoundedCornerShape(16.dp), color = Panel, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(title, color = TitleC, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                if (titleRight != null) Text(titleRight, color = rightColor, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                else if (opts) Text("Chart Options ▸", color = Dim, fontSize = 11.sp)
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = Panel,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(title, color = TitleC, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                when {
+                    titleRight != null -> Text(titleRight, color = rightColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    opts -> Text("Chart Options ▸", color = Faint, fontSize = 12.sp)
+                }
             }
-            Spacer(Modifier.height(12.dp))
-            ChartCanvas(spec)
+            Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+                ChartCanvas(spec)
+            }
+            Spacer(Modifier.height(8.dp))
             if (legend.isNotEmpty()) {
-                Spacer(Modifier.height(10.dp))
-                FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalArrangement = Arrangement.Center
+                ) {
                     legend.forEach { (name, clr) ->
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 7.dp)) {
-                            Box(Modifier.size(9.dp).clip(RoundedCornerShape(2.dp)).background(clr))
+                            Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(clr))
                             Spacer(Modifier.width(5.dp))
-                            Text(name, color = LegendC, fontSize = 12.sp)
+                            Text(name, color = LegendC, fontSize = 13.sp)
                         }
                     }
                 }
-            }
-            if (sub != null) {
-                Spacer(Modifier.height(8.dp))
-                Text(sub, color = Faint, fontSize = 11.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                if (sub != null) {
+                    Text(sub, color = Faint, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp))
+                }
+            } else if (sub != null) {
+                Text(sub, color = Faint, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp))
             }
         }
     }
@@ -873,8 +853,8 @@ private fun ChartCanvas(spec: ChartSpec) {
                 val step = w / (data.size - 1)
                 val pts = data.mapIndexed { i, v -> Offset(insetL + i * step, yOf(v, spec.yMin, spec.yMax)) }
                 val path = Path().apply { moveTo(pts.first().x, pts.first().y); for (i in 1 until pts.size) lineTo(pts[i].x, pts[i].y) }
-                val style = if (idx in spec.dashed) Stroke(1.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round,
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 3.dp.toPx()))) else Stroke(1.8.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                val style = if (idx in spec.dashed) Stroke(spec.lineWidth.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round,
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 3.dp.toPx()))) else Stroke(spec.lineWidth.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
                 drawPath(path, color, style = style)
             }
             spec.rightSeries.forEach { (data, color) ->
