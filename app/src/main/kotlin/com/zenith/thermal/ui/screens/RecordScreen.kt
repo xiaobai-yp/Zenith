@@ -751,7 +751,7 @@ private fun ChartCard(
     Surface(
         shape = RoundedCornerShape(20.dp),
         color = Panel,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+        modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp)
     ) {
         Column {
             Row(
