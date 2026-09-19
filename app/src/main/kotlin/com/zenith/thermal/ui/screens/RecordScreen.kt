@@ -5,6 +5,7 @@ import android.os.Build
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -671,24 +672,27 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
 @Composable
 private fun SessionStatsCard(s: SessionEntry) {
     val ctx = LocalContext.current
-    Surface(shape = RoundedCornerShape(14.dp), color = Panel, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(12.dp)) {
+    Surface(
+        shape = RoundedCornerShape(20.dp), color = Panel,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).border(1.dp, Color(0x08FFFFFF), RoundedCornerShape(20.dp))
+    ) {
+        Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                GameIcon(s.appName, s.appPkg, size = 34, fontSize = 5, radius = 8)
-                Spacer(Modifier.width(10.dp))
+                GameIcon(s.appName, s.appPkg, size = 40, fontSize = 7, radius = 10)
+                Spacer(Modifier.width(12.dp))
                 Column {
                     Text(s.date, color = Ink, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(2.dp))
+                    Spacer(Modifier.height(1.dp))
                     val label = resolveAppLabel(ctx, s.appPkg).ifEmpty { s.appName }
-                    Text("$label (${s.version}) · ${s.crop}", color = Dim, fontSize = 10.sp)
+                    Text("$label (${s.version}) crop: ${s.crop}", color = Muted, fontSize = 11.sp)
                 }
             }
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(12.dp))
             Row(Modifier.fillMaxWidth()) {
                 StatCell("MAX", comma(s.maxFps), "FPS", Modifier.weight(1f))
                 StatCell("MIN", comma(s.minFps), "FPS", Modifier.weight(1f))
                 StatCell("AVG", comma(s.avgFps), "FPS", Modifier.weight(1f))
-                StatCell("VAR", comma(s.variance), "FPS", Modifier.weight(1f))
+                StatCell("VARIANCE", comma(s.variance), "FPS", Modifier.weight(1f))
             }
             Spacer(Modifier.height(6.dp))
             Row(Modifier.fillMaxWidth().background(Divider, RoundedCornerShape(2.dp)).height(1.dp)) {}
@@ -706,11 +710,11 @@ private fun SessionStatsCard(s: SessionEntry) {
 @Composable
 private fun StatCell(label: String, value: String, unit: String, modifier: Modifier = Modifier, valueColor: Color = StatBlue) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier.padding(vertical = 4.dp)) {
-        Text(label, color = Dim, fontSize = 9.sp)
-        Spacer(Modifier.height(3.dp))
-        Text(value, color = valueColor, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        Text(label, color = Dim, fontSize = 11.sp)
         Spacer(Modifier.height(2.dp))
-        Text(unit, color = Faint, fontSize = 9.sp)
+        Text(value, color = valueColor, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        Spacer(Modifier.height(1.dp))
+        Text(unit, color = Dim, fontSize = 10.sp)
     }
 }
 
