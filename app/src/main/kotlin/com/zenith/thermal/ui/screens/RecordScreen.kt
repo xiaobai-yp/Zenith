@@ -547,7 +547,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                 Spacer(Modifier.height(12.dp))
             }
             // ── Charts (Scene order) ──
-            if ("FPS" !in hiddenCards) ChartCard(title = "FPS", opts = true,
+            if ("FPS" !in hiddenCards) ChartCard(title = "FPS", titleRight = "Temperature(°C)", rightColor = S_TEMP,
                 legend = listOf(
                     "FPS" to S_FPS,
                     "TEMP(°C)" to S_TEMP,
@@ -605,7 +605,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                 ))
             Spacer(Modifier.height(14.dp))
             if (s.chartData.cpuCyc0.isNotEmpty())
-                ChartCard(title = "CPU Cycles (M) / CPU Temperature (°C)", opts = true,
+                ChartCard(title = "CPU Cycles (M) / CPU Temperature (°C)", titleRight = "CPU Temperature (°C)", rightColor = S_TEMP2,
                     legend = listOf("CPU 0~3" to S_CPU03, "CPU 4~6" to S_CPU46, "CPU 7" to S_CPU7, "TEMP(°C)" to S_TEMP2),
                     spec = ChartSpec(
                         series = listOf(
@@ -621,7 +621,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                         fillColor = S_CPU03.copy(alpha = 0.15f),
                     ))
             Spacer(Modifier.height(14.dp))
-            if ("GPU" !in hiddenCards) ChartCard(title = "GPU Frequency (MHz)", opts = true,
+            if ("GPU" !in hiddenCards) ChartCard(title = "GPU Frequency (MHz)", titleRight = "Usage (%)", rightColor = S_GU,
                 legend = listOf("GPU" to S_GF, "Usage (%)" to S_GU),
                 spec = ChartSpec(
                     series = listOf(s.chartData.gpuFreq to S_GF),
@@ -641,7 +641,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                     fillColor = S_DDR.copy(alpha = 0.15f),
                 ))
             Spacer(Modifier.height(14.dp))
-            if ("Power" !in hiddenCards) ChartCard(title = "Power (W)", opts = true,
+            if ("Power" !in hiddenCards) ChartCard(title = "Power (W)", titleRight = "Capacity %", rightColor = S_CAP,
                 legend = listOf("Power (W)" to S_PWR, "Capacity (%)" to S_CAP),
                 sub = "MAX: ${comma(pMax, 2)}W  MIN: ${comma(pMin, 2)}W  AVG: ${comma(pAvg.toFloat(), 2)}W",
                 spec = ChartSpec(
