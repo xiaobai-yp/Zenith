@@ -715,16 +715,16 @@ private fun SessionStatsCard(s: SessionEntry) {
 }
 
 @Composable
-private fun StatCell(label: String, value: String, unit: String, modifier: Modifier = Modifier, valueColor: Color = StatBlue) {
+private fun StatCell(label: String, value: String, unit: String, modifier: Modifier = Modifier, valueColor: Color = StatBlue, valueSize: TextUnit = 22.sp) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier.fillMaxWidth()
     ) {
-        Text(label, color = Color(0xFF666666), fontSize = 10.sp)
+        Text(label, color = Color(0xFF666666), fontSize = 10.sp, textAlign = TextAlign.Center)
         Spacer(Modifier.height(4.dp))
-        Text(value, color = valueColor, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        Text(value, color = valueColor, fontSize = valueSize, fontWeight = FontWeight.Bold, maxLines = 1, textAlign = TextAlign.Center)
         Spacer(Modifier.height(2.dp))
-        Text(unit, color = Color(0xFF555555), fontSize = 10.sp)
+        Text(unit, color = Color(0xFF555555), fontSize = 10.sp, textAlign = TextAlign.Center)
     }
 }
 
