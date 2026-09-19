@@ -92,6 +92,8 @@ private val S_DDR = Color(0xFF90D4F3)       // DDR, biru langit
 private val S_PWR = Color(0xFF2D6FFF)       // Power, biru
 private val S_CAP = Color(0xFF8DC9E8)       // Capacity, biru muda
 private val S_TEMPL = Color(0xFF8DC9E8)     // CPU Temperature chart, biru muda
+private val S_CPU_PCT = Color(0xFFA35AA2)   // CPU(%) dot legend — ungu muda
+private val S_GPU_PCT = Color(0xFF6BC9EA)   // GPU(%) dot legend — biru muda
 
 internal data class SessionEntry(
     val id: Long, val appName: String, val appPkg: String,
@@ -605,7 +607,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                 ))
             Spacer(Modifier.height(14.dp))
             if (s.chartData.cpuCyc0.isNotEmpty())
-                ChartCard(title = "CPU Cycles (M) / CPU Temperature (°C)", titleRight = "CPU Temperature (°C)", rightColor = S_TEMP2,
+                ChartCard(title = "CPU Cycles (M) / CPU Temperature (°C)",
                     legend = listOf("CPU 0~3" to S_CPU03, "CPU 4~6" to S_CPU46, "CPU 7" to S_CPU7, "TEMP(°C)" to S_TEMP2),
                     spec = ChartSpec(
                         series = listOf(
