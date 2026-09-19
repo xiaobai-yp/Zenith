@@ -711,7 +711,10 @@ private fun SessionStatsCard(s: SessionEntry) {
 
 @Composable
 private fun StatCell(label: String, value: String, unit: String, modifier: Modifier = Modifier, valueColor: Color = StatBlue) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier.padding(vertical = 4.dp)) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier.fillMaxWidth().padding(vertical = 4.dp)
+    ) {
         Text(label, color = Color(0xFF969696), fontSize = 11.sp)
         Spacer(Modifier.height(1.dp))
         Text(value, color = valueColor, fontSize = 36.sp, fontWeight = FontWeight.Bold, maxLines = 1)
