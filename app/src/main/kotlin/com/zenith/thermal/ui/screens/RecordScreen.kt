@@ -676,7 +676,7 @@ private fun SessionStatsCard(s: SessionEntry) {
     val ctx = LocalContext.current
     Surface(
         shape = RoundedCornerShape(20.dp), color = Panel,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).border(1.dp, Color(0x08FFFFFF), RoundedCornerShape(20.dp))
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp).border(1.dp, Color(0x08FFFFFF), RoundedCornerShape(20.dp))
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
