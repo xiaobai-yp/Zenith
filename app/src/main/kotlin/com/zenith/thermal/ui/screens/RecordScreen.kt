@@ -92,8 +92,6 @@ private val S_DDR = Color(0xFF90D4F3)       // DDR, biru langit
 private val S_PWR = Color(0xFF2D6FFF)       // Power, biru
 private val S_CAP = Color(0xFF8DC9E8)       // Capacity, biru muda
 private val S_TEMPL = Color(0xFF8DC9E8)     // CPU Temperature chart, biru muda
-private val S_CPU_PCT = Color(0xFFA35AA2)   // CPU(%) dot legend — ungu muda
-private val S_GPU_PCT = Color(0xFF6BC9EA)   // GPU(%) dot legend — biru muda
 
 internal data class SessionEntry(
     val id: Long, val appName: String, val appPkg: String,
