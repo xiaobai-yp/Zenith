@@ -65,6 +65,8 @@ import kotlin.math.roundToInt
 private val Bg = Color(0xFF171717)          // scene body bg
 private val Panel = Color(0xFF090909)       // scene card bg
 private val Divider = Color(0xFF383838)     // scene grid bg (reuse for divider)
+private val Divider2 = Color(0xFF2A2A2E)    // preview divider (session-row border)
+private val Panel2 = Color(0xFF1C1C1E)      // preview card bg (#1c1c1e)
 private val Ink = Color(0xFFf4f4f4)         // scene text
 private val Muted = Color(0xFF8e8e93)       // scene muted (stats app text)
 private val Dim = Color(0xFF969696)         // scene dim (label text)
@@ -675,30 +677,33 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
 private fun SessionStatsCard(s: SessionEntry) {
     val ctx = LocalContext.current
     Surface(
-        shape = RoundedCornerShape(20.dp), color = Panel,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp).border(1.dp, Color(0x08FFFFFF), RoundedCornerShape(20.dp))
+        shape = RoundedCornerShape(16.dp), color = Panel2,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
     ) {
         Column(Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                GameIcon(s.appName, s.appPkg, size = 40, fontSize = 7, radius = 10)
+            // session-row
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+            ) {
+                GameIcon(s.appName, s.appPkg, size = 32, fontSize = 5, radius = 8)
                 Spacer(Modifier.width(12.dp))
                 Column {
-                    Text(s.date, color = Ink, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(1.dp))
+                    Text(s.date, color = Ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(2.dp))
                     val label = resolveAppLabel(ctx, s.appPkg).ifEmpty { s.appName }
-                    Text("$label (${s.version}) crop: ${s.crop}", color = Muted, fontSize = 11.sp)
+                    Text("$label (${s.version}) · crop: ${s.crop}", color = Color(0xFF666666), fontSize = 11.sp)
                 }
             }
-            Spacer(Modifier.height(12.dp))
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Divider2))
+            Spacer(Modifier.height(14.dp))
             Row(Modifier.fillMaxWidth()) {
                 StatCell("MAX", comma(s.maxFps), "FPS", Modifier.weight(1f))
                 StatCell("MIN", comma(s.minFps), "FPS", Modifier.weight(1f))
                 StatCell("AVG", comma(s.avgFps), "FPS", Modifier.weight(1f))
                 StatCell("VARIANCE", comma(s.variance), "FPS", Modifier.weight(1f))
             }
-            Spacer(Modifier.height(6.dp))
-            Row(Modifier.fillMaxWidth().background(Divider, RoundedCornerShape(2.dp)).height(1.dp)) {}
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(14.dp))
             Row(Modifier.fillMaxWidth()) {
                 StatCell("≥45FPS", comma(s.smoothPct, 1) + "%", "Smoothness", Modifier.weight(1f), valueColor = Green)
                 StatCell("5% Low", comma(s.low5Pct), "FPS", Modifier.weight(1f))
@@ -713,13 +718,13 @@ private fun SessionStatsCard(s: SessionEntry) {
 private fun StatCell(label: String, value: String, unit: String, modifier: Modifier = Modifier, valueColor: Color = StatBlue) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier.fillMaxWidth().padding(vertical = 4.dp)
+        modifier = modifier.fillMaxWidth()
     ) {
-        Text(label, color = Color(0xFF969696), fontSize = 11.sp)
-        Spacer(Modifier.height(1.dp))
-        Text(value, color = valueColor, fontSize = 36.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-        Spacer(Modifier.height(1.dp))
-        Text(unit, color = Color(0xFF969696), fontSize = 12.sp)
+        Text(label, color = Color(0xFF666666), fontSize = 10.sp)
+        Spacer(Modifier.height(4.dp))
+        Text(value, color = valueColor, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        Spacer(Modifier.height(2.dp))
+        Text(unit, color = Color(0xFF555555), fontSize = 10.sp)
     }
 }
 
