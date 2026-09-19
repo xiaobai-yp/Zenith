@@ -606,7 +606,7 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                 ))
             Spacer(Modifier.height(14.dp))
             if (s.chartData.cpuCyc0.isNotEmpty())
-                ChartCard(title = "CPU Cycles (M) / CPU Temperature (°C)",
+                ChartCard(title = "CPU Cycles (M)", titleRight = "CPU Temperature (°C)", rightColor = S_TEMP2,
                     legend = listOf("CPU 0~3" to S_CPU03, "CPU 4~6" to S_CPU46, "CPU 7" to S_CPU7, "TEMP(°C)" to S_TEMP2),
                     spec = ChartSpec(
                         series = listOf(
@@ -620,7 +620,9 @@ private fun SessionDetailView(s: SessionEntry, onBack: () -> Unit) {
                         rightMin = 0f, rightMax = 100f,
                         fillArea = true,
                         fillColor = S_CPU03.copy(alpha = 0.15f),
-                    ))
+                        lineWidth = 1.5.dp,
+                    )
+                )
             Spacer(Modifier.height(14.dp))
             if ("GPU" !in hiddenCards) ChartCard(title = "GPU Frequency (MHz)", titleRight = "Usage (%)", rightColor = S_GU,
                 legend = listOf("GPU" to S_GF, "Usage (%)" to S_GU),
